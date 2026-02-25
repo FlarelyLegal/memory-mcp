@@ -1,7 +1,7 @@
 # Memory Graph MCP
 
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/)
-[![MCP SDK](https://img.shields.io/badge/MCP_SDK-1.12-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTEyIDJMMiA3djEwbDEwIDUgMTAtNVY3eiIvPjwvc3ZnPg==)](https://modelcontextprotocol.io)
+[![MCP SDK](https://img.shields.io/badge/MCP_SDK-1.18-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTEyIDJMMiA3djEwbDEwIDUgMTAtNVY3eiIvPjwvc3ZnPg==)](https://modelcontextprotocol.io)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Wrangler](https://img.shields.io/badge/Wrangler-4.x-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/wrangler/)
 
@@ -18,23 +18,63 @@ A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured
 | Cache            | **KV**                         | Optional caching layer                                           |
 | Blob storage     | **R2**                         | Conversation logs, documents                                     |
 
-## Tools (25)
+## Tools (13)
 
-**Namespaces** -- `create_namespace`, `list_namespaces`
+Consolidated from 25 granular tools into 13 action-based tools for token efficiency. Each multi-action tool uses an `action` or `mode` parameter to select the operation.
 
-**Entities** (graph nodes) -- `create_entity`, `get_entity`, `search_entities`, `update_entity`, `delete_entity`
+**Namespaces** -- `manage_namespace` (create, list)
 
-**Relations** (graph edges) -- `create_relation`, `get_relations`, `delete_relation`
+**Entities** (graph nodes) -- `manage_entity` (create, get, update, delete), `find_entities` (search by name/type/keyword)
 
-**Graph traversal** -- `traverse_graph` (BFS from a starting entity, configurable depth)
+**Relations** (graph edges) -- `manage_relation` (create, delete), `get_relations` (from/to/both with direction filter)
 
-**Memories** (knowledge fragments) -- `create_memory`, `recall_memories` (ranked by importance + temporal decay), `search_memories`, `get_entity_memories`, `update_memory`, `delete_memory`
+**Graph traversal** -- `traverse_graph` (BFS from a starting entity, max depth 5)
 
-**Conversations** -- `create_conversation`, `list_conversations`, `add_message`, `get_messages`, `search_conversations`
+**Memories** (knowledge fragments) -- `manage_memory` (create, update, delete), `query_memories` (modes: recall, search, entity)
 
-**Semantic search** -- `semantic_search` (vector similarity across entities, memories, messages), `get_context` (composite: semantic + graph + ranked memories in one call)
+**Conversations** -- `manage_conversation` (create, list), `add_message`, `get_messages` (recent or keyword search)
+
+**Semantic search** -- `search` (modes: semantic vector search, context with graph enrichment)
 
 **Admin** -- `reindex_vectors` (re-embed all entities/memories into Vectorize)
+
+## Project Structure
+
+```
+src/
+  index.ts              MCP server entry point (McpAgent + OAuthProvider)
+  response-helpers.ts   Shared response utilities (txt, ok, cap)
+  types.ts              TypeScript type definitions
+  utils.ts              Utility functions (IDs, timestamps, decay scoring)
+  auth.ts               Per-user namespace authorization guards
+  embeddings.ts         Vectorize + Workers AI embedding operations
+  memories.ts           Memory CRUD with temporal decay
+  conversations.ts      Conversation and message operations
+  access-handler.ts     Cloudflare Access OAuth route handler
+  jwt.ts                JWT parsing, JWKS fetch, token verification
+  tools/
+    namespace.ts        manage_namespace tool
+    entity.ts           manage_entity, find_entities tools
+    relation.ts         manage_relation, get_relations tools
+    traversal.ts        traverse_graph tool
+    memory.ts           manage_memory, query_memories tools
+    conversation.ts     manage_conversation, add_message, get_messages tools
+    search.ts           search tool (semantic + context modes)
+    admin.ts            reindex_vectors tool
+  graph/
+    namespaces.ts       Namespace D1 CRUD
+    entities.ts         Entity D1 CRUD
+    relations.ts        Relation D1 CRUD
+    traversal.ts        BFS graph traversal
+    index.ts            Barrel re-export
+  oauth/
+    error.ts            OAuthError class
+    sanitize.ts         HTML/URL sanitization
+    csrf.ts             CSRF token generation/validation
+    state.ts            OAuth state management + upstream token exchange
+    approval.ts         Approval dialog UI + signed cookie management
+    index.ts            Barrel re-export
+```
 
 ## Setup
 
@@ -103,7 +143,7 @@ npx @modelcontextprotocol/inspector https://memory-graph-mcp.<your-subdomain>.wo
 
 ## Temporal Decay
 
-`recall_memories` ranks memories by blending importance with recency:
+`query_memories` (recall mode) ranks memories by blending importance with recency:
 
 ```
 relevance = importance * 0.4 + recency_factor * 0.6
