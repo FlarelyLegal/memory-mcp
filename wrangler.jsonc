@@ -1,0 +1,58 @@
+{
+  "name": "memory-graph-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-02-20",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Durable Object for the MCP agent sessions
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MEMORY_GRAPH_MCP",
+        "class_name": "MemoryGraphMCP"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MemoryGraphMCP"]
+    }
+  ],
+
+  // D1 database for the structured graph, memories, and conversations
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "memory-graph",
+      // Replace with your actual database_id after running:
+      //   npx wrangler d1 create memory-graph
+      "database_id": "YOUR_DATABASE_ID_HERE"
+    }
+  ],
+
+  // Vectorize index for semantic search
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "memory-graph-embeddings"
+      // Create with:
+      //   npx wrangler vectorize create memory-graph-embeddings --dimensions=768 --metric=cosine
+    }
+  ],
+
+  // Workers AI for generating embeddings
+  "ai": {
+    "binding": "AI"
+  },
+
+  // KV for optional caching (hot graph fragments, etc.)
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      // Replace after running:
+      //   npx wrangler kv namespace create CACHE
+      "id": "YOUR_KV_NAMESPACE_ID_HERE"
+    }
+  ]
+}

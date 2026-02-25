@@ -1,0 +1,43 @@
+// Utility helpers
+
+export function generateId(): string {
+  return crypto.randomUUID();
+}
+
+export function now(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+export function parseJson(raw: string | null): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function toJson(obj: Record<string, unknown> | null | undefined): string | null {
+  if (obj == null) return null;
+  return JSON.stringify(obj);
+}
+
+/**
+ * Temporal decay scoring.
+ * Returns a value in [0, 1] where 1 = just accessed, approaching 0 as time passes.
+ *
+ * Uses exponential decay: score = e^(-lambda * age_hours)
+ * Default half-life is 7 days (168 hours), so after 7 days the time component is ~0.5.
+ */
+export function decayScore(
+  lastAccessedAt: number,
+  importance: number,
+  halfLifeHours: number = 168,
+): number {
+  const ageSeconds = now() - lastAccessedAt;
+  const ageHours = ageSeconds / 3600;
+  const lambda = Math.LN2 / halfLifeHours;
+  const timeFactor = Math.exp(-lambda * ageHours);
+  // Blend importance (weight 0.4) with recency (weight 0.6)
+  return importance * 0.4 + timeFactor * 0.6;
+}
