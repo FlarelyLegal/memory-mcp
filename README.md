@@ -80,7 +80,7 @@ src/
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 24+
 - Cloudflare account with Workers, D1, Vectorize, and Workers AI enabled
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
 
