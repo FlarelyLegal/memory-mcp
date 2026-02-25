@@ -24,10 +24,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "memory-graph",
-      // Replace with your actual database_id after running:
-      //   npx wrangler d1 create memory-graph
-      "database_id": "YOUR_DATABASE_ID_HERE"
+      "database_name": "memory-graph-mcp-db",
+      "database_id": "080fbc1c-3431-4ea6-9a8e-427244e21e05"
     }
   ],
 
@@ -35,9 +33,7 @@
   "vectorize": [
     {
       "binding": "VECTORIZE",
-      "index_name": "memory-graph-embeddings"
-      // Create with:
-      //   npx wrangler vectorize create memory-graph-embeddings --dimensions=768 --metric=cosine
+      "index_name": "memory-graph-mcp"
     }
   ],
 
@@ -50,9 +46,15 @@
   "kv_namespaces": [
     {
       "binding": "CACHE",
-      // Replace after running:
-      //   npx wrangler kv namespace create CACHE
-      "id": "YOUR_KV_NAMESPACE_ID_HERE"
+      "id": "94ae719d3fd842ec93f0728ad6771030"
+    }
+  ],
+
+  // R2 bucket for blob storage (conversation logs, documents, etc.)
+  "r2_buckets": [
+    {
+      "binding": "STORAGE",
+      "bucket_name": "memory-graph-mcp-storage"
     }
   ]
 }

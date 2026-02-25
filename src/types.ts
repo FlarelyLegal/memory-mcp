@@ -4,6 +4,7 @@ export interface Env {
   VECTORIZE: VectorizeIndex;
   AI: Ai;
   CACHE: KVNamespace;
+  STORAGE: R2Bucket;
 }
 
 // --- Domain types ---
