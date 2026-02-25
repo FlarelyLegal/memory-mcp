@@ -7,19 +7,23 @@
  *
  * Uses McpAgent (Durable Objects) so each session gets its own stateful
  * instance with direct access to env bindings.
+ *
+ * Secured with Cloudflare Access via OAuthProvider.
  */
+import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import type { Env } from "./types.js";
+import type { Env, AuthProps } from "./types.js";
 import * as graph from "./graph.js";
 import * as memories from "./memories.js";
 import * as conversations from "./conversations.js";
 import * as embeddings from "./embeddings.js";
 import { parseJson } from "./utils.js";
+import { handleAccessRequest } from "./access-handler.js";
 
-export class MemoryGraphMCP extends McpAgent<Env> {
+export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthProps> {
   server = new McpServer({
     name: "Memory Graph",
     version: "0.1.0",
@@ -619,17 +623,13 @@ export class MemoryGraphMCP extends McpAgent<Env> {
   }
 }
 
-// Wrap McpAgent.serve() to add a health endpoint
-const mcp = MemoryGraphMCP.serve("/mcp");
-
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ status: "ok", server: "memory-graph-mcp", version: "0.1.0" }), {
-        headers: { "content-type": "application/json" },
-      });
-    }
-    return mcp.fetch(request, env, ctx);
-  },
-};
+// Wrap MCP with OAuthProvider for Cloudflare Access authentication.
+// The /health endpoint is handled inside the defaultHandler (access-handler.ts).
+export default new OAuthProvider({
+  apiHandler: MemoryGraphMCP.serve("/mcp"),
+  apiRoute: "/mcp",
+  authorizeEndpoint: "/authorize",
+  clientRegistrationEndpoint: "/register",
+  defaultHandler: { fetch: handleAccessRequest as unknown as ExportedHandlerFetchHandler },
+  tokenEndpoint: "/token",
+});

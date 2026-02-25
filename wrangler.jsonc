@@ -47,6 +47,10 @@
     {
       "binding": "CACHE",
       "id": "94ae719d3fd842ec93f0728ad6771030"
+    },
+    {
+      "binding": "OAUTH_KV",
+      "id": "acbe5f3da3534db19bbe2c9b727298a8"
     }
   ],
 

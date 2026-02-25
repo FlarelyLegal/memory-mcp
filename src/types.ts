@@ -1,3 +1,5 @@
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+
 // Cloudflare bindings
 export interface Env {
   DB: D1Database;
@@ -5,6 +7,24 @@ export interface Env {
   AI: Ai;
   CACHE: KVNamespace;
   STORAGE: R2Bucket;
+  // OAuth / Cloudflare Access
+  OAUTH_KV: KVNamespace;
+  OAUTH_PROVIDER: OAuthHelpers;
+  ACCESS_CLIENT_ID: string;
+  ACCESS_CLIENT_SECRET: string;
+  ACCESS_TOKEN_URL: string;
+  ACCESS_AUTHORIZATION_URL: string;
+  ACCESS_JWKS_URL: string;
+  COOKIE_ENCRYPTION_KEY: string;
+}
+
+// Props passed through from the OAuth flow into McpAgent
+export interface AuthProps {
+  accessToken: string;
+  email: string;
+  login: string;
+  name: string;
+  [key: string]: unknown;
 }
 
 // --- Domain types ---
