@@ -18,7 +18,7 @@ A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured
 | Cache | **KV** | Optional caching layer |
 | Blob storage | **R2** | Conversation logs, documents |
 
-## Tools (23)
+## Tools (25)
 
 **Namespaces** -- `create_namespace`, `list_namespaces`
 
