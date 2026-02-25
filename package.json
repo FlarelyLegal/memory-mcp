@@ -17,9 +17,14 @@
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.2.3",
-    "@modelcontextprotocol/sdk": "^1.18.1",
-    "agents": "^0.1.0",
-    "zod": "^3.25.0"
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "agents": "^0.6.0",
+    "zod": "^4.3.6"
+  },
+  "overrides": {
+    "agents": {
+      "@modelcontextprotocol/sdk": "$@modelcontextprotocol/sdk"
+    }
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250214.0",
@@ -28,6 +33,7 @@
     "eslint-config-prettier": "^10.1.8",
     "jiti": "^2.6.1",
     "prettier": "^3.8.1",
+    "react": "^19.2.4",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.56.1",
     "wrangler": "^4.0.0"

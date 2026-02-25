@@ -25,3 +25,14 @@ See `package.json` scripts. Summary:
 - **Local D1 must be initialized:** Before first dev server run, execute `npm run db:init:local` to create the SQLite tables in `.wrangler/state/`.
 - **OAuth flow requires Cloudflare Access secrets:** The full OAuth login flow needs `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET`, `ACCESS_TOKEN_URL`, `ACCESS_AUTHORIZATION_URL`, `ACCESS_JWKS_URL`, and `COOKIE_ENCRYPTION_KEY` in `.dev.vars`. Without these, the `/health`, `/register`, and `/.well-known/oauth-authorization-server` endpoints still work, but the `/authorize` → `/callback` flow and authenticated MCP tool calls will not.
 - **Health endpoint:** `GET /health` returns `{"status":"ok","server":"memory-graph-mcp","version":"0.1.0"}` and requires no authentication — use it to verify the server is running.
+
+### File structure
+
+Code is organized into focused modules with a 250-line cap per file:
+
+- `src/index.ts` — MCP server entry point (McpAgent class + OAuthProvider export)
+- `src/tools/` — One file per tool domain (namespace, entity, relation, traversal, memory, conversation, search, admin). Each exports a `register*Tools(server, env, email)` function.
+- `src/graph/` — D1 operations split by domain (namespaces, entities, relations, traversal) with barrel re-export via `index.ts`.
+- `src/oauth/` — OAuth utilities split by concern (error, sanitize, csrf, state, approval) with barrel re-export via `index.ts`.
+- `src/jwt.ts` — JWT verification for Cloudflare Access tokens.
+- `src/response-helpers.ts` — Shared MCP response helpers (`txt`, `ok`, `cap`).

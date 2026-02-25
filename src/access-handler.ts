@@ -17,13 +17,12 @@ import {
   renderApprovalDialog,
   validateCSRFToken,
   validateOAuthState,
-} from "./workers-oauth-utils.js";
-
-type EnvWithOauth = Env;
+} from "./oauth/index.js";
+import { verifyToken } from "./jwt.js";
 
 export async function handleAccessRequest(
   request: Request,
-  env: EnvWithOauth,
+  env: Env,
   _ctx: ExecutionContext,
 ): Promise<Response> {
   const { pathname, searchParams } = new URL(request.url);
@@ -35,13 +34,11 @@ export async function handleAccessRequest(
       return new Response("Invalid request", { status: 400 });
     }
 
-    // Check if client is already approved
     if (await isClientApproved(request, clientId, env.COOKIE_ENCRYPTION_KEY)) {
       const { stateToken } = await createOAuthState(oauthReqInfo, env.OAUTH_KV);
       return redirectToAccess(request, env, stateToken);
     }
 
-    // Generate CSRF protection for the approval form
     const { token: csrfToken, setCookie } = generateCSRFProtection();
 
     return renderApprovalDialog(request, {
@@ -118,7 +115,6 @@ export async function handleAccessRequest(
       return new Response("Invalid OAuth request data", { status: 400 });
     }
 
-    // Exchange the code for an access token
     const [accessToken, idToken, errResponse] = await fetchUpstreamAuthToken({
       client_id: env.ACCESS_CLIENT_ID,
       client_secret: env.ACCESS_CLIENT_SECRET,
@@ -137,7 +133,6 @@ export async function handleAccessRequest(
       sub: idTokenClaims.sub as string,
     };
 
-    // Return back to the MCP client a new token
     const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
       metadata: {
         label: user.name,
@@ -156,7 +151,6 @@ export async function handleAccessRequest(
     return Response.redirect(redirectTo, 302);
   }
 
-  // Health endpoint passes through the OAuthProvider wrapper, so handle it here too
   if (pathname === "/health") {
     return new Response(
       JSON.stringify({ status: "ok", server: "memory-graph-mcp", version: "0.1.0" }),
@@ -167,14 +161,12 @@ export async function handleAccessRequest(
   return new Response("Not Found", { status: 404 });
 }
 
-// --- Token verification helpers ---
-
-async function redirectToAccess(
+function redirectToAccess(
   request: Request,
   env: Env,
   stateToken: string,
   headers: Record<string, string> = {},
-): Promise<Response> {
+): Response {
   return new Response(null, {
     headers: {
       ...headers,
@@ -188,81 +180,4 @@ async function redirectToAccess(
     },
     status: 302,
   });
-}
-
-async function fetchAccessPublicKey(env: Env, kid: string): Promise<CryptoKey> {
-  if (!env.ACCESS_JWKS_URL) {
-    throw new Error("ACCESS_JWKS_URL not configured");
-  }
-  const resp = await fetch(env.ACCESS_JWKS_URL);
-  const keys = (await resp.json()) as {
-    keys: (JsonWebKey & { kid: string })[];
-  };
-  const jwk = keys.keys.filter((key) => key.kid === kid)[0];
-  if (!jwk) {
-    throw new Error(`No matching JWK found for kid: ${kid}`);
-  }
-  return crypto.subtle.importKey(
-    "jwk",
-    jwk,
-    { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
-    false,
-    ["verify"],
-  );
-}
-
-/** Decode a base64url string to a UTF-8 string */
-function base64urlDecode(input: string): string {
-  // Convert base64url to base64
-  let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
-  // Pad with = if needed
-  while (base64.length % 4 !== 0) base64 += "=";
-  return atob(base64);
-}
-
-/** Decode a base64url string to a Uint8Array */
-function base64urlToBytes(input: string): Uint8Array {
-  const str = base64urlDecode(input);
-  const bytes = new Uint8Array(str.length);
-  for (let i = 0; i < str.length; i++) {
-    bytes[i] = str.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function parseJWT(token: string) {
-  const tokenParts = token.split(".");
-  if (tokenParts.length !== 3) {
-    throw new Error("token must have 3 parts");
-  }
-  return {
-    data: `${tokenParts[0]}.${tokenParts[1]}`,
-    header: JSON.parse(base64urlDecode(tokenParts[0])),
-    payload: JSON.parse(base64urlDecode(tokenParts[1])),
-    signature: tokenParts[2],
-  };
-}
-
-async function verifyToken(env: Env, token: string): Promise<Record<string, unknown>> {
-  const jwt = parseJWT(token);
-  const key = await fetchAccessPublicKey(env, jwt.header.kid);
-
-  const verified = await crypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    base64urlToBytes(jwt.signature),
-    new TextEncoder().encode(jwt.data),
-  );
-
-  if (!verified) {
-    throw new Error("failed to verify token");
-  }
-
-  const claims = jwt.payload;
-  const now = Math.floor(Date.now() / 1000);
-  if (claims.exp < now) {
-    throw new Error("expired token");
-  }
-
-  return claims;
 }

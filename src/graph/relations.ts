@@ -1,0 +1,100 @@
+/** Relation CRUD operations against D1. */
+import type { RelationRow } from "../types.js";
+import { generateId, now, toJson } from "../utils.js";
+
+export async function createRelation(
+  db: D1Database,
+  opts: {
+    namespace_id: string;
+    source_id: string;
+    target_id: string;
+    relation_type: string;
+    weight?: number;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<string> {
+  const id = generateId();
+  await db
+    .prepare(
+      `INSERT INTO relations (id, namespace_id, source_id, target_id, relation_type, weight, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(namespace_id, source_id, target_id, relation_type) DO UPDATE SET
+         weight = excluded.weight, metadata = excluded.metadata, updated_at = ?`,
+    )
+    .bind(
+      id,
+      opts.namespace_id,
+      opts.source_id,
+      opts.target_id,
+      opts.relation_type,
+      opts.weight ?? 1.0,
+      toJson(opts.metadata ?? null),
+      now(),
+    )
+    .run();
+  return id;
+}
+
+export async function getRelationsFrom(
+  db: D1Database,
+  entity_id: string,
+  opts?: { relation_type?: string; limit?: number },
+): Promise<(RelationRow & { target_name: string; target_type: string })[]> {
+  const clauses: string[] = ["r.source_id = ?"];
+  const params: unknown[] = [entity_id];
+
+  if (opts?.relation_type) {
+    clauses.push("r.relation_type = ?");
+    params.push(opts.relation_type);
+  }
+
+  const limit = opts?.limit ?? 50;
+  params.push(limit);
+
+  const sql = `
+    SELECT r.*, e.name as target_name, e.type as target_type
+    FROM relations r
+    JOIN entities e ON e.id = r.target_id
+    WHERE ${clauses.join(" AND ")}
+    ORDER BY r.weight DESC
+    LIMIT ?`;
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<RelationRow & { target_name: string; target_type: string }>();
+  return result.results;
+}
+
+export async function getRelationsTo(
+  db: D1Database,
+  entity_id: string,
+  opts?: { relation_type?: string; limit?: number },
+): Promise<(RelationRow & { source_name: string; source_type: string })[]> {
+  const clauses: string[] = ["r.target_id = ?"];
+  const params: unknown[] = [entity_id];
+
+  if (opts?.relation_type) {
+    clauses.push("r.relation_type = ?");
+    params.push(opts.relation_type);
+  }
+
+  const limit = opts?.limit ?? 50;
+  params.push(limit);
+
+  const sql = `
+    SELECT r.*, e.name as source_name, e.type as source_type
+    FROM relations r
+    JOIN entities e ON e.id = r.source_id
+    WHERE ${clauses.join(" AND ")}
+    ORDER BY r.weight DESC
+    LIMIT ?`;
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<RelationRow & { source_name: string; source_type: string }>();
+  return result.results;
+}
+
+export async function deleteRelation(db: D1Database, id: string): Promise<void> {
+  await db.prepare(`DELETE FROM relations WHERE id = ?`).bind(id).run();
+}
