@@ -542,7 +542,78 @@ export class MemoryGraphMCP extends McpAgent<Env> {
           keyword_memories: keywordMemories,
         };
 
-        return { content: [{ type: "text" as const, text: JSON.stringify(context) }] };
+         return { content: [{ type: "text" as const, text: JSON.stringify(context) }] };
+      },
+    );
+
+    // ============================================================
+    // ADMIN / MAINTENANCE
+    // ============================================================
+
+    this.server.tool(
+      "reindex_vectors",
+      "Re-embed all entities and memories into Vectorize. Use this to fix missing vectors or after the embedding model changes. Returns counts of items reindexed.",
+      {
+        namespace_id: z.string().describe("Namespace to reindex (or 'all' for everything)"),
+      },
+      async ({ namespace_id }) => {
+        let entityCount = 0;
+        let memoryCount = 0;
+        let errorCount = 0;
+
+        // Get entities to reindex
+        const entityQuery = namespace_id === "all"
+          ? "SELECT id, namespace_id, name, type, summary FROM entities"
+          : "SELECT id, namespace_id, name, type, summary FROM entities WHERE namespace_id = ?";
+        const entityResult = namespace_id === "all"
+          ? await this.env.DB.prepare(entityQuery).all<{ id: string; namespace_id: string; name: string; type: string; summary: string | null }>()
+          : await this.env.DB.prepare(entityQuery).bind(namespace_id).all<{ id: string; namespace_id: string; name: string; type: string; summary: string | null }>();
+
+        for (const entity of entityResult.results) {
+          try {
+            await embeddings.upsertEntityVector(this.env, {
+              entity_id: entity.id,
+              namespace_id: entity.namespace_id,
+              name: entity.name,
+              type: entity.type,
+              summary: entity.summary,
+            });
+            entityCount++;
+          } catch {
+            errorCount++;
+          }
+        }
+
+        // Get memories to reindex
+        const memoryQuery = namespace_id === "all"
+          ? "SELECT id, namespace_id, content, type FROM memories"
+          : "SELECT id, namespace_id, content, type FROM memories WHERE namespace_id = ?";
+        const memoryResult = namespace_id === "all"
+          ? await this.env.DB.prepare(memoryQuery).all<{ id: string; namespace_id: string; content: string; type: string }>()
+          : await this.env.DB.prepare(memoryQuery).bind(namespace_id).all<{ id: string; namespace_id: string; content: string; type: string }>();
+
+        for (const memory of memoryResult.results) {
+          try {
+            await embeddings.upsertMemoryVector(this.env, {
+              memory_id: memory.id,
+              namespace_id: memory.namespace_id,
+              content: memory.content,
+              type: memory.type,
+            });
+            memoryCount++;
+          } catch {
+            errorCount++;
+          }
+        }
+
+        const summary = {
+          entities_reindexed: entityCount,
+          memories_reindexed: memoryCount,
+          errors: errorCount,
+          total: entityCount + memoryCount,
+        };
+
+        return { content: [{ type: "text" as const, text: JSON.stringify(summary) }] };
       },
     );
   }
