@@ -22,13 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "npm"
@@ -57,6 +57,8 @@ jobs:
           NEXT=$(npx git-cliff --bumped-version $BUMP_ARG 2>/dev/null || echo "")
           if [ -z "$NEXT" ]; then
             echo "No version bump detected from commits"
+            echo "## Release Failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "No version bump detected from conventional commits." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
@@ -80,9 +82,7 @@ jobs:
           git push origin main --follow-tags
 
       - name: Generate release notes
-        id: notes
-        run: |
-          npx git-cliff --latest --strip header > RELEASE_NOTES.md
+        run: npx git-cliff --latest --strip header > RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -93,3 +93,15 @@ jobs:
             --notes-file RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## Release Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Previous** | \`${{ steps.version.outputs.current }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **New** | \`${{ steps.version.outputs.next }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Bump** | \`${{ inputs.bump || 'auto' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Release** | [View](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.next }}) |" >> "$GITHUB_STEP_SUMMARY"

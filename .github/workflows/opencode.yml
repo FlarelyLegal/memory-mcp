@@ -54,16 +54,19 @@ jobs:
           if [ "$HEAD_OWNER" != "$REPO_OWNER" ]; then
             echo "Skipping: PR is from a fork ($HEAD_OWNER != $REPO_OWNER)"
             echo "skip=true" >> $GITHUB_OUTPUT
+            echo "reason=PR is from a fork ($HEAD_OWNER)" >> $GITHUB_OUTPUT
             exit 0
           fi
 
           if [ "$BASE_REF" != "main" ]; then
             echo "Skipping: PR targets '$BASE_REF', not 'main'"
             echo "skip=true" >> $GITHUB_OUTPUT
+            echo "reason=PR targets '$BASE_REF', not 'main'" >> $GITHUB_OUTPUT
             exit 0
           fi
 
           echo "skip=false" >> $GITHUB_OUTPUT
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
       - name: Checkout PR branch
         if: (github.event.issue.pull_request || github.event.pull_request) && steps.check-pr.outputs.skip != 'true'
@@ -86,3 +89,21 @@ jobs:
           CLOUDFLARE_GATEWAY_ID: ${{ secrets.CLOUDFLARE_GATEWAY_ID }}
         with:
           model: cloudflare-ai-gateway/anthropic/claude-sonnet-4-5
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## OpenCode Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Triggered by** | @${{ github.event.comment.user.login }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Comment** | \`${{ github.event.comment.body }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.check-pr.outputs.skip }}" = "true" ]; then
+            echo "| **Status** | Skipped |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| **Reason** | ${{ steps.check-pr.outputs.reason }} |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| **Status** | Ran |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| **PR** | #${{ steps.check-pr.outputs.pr_number || github.event.issue.number }} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| **Model** | \`claude-sonnet-4-5\` |" >> "$GITHUB_STEP_SUMMARY"
+          fi
