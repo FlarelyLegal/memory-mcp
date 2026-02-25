@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run --outdir=dist",
+    "typecheck": "tsc --noEmit",
     "db:init": "wrangler d1 execute memory-graph --remote --file=schemas/schema.sql",
     "db:init:local": "wrangler d1 execute memory-graph --local --file=schemas/schema.sql"
   },

@@ -1,0 +1,29 @@
+name: TypeCheck
+
+on:
+  workflow_call:
+
+jobs:
+  typecheck:
+    name: TypeScript
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Type check
+        run: |
+          set -o pipefail
+          echo "## TypeScript Results" >> $GITHUB_STEP_SUMMARY
+          if npm run typecheck 2>&1 | tee output.txt; then
+            echo "**No type errors found**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Type errors detected:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

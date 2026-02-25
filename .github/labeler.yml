@@ -1,0 +1,41 @@
+# Configuration for actions/labeler
+# Labels PRs based on file paths changed
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+
+typescript:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/**/*.ts'
+          - 'tsconfig.json'
+
+schema:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'schemas/**/*.sql'
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'wrangler.jsonc'
+          - 'package.json'
+          - 'tsconfig.json'
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'package-lock.json'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**/*'
+
+cloudflare:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'wrangler.jsonc'

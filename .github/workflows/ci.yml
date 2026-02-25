@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    name: TypeCheck
+    uses: ./.github/workflows/typecheck.yml
+
+  build:
+    name: Build
+    needs: [typecheck]
+    uses: ./.github/workflows/build.yml
