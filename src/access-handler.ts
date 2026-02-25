@@ -19,6 +19,7 @@ import {
   validateOAuthState,
 } from "./oauth/index.js";
 import { verifyToken } from "./jwt.js";
+import { VERSION, SERVER_NAME } from "./version.js";
 
 export async function handleAccessRequest(
   request: Request,
@@ -152,10 +153,9 @@ export async function handleAccessRequest(
   }
 
   if (pathname === "/health") {
-    return new Response(
-      JSON.stringify({ status: "ok", server: "memory-graph-mcp", version: "0.1.0" }),
-      { headers: { "content-type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ status: "ok", server: SERVER_NAME, version: VERSION }), {
+      headers: { "content-type": "application/json" },
+    });
   }
 
   return new Response("Not Found", { status: 404 });
