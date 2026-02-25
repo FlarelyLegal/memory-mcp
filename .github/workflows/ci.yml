@@ -7,11 +7,15 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint.yml
+
   typecheck:
     name: TypeCheck
     uses: ./.github/workflows/typecheck.yml
 
   build:
     name: Build
-    needs: [typecheck]
+    needs: [lint, typecheck]
     uses: ./.github/workflows/build.yml

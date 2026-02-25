@@ -9,15 +9,15 @@
     "bindings": [
       {
         "name": "MCP_OBJECT",
-        "class_name": "MemoryGraphMCP"
-      }
-    ]
+        "class_name": "MemoryGraphMCP",
+      },
+    ],
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["MemoryGraphMCP"]
-    }
+      "new_sqlite_classes": ["MemoryGraphMCP"],
+    },
   ],
 
   // D1 database for the structured graph, memories, and conversations
@@ -25,41 +25,41 @@
     {
       "binding": "DB",
       "database_name": "memory-graph-mcp-db",
-      "database_id": "080fbc1c-3431-4ea6-9a8e-427244e21e05"
-    }
+      "database_id": "080fbc1c-3431-4ea6-9a8e-427244e21e05",
+    },
   ],
 
   // Vectorize index for semantic search
   "vectorize": [
     {
       "binding": "VECTORIZE",
-      "index_name": "memory-graph-mcp-embeddings"
-    }
+      "index_name": "memory-graph-mcp-embeddings",
+    },
   ],
 
   // Workers AI for generating embeddings
   "ai": {
-    "binding": "AI"
+    "binding": "AI",
   },
 
   // KV for optional caching (hot graph fragments, etc.)
   "kv_namespaces": [
     {
       "binding": "CACHE",
-      "id": "94ae719d3fd842ec93f0728ad6771030"
+      "id": "94ae719d3fd842ec93f0728ad6771030",
     },
     {
       "binding": "OAUTH_KV",
-      "id": "acbe5f3da3534db19bbe2c9b727298a8"
-    }
+      "id": "acbe5f3da3534db19bbe2c9b727298a8",
+    },
   ],
 
   // R2 bucket for blob storage (conversation logs, documents, etc.)
   "r2_buckets": [
     {
       "binding": "STORAGE",
-      "bucket_name": "memory-graph-mcp-storage"
-    }
+      "bucket_name": "memory-graph-mcp-storage",
+    },
   ],
 
   // Observability — logs enabled for debugging OAuth + MCP flows
@@ -70,12 +70,12 @@
       "enabled": true,
       "head_sampling_rate": 1,
       "persist": true,
-      "invocation_logs": true
+      "invocation_logs": true,
     },
     "traces": {
       "enabled": false,
       "persist": true,
-      "head_sampling_rate": 1
-    }
-  }
+      "head_sampling_rate": 1,
+    },
+  },
 }

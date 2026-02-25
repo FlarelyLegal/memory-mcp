@@ -28,7 +28,6 @@ import {
   assertMemoryAccess,
   assertConversationAccess,
   assertRelationAccess,
-  AccessDeniedError,
 } from "./auth.js";
 
 export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthProps> {
@@ -57,7 +56,11 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
         description: z.string().optional().describe("What this namespace is for"),
       },
       async ({ name, description }) => {
-        const id = await graph.createNamespace(this.env.DB, { name, description, owner: this.email });
+        const id = await graph.createNamespace(this.env.DB, {
+          name,
+          description,
+          owner: this.email,
+        });
         return { content: [{ type: "text" as const, text: JSON.stringify({ id, name }) }] };
       },
     );
@@ -82,7 +85,9 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
       {
         namespace_id: z.string().describe("Namespace to create the entity in"),
         name: z.string().describe("Entity name"),
-        type: z.string().describe("Entity type: person, concept, project, tool, location, organization, etc."),
+        type: z
+          .string()
+          .describe("Entity type: person, concept, project, tool, location, organization, etc."),
         summary: z.string().optional().describe("Brief description of the entity"),
         metadata: z.string().optional().describe("Optional JSON string of additional properties"),
       },
@@ -117,7 +122,12 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
         const entity = await graph.getEntity(this.env.DB, id);
         if (!entity) return { content: [{ type: "text" as const, text: "Entity not found" }] };
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ ...entity, metadata: parseJson(entity.metadata) }) }],
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ ...entity, metadata: parseJson(entity.metadata) }),
+            },
+          ],
         };
       },
     );
@@ -133,7 +143,11 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
       },
       async ({ namespace_id, query, type, limit }) => {
         await assertNamespaceAccess(this.env.DB, namespace_id, this.email);
-        const results = await graph.searchEntities(this.env.DB, namespace_id, { query, type, limit });
+        const results = await graph.searchEntities(this.env.DB, namespace_id, {
+          query,
+          type,
+          limit,
+        });
         return { content: [{ type: "text" as const, text: JSON.stringify(results) }] };
       },
     );
@@ -197,7 +211,9 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
         namespace_id: z.string(),
         source_id: z.string().describe("Source entity ID (from)"),
         target_id: z.string().describe("Target entity ID (to)"),
-        relation_type: z.string().describe("Relationship label: knows, uses, depends_on, part_of, related_to, etc."),
+        relation_type: z
+          .string()
+          .describe("Relationship label: knows, uses, depends_on, part_of, related_to, etc."),
         weight: z.number().optional().describe("Strength of relation 0.0-1.0 (default 1.0)"),
         metadata: z.string().optional().describe("Optional JSON string of additional properties"),
       },
@@ -212,7 +228,12 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
           metadata: metadata ? JSON.parse(metadata) : undefined,
         });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ id, source_id, target_id, relation_type }) }],
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ id, source_id, target_id, relation_type }),
+            },
+          ],
         };
       },
     );
@@ -222,7 +243,10 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
       "Get all relations from or to an entity",
       {
         entity_id: z.string().describe("Entity ID"),
-        direction: z.enum(["from", "to", "both"]).optional().describe("Direction of relations (default: both)"),
+        direction: z
+          .enum(["from", "to", "both"])
+          .optional()
+          .describe("Direction of relations (default: both)"),
         relation_type: z.string().optional().describe("Filter by relation type"),
         limit: z.number().optional(),
       },
@@ -232,7 +256,10 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
         const results: unknown[] = [];
 
         if (dir === "from" || dir === "both") {
-          const rels = await graph.getRelationsFrom(this.env.DB, entity_id, { relation_type, limit });
+          const rels = await graph.getRelationsFrom(this.env.DB, entity_id, {
+            relation_type,
+            limit,
+          });
           results.push(...rels.map((r) => ({ ...r, direction: "outgoing" })));
         }
         if (dir === "to" || dir === "both") {
@@ -316,7 +343,9 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
           content,
           type: type ?? "fact",
         });
-        return { content: [{ type: "text" as const, text: JSON.stringify({ id, type: type ?? "fact" }) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ id, type: type ?? "fact" }) }],
+        };
       },
     );
 
@@ -346,7 +375,11 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
       },
       async ({ namespace_id, query, type, limit }) => {
         await assertNamespaceAccess(this.env.DB, namespace_id, this.email);
-        const results = await memories.searchMemories(this.env.DB, namespace_id, { query, type, limit });
+        const results = await memories.searchMemories(this.env.DB, namespace_id, {
+          query,
+          type,
+          limit,
+        });
         return { content: [{ type: "text" as const, text: JSON.stringify(results) }] };
       },
     );
@@ -504,7 +537,9 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
       },
       async ({ namespace_id, query, limit }) => {
         await assertNamespaceAccess(this.env.DB, namespace_id, this.email);
-        const results = await conversations.searchMessages(this.env.DB, namespace_id, query, { limit });
+        const results = await conversations.searchMessages(this.env.DB, namespace_id, query, {
+          limit,
+        });
         return { content: [{ type: "text" as const, text: JSON.stringify(results) }] };
       },
     );
@@ -527,7 +562,10 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
       },
       async ({ namespace_id, query, kind, limit }) => {
         await assertNamespaceAccess(this.env.DB, namespace_id, this.email);
-        const results = await embeddings.semanticSearch(this.env, query, namespace_id, { kind, limit });
+        const results = await embeddings.semanticSearch(this.env, query, namespace_id, {
+          kind,
+          limit,
+        });
         return { content: [{ type: "text" as const, text: JSON.stringify(results) }] };
       },
     );
@@ -548,7 +586,9 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
         await assertNamespaceAccess(this.env.DB, namespace_id, this.email);
         const n = limit ?? 5;
 
-        const semanticResults = await embeddings.semanticSearch(this.env, query, namespace_id, { limit: n });
+        const semanticResults = await embeddings.semanticSearch(this.env, query, namespace_id, {
+          limit: n,
+        });
 
         const entityContext: unknown[] = [];
         for (const result of semanticResults.filter((r) => r.kind === "entity")) {
@@ -570,7 +610,9 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
           });
         }
 
-        const rankedMemories = await memories.recallMemories(this.env.DB, namespace_id, { limit: n });
+        const rankedMemories = await memories.recallMemories(this.env.DB, namespace_id, {
+          limit: n,
+        });
         const keywordMemories = await memories.searchMemories(this.env.DB, namespace_id, {
           query,
           limit: n,
@@ -583,7 +625,7 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
           keyword_memories: keywordMemories,
         };
 
-         return { content: [{ type: "text" as const, text: JSON.stringify(context) }] };
+        return { content: [{ type: "text" as const, text: JSON.stringify(context) }] };
       },
     );
 
@@ -608,12 +650,19 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
         let errorCount = 0;
 
         // Get entities to reindex (scoped to user's namespaces)
-        const entityQuery = namespace_id === "all"
-          ? "SELECT e.id, e.namespace_id, e.name, e.type, e.summary FROM entities e JOIN namespaces n ON n.id = e.namespace_id WHERE n.owner = ? OR n.owner IS NULL"
-          : "SELECT id, namespace_id, name, type, summary FROM entities WHERE namespace_id = ?";
+        const entityQuery =
+          namespace_id === "all"
+            ? "SELECT e.id, e.namespace_id, e.name, e.type, e.summary FROM entities e JOIN namespaces n ON n.id = e.namespace_id WHERE n.owner = ? OR n.owner IS NULL"
+            : "SELECT id, namespace_id, name, type, summary FROM entities WHERE namespace_id = ?";
         const entityResult = await this.env.DB.prepare(entityQuery)
           .bind(namespace_id === "all" ? this.email : namespace_id)
-          .all<{ id: string; namespace_id: string; name: string; type: string; summary: string | null }>();
+          .all<{
+            id: string;
+            namespace_id: string;
+            name: string;
+            type: string;
+            summary: string | null;
+          }>();
 
         for (const entity of entityResult.results) {
           try {
@@ -631,9 +680,10 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
         }
 
         // Get memories to reindex (scoped to user's namespaces)
-        const memoryQuery = namespace_id === "all"
-          ? "SELECT m.id, m.namespace_id, m.content, m.type FROM memories m JOIN namespaces n ON n.id = m.namespace_id WHERE n.owner = ? OR n.owner IS NULL"
-          : "SELECT id, namespace_id, content, type FROM memories WHERE namespace_id = ?";
+        const memoryQuery =
+          namespace_id === "all"
+            ? "SELECT m.id, m.namespace_id, m.content, m.type FROM memories m JOIN namespaces n ON n.id = m.namespace_id WHERE n.owner = ? OR n.owner IS NULL"
+            : "SELECT id, namespace_id, content, type FROM memories WHERE namespace_id = ?";
         const memoryResult = await this.env.DB.prepare(memoryQuery)
           .bind(namespace_id === "all" ? this.email : namespace_id)
           .all<{ id: string; namespace_id: string; content: string; type: string }>();

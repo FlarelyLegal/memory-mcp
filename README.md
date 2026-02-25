@@ -9,14 +9,14 @@ A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured
 
 ## Architecture
 
-| Component | Cloudflare Service | Purpose |
-|---|---|---|
-| MCP sessions | **Durable Objects** | Stateful per-session MCP agent (`McpAgent`) |
-| Structured graph | **D1** (SQLite) | Entities, relations, memories, conversations |
-| Semantic search | **Vectorize** + **Workers AI** | Embedding-based similarity (`@cf/baai/bge-large-en-v1.5`, 1024d) |
-| Auth | **KV** + **OAuthProvider** | OAuth token/client storage, Cloudflare Access integration |
-| Cache | **KV** | Optional caching layer |
-| Blob storage | **R2** | Conversation logs, documents |
+| Component        | Cloudflare Service             | Purpose                                                          |
+| ---------------- | ------------------------------ | ---------------------------------------------------------------- |
+| MCP sessions     | **Durable Objects**            | Stateful per-session MCP agent (`McpAgent`)                      |
+| Structured graph | **D1** (SQLite)                | Entities, relations, memories, conversations                     |
+| Semantic search  | **Vectorize** + **Workers AI** | Embedding-based similarity (`@cf/baai/bge-large-en-v1.5`, 1024d) |
+| Auth             | **KV** + **OAuthProvider**     | OAuth token/client storage, Cloudflare Access integration        |
+| Cache            | **KV**                         | Optional caching layer                                           |
+| Blob storage     | **R2**                         | Conversation logs, documents                                     |
 
 ## Tools (25)
 
@@ -39,6 +39,7 @@ A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured
 ## Setup
 
 ### Prerequisites
+
 - Node.js 18+
 - Cloudflare account with Workers, D1, Vectorize, and Workers AI enabled
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
@@ -62,6 +63,7 @@ npx wrangler r2 bucket create memory-graph-mcp-storage
 ### 3. Update wrangler.jsonc
 
 Replace the IDs in `wrangler.jsonc` with the values printed by the commands above:
+
 - `database_id` for D1
 - `id` for each KV namespace
 

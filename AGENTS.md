@@ -10,13 +10,13 @@ Memory Graph MCP — a remote MCP server on Cloudflare Workers providing LLMs wi
 
 See `package.json` scripts. Summary:
 
-| Task | Command |
-|---|---|
-| Install deps | `npm install` |
-| Typecheck | `npm run typecheck` |
-| Build (dry-run) | `npm run build` |
-| Dev server (local) | `npx wrangler dev --local --port 8787` |
-| Init local D1 schema | `npm run db:init:local` |
+| Task                 | Command                                |
+| -------------------- | -------------------------------------- |
+| Install deps         | `npm install`                          |
+| Typecheck            | `npm run typecheck`                    |
+| Build (dry-run)      | `npm run build`                        |
+| Dev server (local)   | `npx wrangler dev --local --port 8787` |
+| Init local D1 schema | `npm run db:init:local`                |
 
 ### Non-obvious caveats
 

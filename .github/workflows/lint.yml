@@ -1,0 +1,43 @@
+name: Lint
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Prettier
+        run: |
+          set -o pipefail
+          echo "## Prettier Results" >> $GITHUB_STEP_SUMMARY
+          if npm run format:check 2>&1 | tee output.txt; then
+            echo "**All files formatted correctly**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Formatting issues detected:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: ESLint
+        run: |
+          set -o pipefail
+          echo "## ESLint Results" >> $GITHUB_STEP_SUMMARY
+          if npm run lint 2>&1 | tee output.txt; then
+            echo "**No lint errors found**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Lint errors detected:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

@@ -13,7 +13,7 @@ const EMBEDDING_MODEL = "@cf/baai/bge-large-en-v1.5";
  * Generate an embedding vector for the given text using Workers AI.
  */
 export async function embed(ai: Ai, text: string): Promise<number[]> {
-  const result = await ai.run(EMBEDDING_MODEL, { text: [text] }) as { data: number[][] };
+  const result = (await ai.run(EMBEDDING_MODEL, { text: [text] })) as { data: number[][] };
   return result.data[0];
 }
 

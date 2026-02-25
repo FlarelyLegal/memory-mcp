@@ -1,7 +1,7 @@
 /**
  * Memory operations: standalone knowledge fragments with temporal decay.
  */
-import type { Env, MemoryRow } from "./types.js";
+import type { MemoryRow } from "./types.js";
 import { generateId, now, toJson, decayScore } from "./utils.js";
 
 export async function createMemory(
@@ -78,7 +78,10 @@ export async function searchMemories(
   params.push(limit);
 
   const sql = `SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY importance DESC, last_accessed_at DESC LIMIT ?`;
-  const result = await db.prepare(sql).bind(...params).all<MemoryRow>();
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<MemoryRow>();
   return result.results;
 }
 
@@ -103,7 +106,10 @@ export async function recallMemories(
   params.push(pool);
 
   const sql = `SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY last_accessed_at DESC LIMIT ?`;
-  const result = await db.prepare(sql).bind(...params).all<MemoryRow>();
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<MemoryRow>();
 
   const scored = result.results.map((m) => ({
     ...m,
@@ -136,18 +142,38 @@ export async function getMemoriesForEntity(
 export async function updateMemory(
   db: D1Database,
   id: string,
-  updates: { content?: string; type?: string; importance?: number; metadata?: Record<string, unknown> },
+  updates: {
+    content?: string;
+    type?: string;
+    importance?: number;
+    metadata?: Record<string, unknown>;
+  },
 ): Promise<void> {
   const sets: string[] = ["updated_at = ?"];
   const params: unknown[] = [now()];
 
-  if (updates.content !== undefined) { sets.push("content = ?"); params.push(updates.content); }
-  if (updates.type !== undefined) { sets.push("type = ?"); params.push(updates.type); }
-  if (updates.importance !== undefined) { sets.push("importance = ?"); params.push(updates.importance); }
-  if (updates.metadata !== undefined) { sets.push("metadata = ?"); params.push(toJson(updates.metadata)); }
+  if (updates.content !== undefined) {
+    sets.push("content = ?");
+    params.push(updates.content);
+  }
+  if (updates.type !== undefined) {
+    sets.push("type = ?");
+    params.push(updates.type);
+  }
+  if (updates.importance !== undefined) {
+    sets.push("importance = ?");
+    params.push(updates.importance);
+  }
+  if (updates.metadata !== undefined) {
+    sets.push("metadata = ?");
+    params.push(toJson(updates.metadata));
+  }
 
   params.push(id);
-  await db.prepare(`UPDATE memories SET ${sets.join(", ")} WHERE id = ?`).bind(...params).run();
+  await db
+    .prepare(`UPDATE memories SET ${sets.join(", ")} WHERE id = ?`)
+    .bind(...params)
+    .run();
 }
 
 export async function deleteMemory(db: D1Database, id: string): Promise<void> {

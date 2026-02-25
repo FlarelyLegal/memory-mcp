@@ -173,8 +173,7 @@ export async function addApprovedClient(
   const approvedClientsCookieName = "__Host-APPROVED_CLIENTS";
   const THIRTY_DAYS_IN_SECONDS = 2592000;
 
-  const existingApprovedClients =
-    (await getApprovedClientsFromCookie(request, cookieSecret)) || [];
+  const existingApprovedClients = (await getApprovedClientsFromCookie(request, cookieSecret)) || [];
   const updatedApprovedClients = Array.from(new Set([...existingApprovedClients, clientId]));
 
   const payload = JSON.stringify(updatedApprovedClients);
@@ -366,7 +365,10 @@ async function getApprovedClientsFromCookie(
 
   try {
     const approvedClients = JSON.parse(payload);
-    if (!Array.isArray(approvedClients) || !approvedClients.every((item) => typeof item === "string")) {
+    if (
+      !Array.isArray(approvedClients) ||
+      !approvedClients.every((item) => typeof item === "string")
+    ) {
       return null;
     }
     return approvedClients as string[];
@@ -384,7 +386,11 @@ async function signData(data: string, secret: string): Promise<string> {
     .join("");
 }
 
-async function verifySignature(signatureHex: string, data: string, secret: string): Promise<boolean> {
+async function verifySignature(
+  signatureHex: string,
+  data: string,
+  secret: string,
+): Promise<boolean> {
   const key = await importKey(secret);
   const enc = new TextEncoder();
   try {

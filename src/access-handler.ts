@@ -89,11 +89,15 @@ export async function handleAccessRequest(
         "Set-Cookie": approvedClientCookie,
       });
     } catch (error: unknown) {
+      // eslint-disable-next-line no-console
       console.error("POST /authorize error:", error);
       if (error instanceof OAuthError) {
         return error.toResponse();
       }
-      return new Response(`Internal server error: ${error instanceof Error ? error.message : "unknown"}`, { status: 500 });
+      return new Response(
+        `Internal server error: ${error instanceof Error ? error.message : "unknown"}`,
+        { status: 500 },
+      );
     }
   }
 

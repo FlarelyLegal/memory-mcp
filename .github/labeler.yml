@@ -4,38 +4,38 @@
 documentation:
   - changed-files:
       - any-glob-to-any-file:
-          - '**/*.md'
+          - "**/*.md"
 
 typescript:
   - changed-files:
       - any-glob-to-any-file:
-          - 'src/**/*.ts'
-          - 'tsconfig.json'
+          - "src/**/*.ts"
+          - "tsconfig.json"
 
 schema:
   - changed-files:
       - any-glob-to-any-file:
-          - 'schemas/**/*.sql'
+          - "schemas/**/*.sql"
 
 config:
   - changed-files:
       - any-glob-to-any-file:
-          - 'wrangler.jsonc'
-          - 'package.json'
-          - 'tsconfig.json'
+          - "wrangler.jsonc"
+          - "package.json"
+          - "tsconfig.json"
 
 dependencies:
   - changed-files:
       - any-glob-to-any-file:
-          - 'package.json'
-          - 'package-lock.json'
+          - "package.json"
+          - "package-lock.json"
 
 ci:
   - changed-files:
       - any-glob-to-any-file:
-          - '.github/**/*'
+          - ".github/**/*"
 
 cloudflare:
   - changed-files:
       - any-glob-to-any-file:
-          - 'wrangler.jsonc'
+          - "wrangler.jsonc"

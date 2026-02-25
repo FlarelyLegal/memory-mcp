@@ -7,6 +7,10 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "build": "wrangler deploy --dry-run --outdir=dist",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
     "typecheck": "tsc --noEmit",
     "db:init": "wrangler d1 execute memory-graph-mcp-db --remote --file=schemas/schema.sql",
     "db:init:local": "wrangler d1 execute memory-graph-mcp-db --local --file=schemas/schema.sql"
@@ -19,7 +23,13 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250214.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.2",
+    "eslint-config-prettier": "^10.1.8",
+    "jiti": "^2.6.1",
+    "prettier": "^3.8.1",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.56.1",
     "wrangler": "^4.0.0"
   }
 }
