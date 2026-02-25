@@ -13,7 +13,7 @@ A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured
 |---|---|---|
 | MCP sessions | **Durable Objects** | Stateful per-session MCP agent (`McpAgent`) |
 | Structured graph | **D1** (SQLite) | Entities, relations, memories, conversations |
-| Semantic search | **Vectorize** + **Workers AI** | Embedding-based similarity (`@cf/baai/bge-base-en-v1.5`, 768d) |
+| Semantic search | **Vectorize** + **Workers AI** | Embedding-based similarity (`@cf/baai/bge-large-en-v1.5`, 1024d) |
 | Auth | **KV** + **OAuthProvider** | OAuth token/client storage, Cloudflare Access integration |
 | Cache | **KV** | Optional caching layer |
 | Blob storage | **R2** | Conversation logs, documents |
@@ -53,7 +53,7 @@ npm install
 
 ```bash
 npx wrangler d1 create memory-graph-mcp-db
-npx wrangler vectorize create memory-graph-mcp-embeddings --dimensions=768 --metric=cosine
+npx wrangler vectorize create memory-graph-mcp-embeddings --dimensions=1024 --metric=cosine
 npx wrangler kv namespace create CACHE
 npx wrangler kv namespace create OAUTH_KV
 npx wrangler r2 bucket create memory-graph-mcp-storage

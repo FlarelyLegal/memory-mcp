@@ -7,7 +7,7 @@
  */
 import type { Env } from "./types.js";
 
-const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
+const EMBEDDING_MODEL = "@cf/baai/bge-large-en-v1.5";
 
 /**
  * Generate an embedding vector for the given text using Workers AI.
