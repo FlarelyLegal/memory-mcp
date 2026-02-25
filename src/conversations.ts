@@ -1,7 +1,7 @@
 /**
  * Conversation and message history operations.
  */
-import type { Env, ConversationRow, MessageRow } from "./types.js";
+import type { ConversationRow, MessageRow } from "./types.js";
 import { generateId, now, toJson } from "./utils.js";
 
 export async function createConversation(
@@ -10,9 +10,7 @@ export async function createConversation(
 ): Promise<string> {
   const id = generateId();
   await db
-    .prepare(
-      `INSERT INTO conversations (id, namespace_id, title, metadata) VALUES (?, ?, ?, ?)`,
-    )
+    .prepare(`INSERT INTO conversations (id, namespace_id, title, metadata) VALUES (?, ?, ?, ?)`)
     .bind(id, opts.namespace_id, opts.title ?? null, toJson(opts.metadata ?? null))
     .run();
   return id;
@@ -79,7 +77,10 @@ export async function getMessages(
   params.push(limit);
 
   const sql = `SELECT * FROM messages WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC LIMIT ?`;
-  const result = await db.prepare(sql).bind(...params).all<MessageRow>();
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<MessageRow>();
   // Return in chronological order
   return result.results.reverse();
 }

@@ -2,8 +2,8 @@
  * Core graph operations against D1.
  * Handles entities, relations, namespaces, and graph traversal.
  */
-import type { Env, EntityRow, RelationRow, NamespaceRow } from "./types.js";
-import { generateId, now, parseJson, toJson } from "./utils.js";
+import type { EntityRow, RelationRow, NamespaceRow } from "./types.js";
+import { generateId, now, toJson } from "./utils.js";
 
 // ---- Namespaces ----
 
@@ -16,7 +16,13 @@ export async function createNamespace(
     .prepare(
       `INSERT INTO namespaces (id, name, description, owner, metadata) VALUES (?, ?, ?, ?, ?)`,
     )
-    .bind(id, opts.name, opts.description ?? null, opts.owner ?? null, toJson(opts.metadata ?? null))
+    .bind(
+      id,
+      opts.name,
+      opts.description ?? null,
+      opts.owner ?? null,
+      toJson(opts.metadata ?? null),
+    )
     .run();
   return id;
 }
@@ -33,7 +39,9 @@ export async function listNamespaces(db: D1Database, owner?: string): Promise<Na
       .all<NamespaceRow>();
     return result.results;
   }
-  const result = await db.prepare(`SELECT * FROM namespaces ORDER BY created_at DESC`).all<NamespaceRow>();
+  const result = await db
+    .prepare(`SELECT * FROM namespaces ORDER BY created_at DESC`)
+    .all<NamespaceRow>();
   return result.results;
 }
 
@@ -55,7 +63,14 @@ export async function createEntity(
       `INSERT INTO entities (id, namespace_id, name, type, summary, metadata)
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, opts.namespace_id, opts.name, opts.type, opts.summary ?? null, toJson(opts.metadata ?? null))
+    .bind(
+      id,
+      opts.namespace_id,
+      opts.name,
+      opts.type,
+      opts.summary ?? null,
+      toJson(opts.metadata ?? null),
+    )
     .run();
   return id;
 }
@@ -95,7 +110,10 @@ export async function searchEntities(
   params.push(limit);
 
   const sql = `SELECT * FROM entities WHERE ${clauses.join(" AND ")} ORDER BY last_accessed_at DESC LIMIT ?`;
-  const result = await db.prepare(sql).bind(...params).all<EntityRow>();
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<EntityRow>();
   return result.results;
 }
 
@@ -107,13 +125,28 @@ export async function updateEntity(
   const sets: string[] = ["updated_at = ?"];
   const params: unknown[] = [now()];
 
-  if (updates.name !== undefined) { sets.push("name = ?"); params.push(updates.name); }
-  if (updates.type !== undefined) { sets.push("type = ?"); params.push(updates.type); }
-  if (updates.summary !== undefined) { sets.push("summary = ?"); params.push(updates.summary); }
-  if (updates.metadata !== undefined) { sets.push("metadata = ?"); params.push(toJson(updates.metadata)); }
+  if (updates.name !== undefined) {
+    sets.push("name = ?");
+    params.push(updates.name);
+  }
+  if (updates.type !== undefined) {
+    sets.push("type = ?");
+    params.push(updates.type);
+  }
+  if (updates.summary !== undefined) {
+    sets.push("summary = ?");
+    params.push(updates.summary);
+  }
+  if (updates.metadata !== undefined) {
+    sets.push("metadata = ?");
+    params.push(toJson(updates.metadata));
+  }
 
   params.push(id);
-  await db.prepare(`UPDATE entities SET ${sets.join(", ")} WHERE id = ?`).bind(...params).run();
+  await db
+    .prepare(`UPDATE entities SET ${sets.join(", ")} WHERE id = ?`)
+    .bind(...params)
+    .run();
 }
 
 export async function deleteEntity(db: D1Database, id: string): Promise<void> {
@@ -178,7 +211,10 @@ export async function getRelationsFrom(
     WHERE ${clauses.join(" AND ")}
     ORDER BY r.weight DESC
     LIMIT ?`;
-  const result = await db.prepare(sql).bind(...params).all<RelationRow & { target_name: string; target_type: string }>();
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<RelationRow & { target_name: string; target_type: string }>();
   return result.results;
 }
 
@@ -205,7 +241,10 @@ export async function getRelationsTo(
     WHERE ${clauses.join(" AND ")}
     ORDER BY r.weight DESC
     LIMIT ?`;
-  const result = await db.prepare(sql).bind(...params).all<RelationRow & { source_name: string; source_type: string }>();
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<RelationRow & { source_name: string; source_type: string }>();
   return result.results;
 }
 
