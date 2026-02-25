@@ -1,118 +1,87 @@
 # Memory Graph MCP
 
-A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured memory.
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/)
+[![MCP SDK](https://img.shields.io/badge/MCP_SDK-1.12-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTEyIDJMMiA3djEwbDEwIDUgMTAtNVY3eiIvPjwvc3ZnPg==)](https://modelcontextprotocol.io)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Wrangler](https://img.shields.io/badge/Wrangler-4.x-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/wrangler/)
 
-**What it does:** Any MCP-compatible client (Claude, OpenCode, Cursor, etc.) can connect to this server and use tools to remember things, build knowledge graphs, search by meaning, and recall past conversations -- all persisted on Cloudflare's edge.
+A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured memory via knowledge graphs, semantic search, and temporally-decayed recall.
 
 ## Architecture
 
 | Component | Cloudflare Service | Purpose |
 |---|---|---|
+| MCP sessions | **Durable Objects** | Stateful per-session MCP agent (`McpAgent`) |
 | Structured graph | **D1** (SQLite) | Entities, relations, memories, conversations |
-| Semantic search | **Vectorize** + **Workers AI** | Embedding-based similarity search |
-| Compute | **Workers** | MCP server, tool handlers, graph traversal |
+| Semantic search | **Vectorize** + **Workers AI** | Embedding-based similarity (`@cf/baai/bge-base-en-v1.5`, 768d) |
+| Auth | **KV** + **OAuthProvider** | OAuth token/client storage, Cloudflare Access integration |
 | Cache | **KV** | Optional caching layer |
+| Blob storage | **R2** | Conversation logs, documents |
 
-## Available Tools (22)
+## Tools (23)
 
-### Namespaces
-- `create_namespace` -- Create a scope (per-user, per-project, etc.)
-- `list_namespaces` -- List all namespaces
+**Namespaces** -- `create_namespace`, `list_namespaces`
 
-### Entities (graph nodes)
-- `create_entity` -- Add a person, concept, project, tool, etc.
-- `get_entity` -- Get entity details by ID
-- `search_entities` -- Search by name/type/keyword
-- `update_entity` -- Modify an entity
-- `delete_entity` -- Remove an entity and its relations
+**Entities** (graph nodes) -- `create_entity`, `get_entity`, `search_entities`, `update_entity`, `delete_entity`
 
-### Relations (graph edges)
-- `create_relation` -- Create a directed relationship (e.g. Alice --knows--> Bob)
-- `get_relations` -- Get relations from/to an entity
-- `delete_relation` -- Remove a relation
+**Relations** (graph edges) -- `create_relation`, `get_relations`, `delete_relation`
 
-### Graph Traversal
-- `traverse_graph` -- BFS traversal from a starting entity (configurable depth)
+**Graph traversal** -- `traverse_graph` (BFS from a starting entity, configurable depth)
 
-### Memories (knowledge fragments)
-- `create_memory` -- Store a fact, observation, preference, or instruction
-- `recall_memories` -- Retrieve memories ranked by importance + recency (temporal decay)
-- `search_memories` -- Keyword search
-- `get_entity_memories` -- Get memories linked to an entity
-- `update_memory` -- Modify a memory
-- `delete_memory` -- Remove a memory
+**Memories** (knowledge fragments) -- `create_memory`, `recall_memories` (ranked by importance + temporal decay), `search_memories`, `get_entity_memories`, `update_memory`, `delete_memory`
 
-### Conversations
-- `create_conversation` -- Start tracking a conversation
-- `list_conversations` -- List recent conversations
-- `add_message` -- Add a message (user/assistant/system/tool)
-- `get_messages` -- Get conversation history
-- `search_conversations` -- Search across all conversation messages
+**Conversations** -- `create_conversation`, `list_conversations`, `add_message`, `get_messages`, `search_conversations`
 
-### Semantic Search
-- `semantic_search` -- Vector similarity search across entities, memories, and messages
-- `get_context` -- **High-level composite tool**: gathers semantic matches, graph context, ranked memories, and keyword matches in one call. Best for "tell me everything about X".
+**Semantic search** -- `semantic_search` (vector similarity across entities, memories, messages), `get_context` (composite: semantic + graph + ranked memories in one call)
+
+**Admin** -- `reindex_vectors` (re-embed all entities/memories into Vectorize)
 
 ## Setup
 
 ### Prerequisites
 - Node.js 18+
-- A Cloudflare account with Workers, D1, Vectorize, and Workers AI enabled
+- Cloudflare account with Workers, D1, Vectorize, and Workers AI enabled
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
 
 ### 1. Install dependencies
 
 ```bash
-cd memory-graph-mcp
 npm install
 ```
 
 ### 2. Create Cloudflare resources
 
 ```bash
-# Create the D1 database
-npx wrangler d1 create memory-graph
-
-# Create the Vectorize index (768 dimensions for bge-base-en-v1.5)
-npx wrangler vectorize create memory-graph-embeddings --dimensions=768 --metric=cosine
-
-# Create the KV namespace
+npx wrangler d1 create memory-graph-mcp-db
+npx wrangler vectorize create memory-graph-mcp-embeddings --dimensions=768 --metric=cosine
 npx wrangler kv namespace create CACHE
+npx wrangler kv namespace create OAUTH_KV
+npx wrangler r2 bucket create memory-graph-mcp-storage
 ```
 
 ### 3. Update wrangler.jsonc
 
-Replace the placeholder IDs in `wrangler.jsonc` with the actual IDs printed by the commands above:
+Replace the IDs in `wrangler.jsonc` with the values printed by the commands above:
 - `database_id` for D1
-- `id` for KV namespace
+- `id` for each KV namespace
 
 ### 4. Initialize the database schema
 
 ```bash
-# Remote
-npm run db:init
-
-# Or local dev
-npm run db:init:local
+npm run db:init        # remote
+npm run db:init:local  # local dev
 ```
 
 ### 5. Deploy
 
 ```bash
-# Local development
-npm run dev
-
-# Deploy to production
-npm run deploy
+npm run dev     # local development
+npm run deploy  # production
 ```
-
-Your MCP server will be available at: `https://memory-graph-mcp.<your-subdomain>.workers.dev/mcp`
 
 ## Connecting Clients
 
-### Claude Desktop / OpenCode / Cursor
-
-Add to your MCP client config:
+Add to your MCP client config (Claude Desktop, OpenCode, Cursor, etc.):
 
 ```json
 {
@@ -124,40 +93,19 @@ Add to your MCP client config:
 }
 ```
 
-### Testing with MCP Inspector
+Test with the MCP Inspector:
 
 ```bash
 npx @modelcontextprotocol/inspector https://memory-graph-mcp.<your-subdomain>.workers.dev/mcp
 ```
 
-## How Temporal Decay Works
+## Temporal Decay
 
-Memories have an `importance` score (0.0-1.0) and track `last_accessed_at`. The `recall_memories` tool blends these:
+`recall_memories` ranks memories by blending importance with recency:
 
 ```
 relevance = importance * 0.4 + recency_factor * 0.6
 recency_factor = e^(-ln(2) / half_life_hours * age_hours)
 ```
 
-Default half-life is 7 days: a memory accessed 7 days ago has a recency factor of ~0.5. Important memories (high importance) resist decay. Accessing a memory resets its recency.
-
-## Example Usage
-
-Once connected, an LLM can do things like:
-
-```
-"Create a namespace called 'work' for my work context"
-"Create an entity for the project 'Atlas' of type 'project' with summary 'Internal data platform'"
-"Create an entity for 'Sarah' of type 'person' with summary 'Tech lead on Atlas'"
-"Create a relation from Sarah to Atlas with type 'leads'"
-"Remember that Sarah prefers async communication"
-"What do I know about Atlas?" → uses get_context to pull everything
-"Traverse the graph from Atlas 2 hops deep" → discovers connected people, tools, etc.
-```
-
-## Limits
-
-- **D1**: 10 GB per database, single-threaded (~1000 qps at 1ms/query)
-- **Vectorize**: Metadata filtering scoped by namespace
-- **Workers AI**: Embedding model `@cf/baai/bge-base-en-v1.5` (768 dimensions)
-- **Workers**: Standard request limits apply
+Default half-life is 7 days. Accessing a memory resets its recency.
