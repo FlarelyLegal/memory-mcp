@@ -24,7 +24,8 @@ See `package.json` scripts. Summary:
 - **AI and Vectorize not available locally:** When running `--local`, the Workers AI and Vectorize bindings show "not supported". Tools that rely on embeddings/semantic search will fail gracefully. D1, KV, R2, and Durable Objects all work locally.
 - **Local D1 must be initialized:** Before first dev server run, execute `npm run db:init:local` to create the SQLite tables in `.wrangler/state/`.
 - **OAuth flow requires Cloudflare Access secrets:** The full OAuth login flow needs `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET`, `ACCESS_TOKEN_URL`, `ACCESS_AUTHORIZATION_URL`, `ACCESS_JWKS_URL`, and `COOKIE_ENCRYPTION_KEY` in `.dev.vars`. Without these, the `/health`, `/register`, and `/.well-known/oauth-authorization-server` endpoints still work, but the `/authorize` → `/callback` flow and authenticated MCP tool calls will not.
-- **Health endpoint:** `GET /health` returns `{"status":"ok","server":"memory-graph-mcp","version":"0.1.0"}` and requires no authentication — use it to verify the server is running.
+- **Health endpoint:** `GET /health` returns `{"status":"ok","server":"memory-graph-mcp","version":"<version>"}` and requires no authentication — use it to verify the server is running.
+- **Version is in `package.json` only.** The `src/version.ts` module reads it at build time. Never hardcode version strings elsewhere. To release, use the Release workflow dispatch in GitHub Actions.
 
 ### File structure
 

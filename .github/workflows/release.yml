@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type (leave empty for auto-detect from commits)"
+        required: false
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine next version
+        id: version
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "current=v${CURRENT}" >> "$GITHUB_OUTPUT"
+
+          BUMP_ARG=""
+          if [ "${{ inputs.bump }}" != "auto" ] && [ -n "${{ inputs.bump }}" ]; then
+            BUMP_ARG="--bump ${{ inputs.bump }}"
+          else
+            BUMP_ARG="--bump"
+          fi
+
+          NEXT=$(npx git-cliff --bumped-version $BUMP_ARG 2>/dev/null || echo "")
+          if [ -z "$NEXT" ]; then
+            echo "No version bump detected from commits"
+            exit 1
+          fi
+
+          echo "next=${NEXT}" >> "$GITHUB_OUTPUT"
+          echo "next_bare=${NEXT#v}" >> "$GITHUB_OUTPUT"
+          echo "Bumping from v${CURRENT} to ${NEXT}"
+
+      - name: Bump package.json version
+        run: npm version "${{ steps.version.outputs.next_bare }}" --no-git-tag-version
+
+      - name: Generate changelog
+        run: npx git-cliff --tag "${{ steps.version.outputs.next }}" -o CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit, tag, and push
+        run: |
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.version.outputs.next }}"
+          git tag "${{ steps.version.outputs.next }}" -m "Release ${{ steps.version.outputs.next }}"
+          git push origin main --follow-tags
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          npx git-cliff --latest --strip header > RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub release
+        run: |
+          gh release create "${{ steps.version.outputs.next }}" \
+            --title "${{ steps.version.outputs.next }}" \
+            --notes-file RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

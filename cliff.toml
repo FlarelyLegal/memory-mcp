@@ -54,6 +54,13 @@ filter_commits = false
 sort_commits = "oldest"
 topo_order_commits = true
 
+[bump]
+# Detect semver bump from conventional commits:
+#   feat  -> minor
+#   fix   -> patch
+#   feat! -> major
+initial_tag = "v0.1.0"
+
 [remote.github]
 owner = "FlarelyLegal"
 repo = "memory-mcp"
