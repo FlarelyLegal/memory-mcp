@@ -548,5 +548,17 @@ export class MemoryGraphMCP extends McpAgent<Env> {
   }
 }
 
-// Use McpAgent.serve() to handle routing -- serves on /mcp by default
-export default MemoryGraphMCP.serve("/mcp");
+// Wrap McpAgent.serve() to add a health endpoint
+const mcp = MemoryGraphMCP.serve("/mcp");
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/health") {
+      return new Response(JSON.stringify({ status: "ok", server: "memory-graph-mcp", version: "0.1.0" }), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return mcp.fetch(request, env, ctx);
+  },
+};

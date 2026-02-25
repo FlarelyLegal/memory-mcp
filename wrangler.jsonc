@@ -1,14 +1,14 @@
 {
   "name": "memory-graph-mcp",
   "main": "src/index.ts",
-  "compatibility_date": "2025-02-20",
+  "compatibility_date": "2026-02-25",
   "compatibility_flags": ["nodejs_compat"],
 
   // Durable Object for the MCP agent sessions
   "durable_objects": {
     "bindings": [
       {
-        "name": "MEMORY_GRAPH_MCP",
+        "name": "MCP_OBJECT",
         "class_name": "MemoryGraphMCP"
       }
     ]
@@ -33,7 +33,7 @@
   "vectorize": [
     {
       "binding": "VECTORIZE",
-      "index_name": "memory-graph-mcp"
+      "index_name": "memory-graph-mcp-embeddings"
     }
   ],
 
