@@ -1,0 +1,66 @@
+name: Changelog
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "CHANGELOG.md"
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    name: Update Changelog
+    runs-on: ubuntu-latest
+    # Skip commits made by this workflow to avoid infinite loops
+    if: github.event.head_commit.author.name != 'github-actions[bot]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Generate changelog
+        run: npx git-cliff -o CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync README badges
+        run: |
+          NODE_MIN=$(node -p "require('./package.json').engines?.node?.replace('>=','') || '24'")
+          TS_VER=$(node -p "require('./package.json').devDependencies.typescript.replace('^','').split('.').slice(0,2).join('.')")
+          MCP_VER=$(node -p "require('./package.json').dependencies['@modelcontextprotocol/sdk'].replace('^','').split('.').slice(0,2).join('.')")
+
+          sed -i "s|Node.js-[^-]*-5FA04E|Node.js-≥${NODE_MIN}-5FA04E|" README.md
+          sed -i "s|TypeScript-[^-]*-3178C6|TypeScript-${TS_VER}-3178C6|" README.md
+          sed -i "s|MCP_SDK-[^-]*-blue|MCP_SDK-${MCP_VER}-blue|" README.md
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet CHANGELOG.md README.md; then
+            echo "No changes detected"
+            echo "## Changelog" >> "$GITHUB_STEP_SUMMARY"
+            echo "No changes detected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git add CHANGELOG.md README.md
+            git commit -m "docs: update changelog and badges [skip ci]"
+            git push
+            echo "## Changelog" >> "$GITHUB_STEP_SUMMARY"
+            echo "CHANGELOG.md and README badges updated." >> "$GITHUB_STEP_SUMMARY"
+          fi
