@@ -33,6 +33,7 @@ export interface Namespace {
   id: string;
   name: string;
   description: string | null;
+  owner: string | null;
   metadata: Record<string, unknown> | null;
   created_at: number;
   updated_at: number;
@@ -158,6 +159,7 @@ export interface NamespaceRow {
   id: string;
   name: string;
   description: string | null;
+  owner: string | null;
   metadata: string | null;
   created_at: number;
   updated_at: number;
