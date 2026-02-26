@@ -28,20 +28,18 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Calculate next version
-        id: version
+      - name: Install git-cliff
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --bumped-version
+          args: --version
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      - name: Parse version
+      - name: Calculate next version
         id: parse
         run: |
-          # git-cliff outputs the version with a 'v' prefix
-          FULL_VERSION="${{ steps.version.outputs.version }}"
+          FULL_VERSION=$(git-cliff --config cliff.toml --bumped-version 2>/dev/null || true)
           if [ -z "$FULL_VERSION" ]; then
             echo "No version bump needed (no feat/fix commits since last tag)."
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -104,10 +102,12 @@ jobs:
       - name: Generate changelog
         if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         id: changelog
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --latest --strip header
+        run: |
+          BODY=$(git-cliff --config cliff.toml --latest --strip header)
+          # Use a delimiter to handle multiline output
+          echo "content<<CHANGELOG_EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "CHANGELOG_EOF" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
