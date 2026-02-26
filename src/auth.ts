@@ -2,8 +2,8 @@
  * Per-user authorization helpers.
  *
  * Namespaces have an `owner` column (email). These helpers enforce that the
- * authenticated user can only access namespaces they own (or legacy unowned
- * namespaces where owner IS NULL).
+ * authenticated user can only access namespaces they own. Unowned namespaces
+ * must be claimed via the claim_namespaces admin action before use.
  */
 
 import type { NamespaceRow } from "./types.js";
@@ -17,7 +17,7 @@ export class AccessDeniedError extends Error {
 
 /**
  * Verify the authenticated user owns the given namespace.
- * Allows access to unowned (legacy) namespaces where owner IS NULL.
+ * Unowned namespaces (owner IS NULL) are inaccessible — claim them first.
  */
 export async function assertNamespaceAccess(
   db: D1Database,
@@ -33,7 +33,7 @@ export async function assertNamespaceAccess(
     throw new AccessDeniedError("Namespace not found");
   }
 
-  if (ns.owner !== null && ns.owner !== email) {
+  if (ns.owner !== email) {
     throw new AccessDeniedError("You do not have access to this namespace");
   }
 

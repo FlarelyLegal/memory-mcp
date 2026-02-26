@@ -23,9 +23,9 @@ A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured
 | Cache            | **KV**                         | Optional caching layer                                           |
 | Blob storage     | **R2**                         | Conversation logs, documents                                     |
 
-## Tools (13)
+## Tools (14)
 
-Consolidated from 25 granular tools into 13 action-based tools for token efficiency. Each multi-action tool uses an `action` or `mode` parameter to select the operation.
+Consolidated from 25 granular tools into 14 action-based tools for token efficiency. Each multi-action tool uses an `action` or `mode` parameter to select the operation.
 
 **Namespaces** -- `manage_namespace` (create, list)
 
@@ -41,7 +41,7 @@ Consolidated from 25 granular tools into 13 action-based tools for token efficie
 
 **Semantic search** -- `search` (modes: semantic vector search, context with graph enrichment)
 
-**Admin** -- `reindex_vectors` (re-embed all entities/memories into Vectorize)
+**Admin** -- `reindex_vectors` (re-embed all entities/memories into Vectorize), `claim_namespaces` (adopt unowned legacy namespaces)
 
 ## Project Structure
 
@@ -65,7 +65,7 @@ src/
     memory.ts           manage_memory, query_memories tools
     conversation.ts     manage_conversation, add_message, get_messages tools
     search.ts           search tool (semantic + context modes)
-    admin.ts            reindex_vectors tool
+    admin.ts            reindex_vectors, claim_namespaces tools
   graph/
     namespaces.ts       Namespace D1 CRUD
     entities.ts         Entity D1 CRUD

@@ -18,6 +18,16 @@ export async function embed(ai: Ai, text: string): Promise<number[]> {
 }
 
 /**
+ * Generate embedding vectors for multiple texts in a single Workers AI call.
+ * Much more efficient than calling embed() in a loop.
+ */
+export async function embedBatch(ai: Ai, texts: string[]): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  const result = (await ai.run(EMBEDDING_MODEL, { text: texts })) as { data: number[][] };
+  return result.data;
+}
+
+/**
  * Upsert a vector for an entity into Vectorize.
  */
 export async function upsertEntityVector(
