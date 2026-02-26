@@ -35,21 +35,25 @@ async function fetchAccessPublicKey(env: Env, kid: string): Promise<CryptoKey> {
   if (!env.ACCESS_JWKS_URL) {
     throw new Error("ACCESS_JWKS_URL not configured");
   }
-  const resp = await fetch(env.ACCESS_JWKS_URL);
-  const keys = (await resp.json()) as {
-    keys: (JsonWebKey & { kid: string })[];
-  };
-  const jwk = keys.keys.filter((key) => key.kid === kid)[0];
-  if (!jwk) {
-    throw new Error(`No matching JWK found for kid: ${kid}`);
+  // ACCESS_JWKS_URL may be comma-separated (e.g. team-level + SaaS app JWKS).
+  const urls = env.ACCESS_JWKS_URL.split(",").map((s) => s.trim());
+  for (const url of urls) {
+    const resp = await fetch(url);
+    const keys = (await resp.json()) as {
+      keys: (JsonWebKey & { kid: string })[];
+    };
+    const jwk = keys.keys.find((key) => key.kid === kid);
+    if (jwk) {
+      return crypto.subtle.importKey(
+        "jwk",
+        jwk,
+        { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
+        false,
+        ["verify"],
+      );
+    }
   }
-  return crypto.subtle.importKey(
-    "jwk",
-    jwk,
-    { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
-    false,
-    ["verify"],
-  );
+  throw new Error(`No matching JWK found for kid: ${kid}`);
 }
 
 /** Verify a Cloudflare Access ID token and return its claims. */
@@ -74,10 +78,12 @@ export async function verifyToken(env: Env, token: string): Promise<Record<strin
     throw new Error("expired token");
   }
 
-  // Validate audience claim against the Access application's AUD tag.
+  // Validate audience claim against allowed Access application AUD tags.
+  // ACCESS_AUD_TAG may be a single tag or comma-separated list (e.g. self-hosted + SaaS app).
   if (env.ACCESS_AUD_TAG) {
-    const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    if (!aud.includes(env.ACCESS_AUD_TAG)) {
+    const allowedAuds = env.ACCESS_AUD_TAG.split(",").map((s) => s.trim());
+    const tokenAuds = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+    if (!tokenAuds.some((a: string) => allowedAuds.includes(a))) {
       throw new Error("invalid audience");
     }
   }
