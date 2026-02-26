@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: MCP Documentation
+    url: https://modelcontextprotocol.io
+    about: Learn about the Model Context Protocol.
+  - name: Cloudflare Workers Docs
+    url: https://developers.cloudflare.com/workers/
+    about: Cloudflare Workers platform documentation.
