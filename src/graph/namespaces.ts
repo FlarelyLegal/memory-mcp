@@ -29,7 +29,7 @@ export async function getNamespace(db: D1Database, id: string): Promise<Namespac
 export async function listNamespaces(db: D1Database, owner?: string): Promise<NamespaceRow[]> {
   if (owner) {
     const result = await db
-      .prepare(`SELECT * FROM namespaces WHERE owner = ? OR owner IS NULL ORDER BY created_at DESC`)
+      .prepare(`SELECT * FROM namespaces WHERE owner = ? ORDER BY created_at DESC`)
       .bind(owner)
       .all<NamespaceRow>();
     return result.results;
@@ -38,4 +38,16 @@ export async function listNamespaces(db: D1Database, owner?: string): Promise<Na
     .prepare(`SELECT * FROM namespaces ORDER BY created_at DESC`)
     .all<NamespaceRow>();
   return result.results;
+}
+
+/**
+ * Claim all unowned namespaces (owner IS NULL) for the given owner.
+ * Returns the number of namespaces claimed.
+ */
+export async function claimUnownedNamespaces(db: D1Database, owner: string): Promise<number> {
+  const result = await db
+    .prepare(`UPDATE namespaces SET owner = ? WHERE owner IS NULL`)
+    .bind(owner)
+    .run();
+  return result.meta.changes ?? 0;
 }
