@@ -42,12 +42,19 @@ jobs:
         run: |
           # git-cliff outputs the version with a 'v' prefix
           FULL_VERSION="${{ steps.version.outputs.version }}"
+          if [ -z "$FULL_VERSION" ]; then
+            echo "No version bump needed (no feat/fix commits since last tag)."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           VERSION="${FULL_VERSION#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
           echo "Calculated version: v$VERSION"
 
       - name: Check if tag exists
+        if: steps.parse.outputs.skip != 'true'
         id: check_tag
         run: |
           if git rev-parse "v${{ steps.parse.outputs.version }}" >/dev/null 2>&1; then
@@ -57,23 +64,23 @@ jobs:
           fi
 
       - name: Setup Node.js
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         run: npm ci
 
       - name: Update package.json version
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         run: |
           npm version "${{ steps.parse.outputs.version }}" --no-git-tag-version --allow-same-version
 
       - name: Sync README badges
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         run: |
           NODE_MIN=$(node -p "require('./package.json').engines?.node?.replace('>=','') || '24'")
           TS_VER=$(node -p "require('./package.json').devDependencies.typescript.replace('^','').split('.').slice(0,2).join('.')")
@@ -84,7 +91,7 @@ jobs:
           sed -i "s|MCP_SDK-[^-]*-blue|MCP_SDK-${MCP_VER}-blue|" README.md
 
       - name: Commit version bump
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         id: bump
         run: |
           git config user.name "github-actions[bot]"
@@ -95,7 +102,7 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         id: changelog
         uses: orhun/git-cliff-action@v4
         with:
@@ -105,7 +112,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Create release
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.parse.outputs.tag }}
@@ -119,8 +126,10 @@ jobs:
       - name: Summary
         run: |
           echo "## Release Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.check_tag.outputs.exists }}" == "true" ]; then
-            echo "Skipped - Version ${{ steps.parse.outputs.tag }} already exists." >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.parse.outputs.skip }}" == "true" ]; then
+            echo "Skipped — no releasable commits (feat/fix) since last tag." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.check_tag.outputs.exists }}" == "true" ]; then
+            echo "Skipped — version ${{ steps.parse.outputs.tag }} already exists." >> $GITHUB_STEP_SUMMARY
           else
             echo "Released [${{ steps.parse.outputs.tag }}](https://github.com/${{ github.repository }}/releases/tag/${{ steps.parse.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
