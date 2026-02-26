@@ -28,20 +28,27 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Install git-cliff
+      - name: Calculate next version
+        id: version
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --version
+          args: --bumped-version
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      - name: Calculate next version
+      - name: Parse version
         id: parse
         run: |
-          FULL_VERSION=$(git-cliff --config cliff.toml --bumped-version 2>/dev/null || true)
+          FULL_VERSION="${{ steps.version.outputs.version }}"
+          echo "git-cliff output: '$FULL_VERSION'"
+          # Also try reading from the generated content file
+          if [ -z "$FULL_VERSION" ] && [ -f git-cliff/CHANGES.md ]; then
+            FULL_VERSION=$(cat git-cliff/CHANGES.md | tr -d '[:space:]')
+            echo "From CHANGES.md: '$FULL_VERSION'"
+          fi
           if [ -z "$FULL_VERSION" ]; then
-            echo "No version bump needed (no feat/fix commits since last tag)."
+            echo "No version bump needed."
             echo "skip=true" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -102,12 +109,10 @@ jobs:
       - name: Generate changelog
         if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
         id: changelog
-        run: |
-          BODY=$(git-cliff --config cliff.toml --latest --strip header)
-          # Use a delimiter to handle multiline output
-          echo "content<<CHANGELOG_EOF" >> $GITHUB_OUTPUT
-          echo "$BODY" >> $GITHUB_OUTPUT
-          echo "CHANGELOG_EOF" >> $GITHUB_OUTPUT
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
