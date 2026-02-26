@@ -11,8 +11,8 @@ export function registerNamespaceTools(server: McpServer, env: Env, email: strin
     "Create or list memory namespaces (scopes for organizing data).",
     {
       action: z.enum(["create", "list"]),
-      name: z.string().optional().describe("Required for create"),
-      description: z.string().optional(),
+      name: z.string().max(200).optional().describe("Required for create"),
+      description: z.string().max(2000).optional(),
     },
     async ({ action, name, description }) => {
       if (action === "create") {

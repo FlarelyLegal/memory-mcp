@@ -17,8 +17,7 @@
     "typecheck": "tsc --noEmit",
     "db:init": "wrangler d1 execute memory-graph-mcp-db --remote --file=schemas/schema.sql",
     "db:init:local": "wrangler d1 execute memory-graph-mcp-db --local --file=schemas/schema.sql",
-    "changelog": "git-cliff -o CHANGELOG.md",
-    "changelog:check": "git-cliff --unreleased"
+    "deploy:init": "npm run db:init && wrangler deploy"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.2.3",
@@ -29,6 +28,31 @@
   "overrides": {
     "agents": {
       "@modelcontextprotocol/sdk": "$@modelcontextprotocol/sdk"
+    }
+  },
+  "cloudflare": {
+    "bindings": {
+      "ACCESS_CLIENT_ID": {
+        "description": "Your [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/application-token/) application **Client ID**."
+      },
+      "ACCESS_CLIENT_SECRET": {
+        "description": "Your Cloudflare Access application **Client Secret**."
+      },
+      "ACCESS_TOKEN_URL": {
+        "description": "OIDC token endpoint, e.g. `https://<team>.cloudflareaccess.com/cdn-cgi/access/sso/oidc/<app-id>/token`."
+      },
+      "ACCESS_AUTHORIZATION_URL": {
+        "description": "OIDC authorize endpoint, e.g. `https://<team>.cloudflareaccess.com/cdn-cgi/access/sso/oidc/<app-id>/authorize`."
+      },
+      "ACCESS_JWKS_URL": {
+        "description": "JWKS endpoint for token verification, e.g. `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`."
+      },
+      "ACCESS_AUD_TAG": {
+        "description": "Your Access application's **Audience (AUD) tag** — found in the Access app overview page."
+      },
+      "COOKIE_ENCRYPTION_KEY": {
+        "description": "Random hex string for cookie encryption. Generate with `openssl rand -hex 32`."
+      }
     }
   },
   "devDependencies": {

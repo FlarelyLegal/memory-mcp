@@ -19,9 +19,39 @@ import {
   validateOAuthState,
 } from "./oauth/index.js";
 import { verifyToken } from "./jwt.js";
-import { VERSION, SERVER_NAME } from "./version.js";
+import {
+  VERSION,
+  SERVER_NAME,
+  SERVER_DISPLAY_NAME,
+  SERVER_DESCRIPTION,
+  REPO_URL,
+} from "./version.js";
+
+/** Default security headers applied to all responses from this handler. */
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+};
+
+/** Attach security headers to a response. */
+function withSecurityHeaders(response: Response): Response {
+  const patched = new Response(response.body, response);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+    patched.headers.set(k, v);
+  }
+  return patched;
+}
 
 export async function handleAccessRequest(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  return withSecurityHeaders(await handleRequest(request, env, ctx));
+}
+
+async function handleRequest(
   request: Request,
   env: Env,
   _ctx: ExecutionContext,
@@ -46,8 +76,8 @@ export async function handleAccessRequest(
       client: await env.OAUTH_PROVIDER.lookupClient(clientId),
       csrfToken,
       server: {
-        description: "Memory Graph MCP Server — persistent structured memory for LLMs.",
-        name: "Memory Graph MCP",
+        description: SERVER_DESCRIPTION,
+        name: SERVER_DISPLAY_NAME,
       },
       setCookie,
       state: { oauthReqInfo },
@@ -92,10 +122,7 @@ export async function handleAccessRequest(
       if (error instanceof OAuthError) {
         return error.toResponse();
       }
-      return new Response(
-        `Internal server error: ${error instanceof Error ? error.message : "unknown"}`,
-        { status: 500 },
-      );
+      return new Response("Internal server error", { status: 500 });
     }
   }
 
@@ -156,6 +183,13 @@ export async function handleAccessRequest(
     return new Response(JSON.stringify({ status: "ok", server: SERVER_NAME, version: VERSION }), {
       headers: { "content-type": "application/json" },
     });
+  }
+
+  if (pathname === "/") {
+    return new Response(
+      `${SERVER_DISPLAY_NAME} v${VERSION}\n${SERVER_DESCRIPTION}\n\n${REPO_URL}\n`,
+      { headers: { "content-type": "text/plain; charset=utf-8" } },
+    );
   }
 
   return new Response("Not Found", { status: 404 });

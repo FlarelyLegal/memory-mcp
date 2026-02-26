@@ -11,9 +11,9 @@ export function registerTraversalTools(server: McpServer, env: Env, email: strin
     "traverse_graph",
     "BFS from an entity. Returns reachable entities and relations up to max_depth hops.",
     {
-      entity_id: z.string(),
+      entity_id: z.string().max(100),
       max_depth: z.number().optional(),
-      relation_types: z.array(z.string()).optional(),
+      relation_types: z.array(z.string().max(200)).max(20).optional(),
     },
     async ({ entity_id, max_depth, relation_types }) => {
       await assertEntityAccess(env.DB, entity_id, email);
