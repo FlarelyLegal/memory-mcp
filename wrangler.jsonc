@@ -54,7 +54,7 @@
     },
   ],
 
-  // R2 bucket for blob storage (conversation logs, documents, etc.)
+  // R2 bucket for blob storage (reserved for future use)
   "r2_buckets": [
     {
       "binding": "STORAGE",
