@@ -28,64 +28,60 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Calculate next version
+      - name: Get next version from git-cliff
         id: version
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --bumped-version
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          args: --bump --unreleased
 
-      - name: Parse version
-        id: parse
+      - name: Check if release needed
+        id: check
         run: |
-          FULL_VERSION="${{ steps.version.outputs.version }}"
-          echo "git-cliff output: '$FULL_VERSION'"
-          # Also try reading from the generated content file
-          if [ -z "$FULL_VERSION" ] && [ -f git-cliff/CHANGES.md ]; then
-            FULL_VERSION=$(cat git-cliff/CHANGES.md | tr -d '[:space:]')
-            echo "From CHANGES.md: '$FULL_VERSION'"
-          fi
-          if [ -z "$FULL_VERSION" ]; then
-            echo "No version bump needed."
+          VERSION="${{ steps.version.outputs.version }}"
+          VERSION_TAG="v${VERSION#v}"
+          VERSION_CLEAN="${VERSION#v}"
+          echo "Calculated version: $VERSION (tag: $VERSION_TAG, clean: $VERSION_CLEAN)"
+
+          if [ -z "$VERSION" ]; then
+            echo "No version calculated — no conventional commits."
             echo "skip=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          VERSION="${FULL_VERSION#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "skip=false" >> $GITHUB_OUTPUT
-          echo "Calculated version: v$VERSION"
 
-      - name: Check if tag exists
-        if: steps.parse.outputs.skip != 'true'
-        id: check_tag
-        run: |
-          if git rev-parse "v${{ steps.parse.outputs.version }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+          if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
+            echo "Tag $VERSION_TAG already exists."
+            echo "skip=true" >> $GITHUB_OUTPUT
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Will create release $VERSION_TAG"
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "version=$VERSION_CLEAN" >> $GITHUB_OUTPUT
+            echo "tag=$VERSION_TAG" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup Node.js
-        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
-        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
+        if: steps.check.outputs.skip != 'true'
         run: npm ci
 
       - name: Update package.json version
-        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
+        if: steps.check.outputs.skip != 'true'
         run: |
-          npm version "${{ steps.parse.outputs.version }}" --no-git-tag-version --allow-same-version
+          CURRENT=$(node -p "require('./package.json').version")
+          TARGET="${{ steps.check.outputs.version }}"
+          echo "Current: $CURRENT, Target: $TARGET"
+          if [ "$CURRENT" != "$TARGET" ]; then
+            npm version "$TARGET" --no-git-tag-version
+          fi
 
       - name: Sync README badges
-        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
+        if: steps.check.outputs.skip != 'true'
         run: |
           NODE_MIN=$(node -p "require('./package.json').engines?.node?.replace('>=','') || '24'")
           TS_VER=$(node -p "require('./package.json').devDependencies.typescript.replace('^','').split('.').slice(0,2).join('.')")
@@ -96,18 +92,20 @@ jobs:
           sed -i "s|MCP_SDK-[^-]*-blue|MCP_SDK-${MCP_VER}-blue|" README.md
 
       - name: Commit version bump
-        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
+        if: steps.check.outputs.skip != 'true'
         id: bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json README.md
-          git commit -m "chore: bump version to ${{ steps.parse.outputs.version }} [skip ci]"
-          git push
+          git diff --cached --quiet && echo "No changes to commit" || {
+            git commit -m "chore: bump version to ${{ steps.check.outputs.version }} [skip ci]"
+            git push
+          }
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
-        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
+        if: steps.check.outputs.skip != 'true'
         id: changelog
         uses: orhun/git-cliff-action@v4
         with:
@@ -117,11 +115,11 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Create release
-        if: steps.parse.outputs.skip != 'true' && steps.check_tag.outputs.exists == 'false'
+        if: steps.check.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.parse.outputs.tag }}
-          name: ${{ steps.parse.outputs.tag }}
+          tag_name: ${{ steps.check.outputs.tag }}
+          name: ${{ steps.check.outputs.tag }}
           body: ${{ steps.changelog.outputs.content }}
           target_commitish: ${{ steps.bump.outputs.sha }}
           draft: false
@@ -131,12 +129,11 @@ jobs:
       - name: Summary
         run: |
           echo "## Release Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.parse.outputs.skip }}" == "true" ]; then
-            echo "Skipped — no releasable commits (feat/fix) since last tag." >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ steps.check_tag.outputs.exists }}" == "true" ]; then
-            echo "Skipped — version ${{ steps.parse.outputs.tag }} already exists." >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check.outputs.skip }}" == "true" ]; then
+            echo "Skipped — no new release needed." >> $GITHUB_STEP_SUMMARY
+            echo "Calculated version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           else
-            echo "Released [${{ steps.parse.outputs.tag }}](https://github.com/${{ github.repository }}/releases/tag/${{ steps.parse.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
+            echo "Released [${{ steps.check.outputs.tag }}](https://github.com/${{ github.repository }}/releases/tag/${{ steps.check.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Changelog" >> $GITHUB_STEP_SUMMARY
             echo "${{ steps.changelog.outputs.content }}" >> $GITHUB_STEP_SUMMARY
