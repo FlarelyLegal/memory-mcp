@@ -62,7 +62,7 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/tools/` — One file per tool domain (namespace, entity, relation, traversal, memory, conversation, search, admin). Each exports a `register*Tools(server, env, email)` function.
 - `src/graph/` — D1 operations split by domain (namespaces, entities, relations, traversal) with barrel re-export via `index.ts`.
 - `src/oauth/` — OAuth utilities split by concern (error, sanitize, csrf, state, approval) with barrel re-export via `index.ts`.
-- `schemas/schema.sql` — D1 schema (6 tables: namespaces, entities, relations, conversations, messages, memories + memory_entity_links).
+- `schemas/schema.sql` — D1 schema (7 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links).
 
 ### MCP tools (14 total)
 
