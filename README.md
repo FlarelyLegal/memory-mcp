@@ -10,7 +10,9 @@
 
 <!-- badges:end -->
 
-A remote MCP server on Cloudflare Workers that gives LLMs persistent, structured memory via knowledge graphs, semantic search, and temporally-decayed recall.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/FlarelyLegal/memory-mcp)
+
+Persistent structured memory for LLMs — knowledge graphs, semantic search, and temporally-decayed recall.
 
 ## Architecture
 

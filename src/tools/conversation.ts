@@ -13,9 +13,9 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     "Create or list conversations in a namespace.",
     {
       action: z.enum(["create", "list"]),
-      namespace_id: z.string(),
-      title: z.string().optional(),
-      metadata: z.string().optional(),
+      namespace_id: z.string().max(100),
+      title: z.string().max(500).optional(),
+      metadata: z.string().max(5000).optional(),
       limit: z.number().optional(),
     },
     async ({ action, namespace_id, title, metadata, limit }) => {
@@ -40,10 +40,10 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     "add_message",
     "Add a message to a conversation and embed it for search.",
     {
-      conversation_id: z.string(),
+      conversation_id: z.string().max(100),
       role: z.enum(["user", "assistant", "system", "tool"]),
-      content: z.string(),
-      metadata: z.string().optional(),
+      content: z.string().max(50000),
+      metadata: z.string().max(5000).optional(),
     },
     async ({ conversation_id, role, content, metadata }) => {
       await assertConversationAccess(env.DB, conversation_id, email);
@@ -72,12 +72,21 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     "get_messages",
     "Get or search messages. Without query: returns recent messages. With query: searches across namespace.",
     {
-      conversation_id: z.string().optional().describe("Get messages from a specific conversation"),
+      conversation_id: z
+        .string()
+        .max(100)
+        .optional()
+        .describe("Get messages from a specific conversation"),
       namespace_id: z
         .string()
+        .max(100)
         .optional()
         .describe("Required when using query to search across conversations"),
-      query: z.string().optional().describe("Keyword search across all conversations in namespace"),
+      query: z
+        .string()
+        .max(1000)
+        .optional()
+        .describe("Keyword search across all conversations in namespace"),
       limit: z.number().optional(),
     },
     async ({ conversation_id, namespace_id, query, limit }) => {

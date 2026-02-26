@@ -1,0 +1,7 @@
+ACCESS_CLIENT_ID=your-cloudflare-access-client-id
+ACCESS_CLIENT_SECRET=your-cloudflare-access-client-secret
+ACCESS_TOKEN_URL=https://your-team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/your-app-id/token
+ACCESS_AUTHORIZATION_URL=https://your-team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/your-app-id/authorize
+ACCESS_JWKS_URL=https://your-team.cloudflareaccess.com/cdn-cgi/access/certs
+ACCESS_AUD_TAG=your-access-application-audience-tag
+COOKIE_ENCRYPTION_KEY=generate-with-openssl-rand-hex-32

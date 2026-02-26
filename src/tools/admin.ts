@@ -86,7 +86,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
     "reindex_vectors",
     "Re-embed all entities and memories into Vectorize. Use after model changes.",
     {
-      namespace_id: z.string().describe("Namespace ID or 'all'"),
+      namespace_id: z.string().max(100).describe("Namespace ID or 'all'"),
     },
     async ({ namespace_id }) => {
       if (namespace_id !== "all") {

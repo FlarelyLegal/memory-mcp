@@ -74,5 +74,13 @@ export async function verifyToken(env: Env, token: string): Promise<Record<strin
     throw new Error("expired token");
   }
 
+  // Validate audience claim against the Access application's AUD tag.
+  if (env.ACCESS_AUD_TAG) {
+    const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+    if (!aud.includes(env.ACCESS_AUD_TAG)) {
+      throw new Error("invalid audience");
+    }
+  }
+
   return claims;
 }

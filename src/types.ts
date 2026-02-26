@@ -15,6 +15,7 @@ export interface Env {
   ACCESS_TOKEN_URL: string;
   ACCESS_AUTHORIZATION_URL: string;
   ACCESS_JWKS_URL: string;
+  ACCESS_AUD_TAG: string;
   COOKIE_ENCRYPTION_KEY: string;
 }
 

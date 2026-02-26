@@ -14,12 +14,12 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
     "CRUD for graph entities. Actions: create, get, update, delete.",
     {
       action: z.enum(["create", "get", "update", "delete"]),
-      id: z.string().optional().describe("Required for get/update/delete"),
-      namespace_id: z.string().optional().describe("Required for create"),
-      name: z.string().optional(),
-      type: z.string().optional().describe("person, concept, project, tool, etc."),
-      summary: z.string().optional(),
-      metadata: z.string().optional().describe("JSON string"),
+      id: z.string().max(100).optional().describe("Required for get/update/delete"),
+      namespace_id: z.string().max(100).optional().describe("Required for create"),
+      name: z.string().max(200).optional(),
+      type: z.string().max(200).optional().describe("person, concept, project, tool, etc."),
+      summary: z.string().max(10000).optional(),
+      metadata: z.string().max(5000).optional().describe("JSON string"),
     },
     async ({ action, id, namespace_id, name, type, summary, metadata }) => {
       const meta = metadata ? JSON.parse(metadata) : undefined;
@@ -89,9 +89,9 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
     "find_entities",
     "Search entities by name/type/keyword in a namespace.",
     {
-      namespace_id: z.string(),
-      query: z.string().optional(),
-      type: z.string().optional(),
+      namespace_id: z.string().max(100),
+      query: z.string().max(1000).optional(),
+      type: z.string().max(200).optional(),
       limit: z.number().optional(),
     },
     async ({ namespace_id, query, type, limit }) => {

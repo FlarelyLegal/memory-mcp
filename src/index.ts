@@ -15,7 +15,7 @@ import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { Env, AuthProps } from "./types.js";
-import { VERSION } from "./version.js";
+import { VERSION, SERVER_DISPLAY_NAME, SERVER_DESCRIPTION } from "./version.js";
 import { handleAccessRequest } from "./access-handler.js";
 
 // Tool registration modules
@@ -30,8 +30,9 @@ import { registerAdminTools } from "./tools/admin.js";
 
 export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthProps> {
   server = new McpServer({
-    name: "Memory Graph",
+    name: SERVER_DISPLAY_NAME,
     version: VERSION,
+    description: SERVER_DESCRIPTION,
   });
 
   /** Get the authenticated user's email, or throw. */

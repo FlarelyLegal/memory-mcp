@@ -12,19 +12,28 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
     "Create or delete a directed relation between entities.",
     {
       action: z.enum(["create", "delete"]),
-      id: z.string().optional().describe("Required for delete"),
-      namespace_id: z.string().optional().describe("Required for create"),
-      source_id: z.string().optional().describe("From entity"),
-      target_id: z.string().optional().describe("To entity"),
-      relation_type: z.string().optional().describe("knows, uses, depends_on, part_of, etc."),
+      id: z.string().max(100).optional().describe("Required for delete"),
+      namespace_id: z.string().max(100).optional().describe("Required for create"),
+      source_id: z.string().max(100).optional().describe("From entity"),
+      target_id: z.string().max(100).optional().describe("To entity"),
+      relation_type: z
+        .string()
+        .max(200)
+        .optional()
+        .describe("knows, uses, depends_on, part_of, etc."),
       weight: z.number().optional(),
-      metadata: z.string().optional(),
+      metadata: z.string().max(5000).optional(),
     },
     async ({ action, id, namespace_id, source_id, target_id, relation_type, weight, metadata }) => {
       if (action === "create") {
         if (!namespace_id || !source_id || !target_id || !relation_type)
           return ok("Error: namespace_id, source_id, target_id, relation_type required");
         await assertNamespaceAccess(env.DB, namespace_id, email);
+        // Verify both entities exist and belong to this namespace.
+        const srcNs = await assertEntityAccess(env.DB, source_id, email);
+        const tgtNs = await assertEntityAccess(env.DB, target_id, email);
+        if (srcNs !== namespace_id || tgtNs !== namespace_id)
+          return ok("Error: source and target entities must belong to the specified namespace");
         const rid = await graph.createRelation(env.DB, {
           namespace_id,
           source_id,
@@ -46,9 +55,9 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
     "get_relations",
     "Get relations from/to an entity.",
     {
-      entity_id: z.string(),
+      entity_id: z.string().max(100),
       direction: z.enum(["from", "to", "both"]).optional(),
-      relation_type: z.string().optional(),
+      relation_type: z.string().max(200).optional(),
       limit: z.number().optional(),
     },
     async ({ entity_id, direction, relation_type, limit }) => {

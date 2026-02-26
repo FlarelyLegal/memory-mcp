@@ -1,107 +1,131 @@
 name: Release
+run-name: "Release: ${{ github.sha }}"
 
 on:
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: "Version bump type (leave empty for auto-detect from commits)"
-        required: false
-        type: choice
-        options:
-          - auto
-          - patch
-          - minor
-          - major
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Release
     runs-on: ubuntu-latest
+    # Skip version bump commits to prevent infinite loops
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FLARELYLEGAL_APP_ID }}
+          private-key: ${{ secrets.FLARELYLEGAL_APP_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Calculate next version
+        id: version
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --bumped-version
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Parse version
+        id: parse
+        run: |
+          # git-cliff outputs the version with a 'v' prefix
+          FULL_VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${FULL_VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Calculated version: v$VERSION"
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ steps.parse.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Setup Node.js
+        if: steps.check_tag.outputs.exists == 'false'
         uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.check_tag.outputs.exists == 'false'
         run: npm ci
 
-      - name: Configure git
+      - name: Update package.json version
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          npm version "${{ steps.parse.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Sync README badges
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          NODE_MIN=$(node -p "require('./package.json').engines?.node?.replace('>=','') || '24'")
+          TS_VER=$(node -p "require('./package.json').devDependencies.typescript.replace('^','').split('.').slice(0,2).join('.')")
+          MCP_VER=$(node -p "require('./package.json').dependencies['@modelcontextprotocol/sdk'].replace('^','').split('.').slice(0,2).join('.')")
+
+          sed -i "s|Node.js-[^-]*-5FA04E|Node.js-≥${NODE_MIN}-5FA04E|" README.md
+          sed -i "s|TypeScript-[^-]*-3178C6|TypeScript-${TS_VER}-3178C6|" README.md
+          sed -i "s|MCP_SDK-[^-]*-blue|MCP_SDK-${MCP_VER}-blue|" README.md
+
+      - name: Commit version bump
+        if: steps.check_tag.outputs.exists == 'false'
+        id: bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Determine next version
-        id: version
-        run: |
-          CURRENT=$(node -p "require('./package.json').version")
-          echo "current=v${CURRENT}" >> "$GITHUB_OUTPUT"
-
-          BUMP_ARG=""
-          if [ "${{ inputs.bump }}" != "auto" ] && [ -n "${{ inputs.bump }}" ]; then
-            BUMP_ARG="--bump ${{ inputs.bump }}"
-          else
-            BUMP_ARG="--bump"
-          fi
-
-          NEXT=$(npx git-cliff --bumped-version $BUMP_ARG 2>/dev/null || echo "")
-          if [ -z "$NEXT" ]; then
-            echo "No version bump detected from commits"
-            echo "## Release Failed" >> "$GITHUB_STEP_SUMMARY"
-            echo "No version bump detected from conventional commits." >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-
-          echo "next=${NEXT}" >> "$GITHUB_OUTPUT"
-          echo "next_bare=${NEXT#v}" >> "$GITHUB_OUTPUT"
-          echo "Bumping from v${CURRENT} to ${NEXT}"
-
-      - name: Bump package.json version
-        run: npm version "${{ steps.version.outputs.next_bare }}" --no-git-tag-version
+          git add package.json package-lock.json README.md
+          git commit -m "chore: bump version to ${{ steps.parse.outputs.version }} [skip ci]"
+          git push
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
-        run: npx git-cliff --tag "${{ steps.version.outputs.next }}" -o CHANGELOG.md
+        if: steps.check_tag.outputs.exists == 'false'
+        id: changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      - name: Commit, tag, and push
+      - name: Create release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.parse.outputs.tag }}
+          name: ${{ steps.parse.outputs.tag }}
+          body: ${{ steps.changelog.outputs.content }}
+          target_commitish: ${{ steps.bump.outputs.sha }}
+          draft: false
+          prerelease: false
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Summary
         run: |
-          git add package.json package-lock.json CHANGELOG.md
-          git commit -m "chore(release): ${{ steps.version.outputs.next }}"
-          git tag "${{ steps.version.outputs.next }}" -m "Release ${{ steps.version.outputs.next }}"
-          git push origin main --follow-tags
-
-      - name: Generate release notes
-        run: npx git-cliff --latest --strip header > RELEASE_NOTES.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create GitHub release
-        run: |
-          gh release create "${{ steps.version.outputs.next }}" \
-            --title "${{ steps.version.outputs.next }}" \
-            --notes-file RELEASE_NOTES.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Job summary
-        if: always()
-        run: |
-          echo "## Release Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Previous** | \`${{ steps.version.outputs.current }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **New** | \`${{ steps.version.outputs.next }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Bump** | \`${{ inputs.bump || 'auto' }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Release** | [View](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.next }}) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Release Results" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check_tag.outputs.exists }}" == "true" ]; then
+            echo "Skipped - Version ${{ steps.parse.outputs.tag }} already exists." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Released [${{ steps.parse.outputs.tag }}](https://github.com/${{ github.repository }}/releases/tag/${{ steps.parse.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Changelog" >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.changelog.outputs.content }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version calculated by [git-cliff](https://git-cliff.org) from [Conventional Commits](https://www.conventionalcommits.org/)." >> $GITHUB_STEP_SUMMARY

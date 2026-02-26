@@ -13,8 +13,8 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
     "search",
     "Semantic vector search across all memory types. Use mode=context to also pull graph relations and ranked memories for matched entities.",
     {
-      namespace_id: z.string(),
-      query: z.string(),
+      namespace_id: z.string().max(100),
+      query: z.string().max(1000),
       mode: z.enum(["semantic", "context"]).optional().describe("Default: semantic"),
       kind: z.enum(["entity", "memory", "message"]).optional().describe("Filter by type"),
       limit: z.number().optional(),
