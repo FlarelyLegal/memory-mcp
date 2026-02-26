@@ -1,0 +1,91 @@
+name: Bug Report
+description: Report a bug with the MCP server or a specific tool
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the details below.
+
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Tool
+      description: Which tool is affected?
+      options:
+        - manage_namespace
+        - manage_entity
+        - find_entities
+        - manage_relation
+        - get_relations
+        - traverse_graph
+        - manage_memory
+        - query_memories
+        - manage_conversation
+        - add_message
+        - get_messages
+        - search
+        - reindex_vectors
+        - claim_namespaces
+        - Auth / OAuth flow
+        - Server startup / connectivity
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+      placeholder: Tell us what went wrong...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Call tool '...' with input '...'
+        2. Observe response '...'
+        3. Expected '...'
+    validations:
+      required: false
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where is this running?
+      options:
+        - Cloudflare Workers (deployed)
+        - Local dev (wrangler dev --local)
+        - MCP Inspector
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP Client
+      description: Which client are you connecting with?
+      options:
+        - Claude Desktop
+        - OpenCode
+        - Cursor
+        - MCP Inspector
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Paste any relevant error messages or logs.
+      render: shell
+    validations:
+      required: false
