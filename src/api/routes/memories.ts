@@ -1,0 +1,215 @@
+/** Memory CRUD REST endpoints + OpenAPI definitions. */
+import { defineRoute } from "../registry.js";
+import { json, jsonError, parseBody, handleError } from "../middleware.js";
+import { createMemory, getMemory, updateMemory, deleteMemory } from "../../memories.js";
+import { assertNamespaceAccess, assertMemoryAccess } from "../../auth.js";
+import { upsertMemoryVector, deleteVector } from "../../embeddings.js";
+import {
+  nsPathParam,
+  idPathParam,
+  memorySchema,
+  okSchema,
+  metadataSchema,
+  memoryTypeEnum,
+} from "../schemas.js";
+import { parseMemoryRow } from "../row-parsers.js";
+import type { MemoryType } from "../../types.js";
+
+export function registerMemoryRoutes(): void {
+  defineRoute(
+    "POST",
+    "/api/v1/namespaces/:namespace_id/memories",
+    async (ctx, request) => {
+      try {
+        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        const body = await parseBody<{
+          content?: string;
+          type?: string;
+          importance?: number;
+          source?: string;
+          entity_ids?: string[];
+          metadata?: Record<string, unknown>;
+        }>(request);
+        if (body instanceof Response) return body;
+        if (!body.content) return jsonError("content is required", 400);
+
+        const id = await createMemory(ctx.env.DB, {
+          namespace_id: ctx.params.namespace_id,
+          content: body.content,
+          type: body.type as MemoryType | undefined,
+          importance: body.importance,
+          source: body.source,
+          entity_ids: body.entity_ids,
+          metadata: body.metadata,
+        });
+        await upsertMemoryVector(ctx.env, {
+          memory_id: id,
+          namespace_id: ctx.params.namespace_id,
+          content: body.content,
+          type: body.type ?? "fact",
+        });
+        return json({ id, type: body.type ?? "fact" }, 201);
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Create memory",
+      description: "Store a memory fragment and embed it for semantic search.",
+      tags: ["Memories"],
+      operationId: "createMemory",
+      parameters: [nsPathParam()],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["content"],
+              properties: {
+                content: { type: "string", maxLength: 10000 },
+                type: memoryTypeEnum(),
+                importance: { type: "number", minimum: 0, maximum: 1 },
+                source: { type: "string", maxLength: 500 },
+                entity_ids: { type: "array", items: { type: "string" } },
+                metadata: metadataSchema(),
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "201": {
+          description: "Memory created",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { id: { type: "string" }, type: { type: "string" } },
+              },
+            },
+          },
+        },
+      },
+    },
+  );
+
+  defineRoute(
+    "GET",
+    "/api/v1/memories/:id",
+    async (ctx) => {
+      try {
+        await assertMemoryAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        const row = await getMemory(ctx.env.DB, ctx.params.id);
+        if (!row) return jsonError("Memory not found", 404);
+        return json(parseMemoryRow(row));
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Get memory",
+      tags: ["Memories"],
+      operationId: "getMemory",
+      parameters: [idPathParam("Memory ID")],
+      responses: {
+        "200": {
+          description: "Memory",
+          content: {
+            "application/json": { schema: memorySchema() },
+          },
+        },
+      },
+    },
+  );
+
+  defineRoute(
+    "PUT",
+    "/api/v1/memories/:id",
+    async (ctx, request) => {
+      try {
+        await assertMemoryAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        const body = await parseBody<{
+          content?: string;
+          type?: string;
+          importance?: number;
+          metadata?: Record<string, unknown>;
+        }>(request);
+        if (body instanceof Response) return body;
+        await updateMemory(ctx.env.DB, ctx.params.id, body);
+        if (body.content) {
+          const updated = await getMemory(ctx.env.DB, ctx.params.id);
+          if (updated) {
+            await upsertMemoryVector(ctx.env, {
+              memory_id: ctx.params.id,
+              namespace_id: updated.namespace_id,
+              content: updated.content,
+              type: updated.type,
+            });
+          }
+        }
+        return json({ ok: true });
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Update memory",
+      tags: ["Memories"],
+      operationId: "updateMemory",
+      parameters: [idPathParam("Memory ID")],
+      requestBody: {
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                content: { type: "string", maxLength: 10000 },
+                type: memoryTypeEnum(),
+                importance: { type: "number", minimum: 0, maximum: 1 },
+                metadata: metadataSchema(),
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Updated",
+          content: {
+            "application/json": { schema: okSchema() },
+          },
+        },
+      },
+    },
+  );
+
+  defineRoute(
+    "DELETE",
+    "/api/v1/memories/:id",
+    async (ctx) => {
+      try {
+        await assertMemoryAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        await deleteMemory(ctx.env.DB, ctx.params.id);
+        await deleteVector(ctx.env, "memory", ctx.params.id);
+        return json({ ok: true });
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Delete memory",
+      tags: ["Memories"],
+      operationId: "deleteMemory",
+      parameters: [idPathParam("Memory ID")],
+      responses: {
+        "200": {
+          description: "Deleted",
+          content: {
+            "application/json": { schema: okSchema() },
+          },
+        },
+      },
+    },
+  );
+}

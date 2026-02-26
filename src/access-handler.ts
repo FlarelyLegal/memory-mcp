@@ -1,11 +1,12 @@
 /**
  * Cloudflare Access OAuth handler.
- * Handles /authorize, POST /authorize, and /callback routes to bridge
+ * Handles /authorize, POST /authorize, /callback, and /api/* routes to bridge
  * the MCP OAuth flow with Cloudflare Access as the upstream IdP.
  */
 import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 
 import type { Env, AuthProps } from "./types.js";
+import { handleApiRequest } from "./api/index.js";
 import {
   addApprovedClient,
   createOAuthState,
@@ -177,6 +178,11 @@ async function handleRequest(
     });
 
     return Response.redirect(redirectTo, 302);
+  }
+
+  // REST API — /api/* routes handled by the API layer
+  if (pathname.startsWith("/api/") || pathname === "/api") {
+    return handleApiRequest(request, env);
   }
 
   if (pathname === "/health") {

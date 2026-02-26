@@ -28,6 +28,11 @@ export interface AuthProps {
   [key: string]: unknown;
 }
 
+// --- Shared enums ---
+
+export type MemoryType = "fact" | "observation" | "preference" | "instruction";
+export type MessageRole = "user" | "assistant" | "system" | "tool";
+
 // --- Domain types ---
 
 export interface Namespace {
@@ -77,7 +82,7 @@ export interface Conversation {
 export interface Message {
   id: string;
   conversation_id: string;
-  role: "user" | "assistant" | "system" | "tool";
+  role: MessageRole;
   content: string;
   metadata: Record<string, unknown> | null;
   created_at: number;
@@ -87,7 +92,7 @@ export interface Memory {
   id: string;
   namespace_id: string;
   content: string;
-  type: "fact" | "observation" | "preference" | "instruction";
+  type: MemoryType;
   source: string | null;
   importance: number;
   metadata: Record<string, unknown> | null;
