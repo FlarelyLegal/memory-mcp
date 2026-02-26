@@ -2,84 +2,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
-import { embedBatch } from "../embeddings.js";
 import { assertNamespaceAccess } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { txt, ok } from "../response-helpers.js";
-
-/** Items per Workers AI + Vectorize batch. Keeps each call well within limits. */
-const BATCH_SIZE = 25;
-
-interface EntityItem {
-  id: string;
-  namespace_id: string;
-  name: string;
-  type: string;
-  summary: string | null;
-}
-
-interface MemoryItem {
-  id: string;
-  namespace_id: string;
-  content: string;
-  type: string;
-}
-
-/**
- * Process a chunk of entities: batch-embed then batch-upsert into Vectorize.
- * Returns [successCount, errorCount].
- */
-async function reindexEntityChunk(env: Env, chunk: EntityItem[]): Promise<[number, number]> {
-  const texts = chunk.map((e) => [e.name, e.type, e.summary].filter(Boolean).join(" | "));
-  const vectors = await embedBatch(env.AI, texts);
-
-  const entries: VectorizeVector[] = chunk.map((e, i) => ({
-    id: `entity:${e.id}`,
-    values: vectors[i],
-    metadata: {
-      kind: "entity",
-      entity_id: e.id,
-      namespace_id: e.namespace_id,
-      name: e.name,
-      type: e.type,
-    },
-  }));
-
-  await env.VECTORIZE.upsert(entries);
-  return [chunk.length, 0];
-}
-
-/**
- * Process a chunk of memories: batch-embed then batch-upsert into Vectorize.
- * Returns [successCount, errorCount].
- */
-async function reindexMemoryChunk(env: Env, chunk: MemoryItem[]): Promise<[number, number]> {
-  const texts = chunk.map((m) => m.content);
-  const vectors = await embedBatch(env.AI, texts);
-
-  const entries: VectorizeVector[] = chunk.map((m, i) => ({
-    id: `memory:${m.id}`,
-    values: vectors[i],
-    metadata: {
-      kind: "memory",
-      memory_id: m.id,
-      namespace_id: m.namespace_id,
-      type: m.type,
-    },
-  }));
-
-  await env.VECTORIZE.upsert(entries);
-  return [chunk.length, 0];
-}
-
-/** Split an array into chunks of the given size. */
-function chunks<T>(arr: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    result.push(arr.slice(i, i + size));
-  }
-  return result;
-}
+import { REINDEX_BATCH_SIZE, chunks, reindexEntityChunk, reindexMemoryChunk } from "../reindex.js";
+import type { ReindexEntityItem, ReindexMemoryItem } from "../reindex.js";
 
 export function registerAdminTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -104,12 +31,11 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
           : "SELECT id, namespace_id, name, type, summary FROM entities WHERE namespace_id = ?";
       const entityResult = await env.DB.prepare(entityQuery)
         .bind(namespace_id === "all" ? email : namespace_id)
-        .all<EntityItem>();
+        .all<ReindexEntityItem>();
 
-      for (const chunk of chunks(entityResult.results, BATCH_SIZE)) {
+      for (const chunk of chunks(entityResult.results, REINDEX_BATCH_SIZE)) {
         try {
-          const [ok] = await reindexEntityChunk(env, chunk);
-          entityCount += ok;
+          entityCount += await reindexEntityChunk(env, chunk);
         } catch {
           errorCount += chunk.length;
         }
@@ -122,12 +48,11 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
           : "SELECT id, namespace_id, content, type FROM memories WHERE namespace_id = ?";
       const memoryResult = await env.DB.prepare(memoryQuery)
         .bind(namespace_id === "all" ? email : namespace_id)
-        .all<MemoryItem>();
+        .all<ReindexMemoryItem>();
 
-      for (const chunk of chunks(memoryResult.results, BATCH_SIZE)) {
+      for (const chunk of chunks(memoryResult.results, REINDEX_BATCH_SIZE)) {
         try {
-          const [ok] = await reindexMemoryChunk(env, chunk);
-          memoryCount += ok;
+          memoryCount += await reindexMemoryChunk(env, chunk);
         } catch {
           errorCount += chunk.length;
         }

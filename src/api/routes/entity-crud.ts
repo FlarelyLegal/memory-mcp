@@ -1,0 +1,120 @@
+/** Entity get/update/delete REST endpoints. */
+import { defineRoute } from "../registry.js";
+import { json, jsonError, parseBody, handleError } from "../middleware.js";
+import { getEntity, updateEntity, deleteEntity } from "../../graph/index.js";
+import { assertEntityAccess } from "../../auth.js";
+import { upsertEntityVector, deleteVector } from "../../embeddings.js";
+import { idPathParam, entitySchema, okSchema, metadataSchema } from "../schemas.js";
+import { parseEntityRow } from "../row-parsers.js";
+
+export function registerEntityCrudRoutes(): void {
+  defineRoute(
+    "GET",
+    "/api/v1/entities/:id",
+    async (ctx) => {
+      try {
+        await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        const entity = await getEntity(ctx.env.DB, ctx.params.id);
+        if (!entity) return jsonError("Entity not found", 404);
+        return json(parseEntityRow(entity));
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Get entity",
+      tags: ["Entities"],
+      operationId: "getEntity",
+      parameters: [idPathParam("Entity ID")],
+      responses: {
+        "200": {
+          description: "Entity",
+          content: {
+            "application/json": { schema: entitySchema() },
+          },
+        },
+      },
+    },
+  );
+
+  defineRoute(
+    "PUT",
+    "/api/v1/entities/:id",
+    async (ctx, request) => {
+      try {
+        await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        const body = await parseBody<{
+          name?: string;
+          type?: string;
+          summary?: string;
+          metadata?: Record<string, unknown>;
+        }>(request);
+        if (body instanceof Response) return body;
+        await updateEntity(ctx.env.DB, ctx.params.id, body);
+        if (body.name || body.type || body.summary !== undefined) {
+          const updated = await getEntity(ctx.env.DB, ctx.params.id);
+          if (updated) {
+            await upsertEntityVector(ctx.env, {
+              entity_id: ctx.params.id,
+              namespace_id: updated.namespace_id,
+              name: updated.name,
+              type: updated.type,
+              summary: updated.summary,
+            });
+          }
+        }
+        return json({ ok: true });
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Update entity",
+      tags: ["Entities"],
+      operationId: "updateEntity",
+      parameters: [idPathParam("Entity ID")],
+      requestBody: {
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                name: { type: "string", maxLength: 200 },
+                type: { type: "string", maxLength: 200 },
+                summary: { type: "string", maxLength: 10000 },
+                metadata: metadataSchema(),
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "Updated", content: { "application/json": { schema: okSchema() } } },
+      },
+    },
+  );
+
+  defineRoute(
+    "DELETE",
+    "/api/v1/entities/:id",
+    async (ctx) => {
+      try {
+        await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        await deleteEntity(ctx.env.DB, ctx.params.id);
+        await deleteVector(ctx.env, "entity", ctx.params.id);
+        return json({ ok: true });
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Delete entity",
+      tags: ["Entities"],
+      operationId: "deleteEntity",
+      parameters: [idPathParam("Entity ID")],
+      responses: {
+        "200": { description: "Deleted", content: { "application/json": { schema: okSchema() } } },
+      },
+    },
+  );
+}

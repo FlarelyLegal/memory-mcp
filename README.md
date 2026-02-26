@@ -24,63 +24,21 @@ Remote MCP server on Cloudflare Workers providing LLMs with persistent structure
 | MCP sessions     | **Durable Objects**            | Stateful per-session MCP agent                      |
 | Structured graph | **D1** (SQLite)                | Entities, relations, memories, conversations        |
 | Semantic search  | **Vectorize** + **Workers AI** | Embeddings via `@cf/baai/bge-large-en-v1.5` (1024d) |
-| Auth state       | **KV**                         | OAuth tokens/clients, Cloudflare Access integration |
+| Auth + tokens    | **KV**                         | OAuth state, service token → email bindings         |
 | Blob storage     | **R2**                         | Reserved for future use                             |
-
-## Tools (14)
-
-**Namespaces** — `manage_namespace` (create, list)
-
-**Entities** — `manage_entity` (create, get, update, delete), `find_entities` (name/type/keyword search)
-
-**Relations** — `manage_relation` (create, delete), `get_relations` (from/to/both)
-
-**Traversal** — `traverse_graph` (BFS, max depth 5)
-
-**Memories** — `manage_memory` (create, update, delete), `query_memories` (recall, search, entity modes)
-
-**Conversations** — `manage_conversation` (create, list), `add_message`, `get_messages` (recent or search)
-
-**Search** — `search` (semantic vector search; context mode enriches with graph neighbors)
-
-**Admin** — `reindex_vectors` (batch re-embed into Vectorize), `claim_namespaces` (adopt unowned namespaces)
-
-## Project Structure
-
-```
-src/
-  index.ts              MCP server entry (McpAgent + OAuthProvider)
-  version.ts            Version, name, description constants
-  types.ts              Env, AuthProps, domain + DB row types
-  auth.ts               Per-user namespace authorization guards
-  access-handler.ts     OAuth routes (/authorize, /callback, /health, /)
-  jwt.ts                JWT verification (RSA + expiry + audience)
-  embeddings.ts         Vectorize + Workers AI operations
-  memories.ts           Memory CRUD with temporal decay
-  conversations.ts      Conversation + message operations
-  response-helpers.ts   MCP response helpers (txt, ok, cap)
-  utils.ts              ID generation, decay scoring, JSON helpers
-  tools/                One file per domain, each exports register*Tools()
-  graph/                D1 operations by domain (barrel via index.ts)
-  oauth/                OAuth utilities by concern (barrel via index.ts)
-schemas/
-  schema.sql            D1 schema (7 tables)
-```
 
 ## Setup
 
 ### Prerequisites
 
-- Node.js 24+
+- Node.js 24+, [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
 - Cloudflare account with Workers, D1, Vectorize, and Workers AI
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
 
-### Quick Start
+### 1. Create Cloudflare resources
 
 ```bash
 npm install
 
-# Create Cloudflare resources
 npx wrangler d1 create memory-graph-mcp-db
 npx wrangler vectorize create memory-graph-mcp-embeddings --dimensions=1024 --metric=cosine
 npx wrangler kv namespace create CACHE
@@ -90,20 +48,69 @@ npx wrangler r2 bucket create memory-graph-mcp-storage
 
 Update `wrangler.jsonc` with the resource IDs from the commands above.
 
-```bash
-# Initialize database and deploy
-npm run deploy:init
+### 2. Configure Cloudflare Access
 
-# Or for local development
-npm run db:init:local
-npx wrangler dev --local --port 8787
+You need a [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) application to protect your Worker. This provides authentication for both interactive (MCP) and programmatic (REST API) access.
+
+1. In the [Zero Trust dashboard](https://one.dash.cloudflare.com/), go to **Access > Applications**
+2. Create a **Self-hosted** application for your Workers domain (e.g. `memory-graph-mcp.<subdomain>.workers.dev`)
+3. Add an **Allow** policy for your identity provider (Google, GitHub, etc.)
+4. If you plan to use service tokens for programmatic access, also add a **Service Auth** policy
+5. Note the following values from the application configuration:
+
+| Value                          | Where to find it                                           | Used as           |
+| ------------------------------ | ---------------------------------------------------------- | ----------------- |
+| Application Audience (AUD) tag | Application overview page                                  | `ACCESS_AUD_TAG`  |
+| JWKS URL                       | `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` | `ACCESS_JWKS_URL` |
+
+You also need a **SaaS application** for the MCP OAuth flow (this is separate from the self-hosted app above):
+
+| Value             | Where to find it          | Used as                    |
+| ----------------- | ------------------------- | -------------------------- |
+| Client ID         | SaaS app > OIDC settings  | `ACCESS_CLIENT_ID`         |
+| Client Secret     | SaaS app > OIDC settings  | `ACCESS_CLIENT_SECRET`     |
+| Token URL         | SaaS app > OIDC endpoints | `ACCESS_TOKEN_URL`         |
+| Authorization URL | SaaS app > OIDC endpoints | `ACCESS_AUTHORIZATION_URL` |
+
+### 3. Set secrets
+
+For local development, copy `.dev.vars.example` to `.dev.vars` and fill in the values.
+
+For production, set each secret on the Worker:
+
+```bash
+npx wrangler secret put ACCESS_CLIENT_ID
+npx wrangler secret put ACCESS_CLIENT_SECRET
+npx wrangler secret put ACCESS_TOKEN_URL
+npx wrangler secret put ACCESS_AUTHORIZATION_URL
+npx wrangler secret put ACCESS_JWKS_URL
+npx wrangler secret put ACCESS_AUD_TAG
+npx wrangler secret put COOKIE_ENCRYPTION_KEY   # generate with: openssl rand -hex 32
 ```
 
-### Auth (Cloudflare Access)
+**Important:** `ACCESS_AUD_TAG` must be the audience tag from the Cloudflare Access application protecting your Worker's domain. Mismatched audience tags cause `Invalid or expired token` errors.
 
-The OAuth flow requires secrets — copy `.dev.vars.example` to `.dev.vars` and fill in values from your Cloudflare Access application. Without these, `/health` works but authenticated tool calls will not.
+### 4. Deploy
 
-## Connecting Clients
+```bash
+npm run deploy:init    # first deploy (creates D1 tables + deploys)
+npm run deploy         # subsequent deploys
+```
+
+### Local development
+
+```bash
+npm run db:init:local                  # create local D1 tables
+npx wrangler dev --local --port 8787   # start dev server
+```
+
+Note: Workers AI and Vectorize are unavailable locally. Embedding/search tools fail gracefully. D1, KV, R2, and Durable Objects work.
+
+## Authentication
+
+### Interactive (MCP clients)
+
+For Claude Desktop, Cursor, OpenCode, or any MCP-compatible client:
 
 ```json
 {
@@ -115,14 +122,83 @@ The OAuth flow requires secrets — copy `.dev.vars.example` to `.dev.vars` and 
 }
 ```
 
-Works with Claude Desktop, OpenCode, Cursor, or any MCP-compatible client.
+Your client opens the Cloudflare Access login page. You authenticate with your IdP, and the OAuth flow completes automatically. All data is scoped to your email.
+
+### Programmatic (REST API via service tokens)
+
+For agents, scripts, and CI pipelines that need programmatic access.
+
+**1. Create a service token** in the [Zero Trust dashboard](https://one.dash.cloudflare.com/) under Access > Service Auth > Service Tokens. Save the **Client ID** and **Client Secret** (secret is only shown once).
+
+**2. Add a Service Auth policy** to your Access application (Access > Applications > your app > Policies) that allows the service token.
+
+**3. Bind the token to your email.** Log in to your Worker in a browser, then grab the `CF_Authorization` cookie from DevTools (Application > Cookies). Use it to bind:
 
 ```bash
-# Test with MCP Inspector
-npx @modelcontextprotocol/inspector https://memory-graph-mcp.<your-subdomain>.workers.dev/mcp
+curl -X POST https://<your-worker>/api/v1/admin/service-tokens \
+  -H "Cookie: CF_Authorization=<your-jwt-from-browser>" \
+  -H "Content-Type: application/json" \
+  -d '{"common_name": "<client-id>", "label": "My CI bot"}'
 ```
 
-## Temporal Decay
+**4. Make API calls.** Cloudflare Access validates the service token credentials and injects a signed JWT before the request reaches the Worker:
+
+```bash
+curl https://<your-worker>/api/v1/namespaces \
+  -H "CF-Access-Client-Id: <client-id>" \
+  -H "CF-Access-Client-Secret: <client-secret>"
+```
+
+The Worker resolves the service token to your email via KV. All operations run with your permissions.
+
+### Service token management
+
+| Action           | Method   | Endpoint                                    |
+| ---------------- | -------- | ------------------------------------------- |
+| Bind token       | `POST`   | `/api/v1/admin/service-tokens`              |
+| List your tokens | `GET`    | `/api/v1/admin/service-tokens`              |
+| Get binding      | `GET`    | `/api/v1/admin/service-tokens/:common_name` |
+| Update label     | `PATCH`  | `/api/v1/admin/service-tokens/:common_name` |
+| Revoke           | `DELETE` | `/api/v1/admin/service-tokens/:common_name` |
+
+- `common_name` (= Client ID) survives token rotation — no need to re-bind after rotating the secret in the CF dashboard
+- Unbound service tokens receive 403
+
+### API docs
+
+- **OpenAPI spec:** `GET /api/openapi.json`
+- **Interactive docs:** `GET /api/docs` (Scalar UI)
+- Both endpoints are unauthenticated.
+
+### Public endpoints (no auth)
+
+| Endpoint                | Response                                                      |
+| ----------------------- | ------------------------------------------------------------- |
+| `GET /`                 | Plain-text landing page (version, description, repo)          |
+| `GET /health`           | `{"status":"ok","server":"memory-graph-mcp","version":"..."}` |
+| `GET /api/docs`         | Scalar API reference UI                                       |
+| `GET /api/openapi.json` | OpenAPI 3.1 spec                                              |
+
+## MCP Tools (14)
+
+| Tool                  | Description                                                |
+| --------------------- | ---------------------------------------------------------- |
+| `manage_namespace`    | Create or list memory namespaces                           |
+| `manage_entity`       | CRUD for graph entities with embedding upsert              |
+| `find_entities`       | Search entities by name/type/keyword                       |
+| `manage_relation`     | Create or delete directed relations (with ownership check) |
+| `get_relations`       | Query relations from/to an entity                          |
+| `traverse_graph`      | BFS from an entity up to max_depth hops                    |
+| `manage_memory`       | Create/update/delete memories with embedding               |
+| `query_memories`      | Recall (decay-ranked), search (keyword), or entity-linked  |
+| `manage_conversation` | Create or list conversations                               |
+| `add_message`         | Add a message and embed for search                         |
+| `get_messages`        | Get or search messages                                     |
+| `search`              | Semantic vector search; context mode enriches with graph   |
+| `reindex_vectors`     | Batch re-embed entities/memories (25 per batch)            |
+| `claim_namespaces`    | Claim all unowned namespaces for current user              |
+
+### Temporal decay
 
 `query_memories` recall mode ranks by blending importance with recency:
 
