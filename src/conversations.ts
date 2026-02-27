@@ -13,7 +13,9 @@ export async function createConversation(
   try {
     await withRetry(() =>
       db
-        .prepare(`INSERT INTO conversations (id, namespace_id, title, metadata) VALUES (?, ?, ?, ?)`)
+        .prepare(
+          `INSERT INTO conversations (id, namespace_id, title, metadata) VALUES (?, ?, ?, ?)`,
+        )
         .bind(id, opts.namespace_id, opts.title ?? null, toJson(opts.metadata ?? null))
         .run(),
     );
@@ -69,7 +71,9 @@ export async function addMessage(
             toJson(opts.metadata ?? null),
             ts,
           ),
-        db.prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`).bind(ts, opts.conversation_id),
+        db
+          .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
+          .bind(ts, opts.conversation_id),
       ]),
     );
   } catch (err) {

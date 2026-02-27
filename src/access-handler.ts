@@ -39,7 +39,8 @@ const SECURITY_HEADERS: Record<string, string> = {
  * Strict fallback CSP for non-HTML and routes without custom policies.
  * Route-specific handlers can set their own CSP and it will be preserved.
  */
-const DEFAULT_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+const DEFAULT_CSP =
+  "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
 /** Attach security headers to a response. */
 function withSecurityHeaders(response: Response): Response {
