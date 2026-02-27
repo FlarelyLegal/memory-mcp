@@ -2,9 +2,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
-import { assertNamespaceAccess } from "../auth.js";
+import { assertNamespaceAccess, isAdmin } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { txt, ok } from "../response-helpers.js";
+
+/** Guard: return error response if user is not an admin. */
+async function requireAdmin(env: Env, email: string) {
+  if (!(await isAdmin(env.CACHE, email))) return ok("Error: admin access required");
+  return null;
+}
 import { REINDEX_BATCH_SIZE, chunks, reindexEntityChunk, reindexMemoryChunk } from "../reindex.js";
 import type { ReindexEntityItem, ReindexMemoryItem } from "../reindex.js";
 
@@ -23,6 +29,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       openWorldHint: false,
     },
     async ({ namespace_id }) => {
+      const denied = await requireAdmin(env, email);
+      if (denied) return denied;
       if (namespace_id !== "all") {
         await assertNamespaceAccess(env.DB, namespace_id, email);
       }
@@ -81,6 +89,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       openWorldHint: false,
     },
     async () => {
+      const denied = await requireAdmin(env, email);
+      if (denied) return denied;
       const claimed = await claimUnownedNamespaces(env.DB, email);
       if (claimed === 0) return ok("No unowned namespaces found.");
       return txt({ claimed, owner: email });

@@ -1,7 +1,7 @@
 /** Admin REST endpoints + OpenAPI definitions. */
 import { defineRoute } from "../registry.js";
 import { json, jsonError, handleError } from "../middleware.js";
-import { assertNamespaceAccess } from "../../auth.js";
+import { assertNamespaceAccess, isAdmin } from "../../auth.js";
 import { listNamespaces, claimUnownedNamespaces, searchEntities } from "../../graph/index.js";
 import { searchMemories } from "../../memories.js";
 import {
@@ -17,6 +17,8 @@ export function registerAdminRoutes(): void {
     "/api/v1/admin/reindex",
     async (ctx, request) => {
       try {
+        if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
+          return jsonError("Admin access required", 403);
         const body = (await request.json()) as { namespace_id?: string };
         if (!body.namespace_id) return jsonError("namespace_id is required", 400);
 
@@ -105,6 +107,8 @@ export function registerAdminRoutes(): void {
     "/api/v1/admin/claim-namespaces",
     async (ctx) => {
       try {
+        if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
+          return jsonError("Admin access required", 403);
         const claimed = await claimUnownedNamespaces(ctx.env.DB, ctx.email);
         return json({ claimed, owner: ctx.email });
       } catch (e) {

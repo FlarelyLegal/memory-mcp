@@ -110,6 +110,38 @@ npm run vectorize:indexes:b  # account B
 
 Creates indexes on `namespace_id`, `kind`, and `type`. Without these, metadata filters silently return empty results.
 
+## Admin Role
+
+Admin-only operations (reindex, claim namespaces) are gated by a KV allowlist.
+
+**KV key:** `admin:emails` in the `CACHE` namespace
+**Value:** comma-separated emails, e.g. `alice@example.com,bob@example.com`
+
+Set via dashboard or CLI:
+
+```sh
+# Account A
+npx wrangler kv key put "admin:emails" "tim@schenanigans.com,tschneider@cloudflare.com,tim@taslabs.net" \
+  --namespace-id <CACHE_KV_ID_A>
+
+# Account B
+npx wrangler kv key put "admin:emails" "tim@schenanigans.com,tschneider@cloudflare.com,tim@taslabs.net" \
+  --namespace-id <CACHE_KV_ID_B>
+```
+
+No redeploy needed — changes take effect immediately. If the key is missing, all admin operations are denied (fail-closed).
+
+**Guarded operations:**
+
+- MCP: `reindex_vectors`, `claim_namespaces`
+- REST: `POST /api/v1/admin/reindex`, `POST /api/v1/admin/claim-namespaces`
+
+**Not guarded** (all authenticated users can manage their own tokens):
+
+- `POST /api/v1/admin/service-tokens/bind-request`
+- `POST /api/v1/admin/service-tokens/bind-self`
+- `GET/PATCH/DELETE /api/v1/admin/service-tokens/*`
+
 ## Merge Strategy
 
 Use merge commits only (no squash/rebase) to preserve commit granularity for `git-cliff` release notes.

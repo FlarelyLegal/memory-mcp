@@ -8,6 +8,20 @@
 
 import type { NamespaceRow } from "./types.js";
 
+const ADMIN_KEY = "admin:emails";
+
+/**
+ * Check if an email is in the admin allowlist stored in KV.
+ * Key: `admin:emails`, value: comma-separated emails.
+ * Returns false when the key is missing (fail-closed).
+ */
+export async function isAdmin(kv: KVNamespace, email: string): Promise<boolean> {
+  const raw = await kv.get(ADMIN_KEY);
+  if (!raw) return false;
+  const admins = raw.split(",").map((e) => e.trim().toLowerCase());
+  return admins.includes(email.toLowerCase());
+}
+
 export class AccessDeniedError extends Error {
   constructor(message = "Access denied") {
     super(message);
