@@ -33,6 +33,11 @@ export async function getNamespace(db: DbHandle, id: string): Promise<NamespaceR
   return db.prepare(`SELECT * FROM namespaces WHERE id = ?`).bind(id).first<NamespaceRow>();
 }
 
+/**
+ * List namespaces accessible to a user.
+ * If `owner` is provided, returns namespaces owned by that email PLUS public namespaces.
+ * If `owner` is omitted, returns all namespaces (admin use).
+ */
 export async function listNamespaces(
   db: DbHandle,
   owner?: string,
@@ -42,7 +47,10 @@ export async function listNamespaces(
   const offset = opts?.offset ?? 0;
   if (owner) {
     const result = await db
-      .prepare(`SELECT * FROM namespaces WHERE owner = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+      .prepare(
+        `SELECT * FROM namespaces WHERE owner = ? OR visibility = 'public'
+         ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      )
       .bind(owner, limit, offset)
       .all<NamespaceRow>();
     return result.results;
