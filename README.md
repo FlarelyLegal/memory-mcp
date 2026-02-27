@@ -12,6 +12,8 @@
 
 Remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory — knowledge graphs, semantic search, and temporally-decayed recall.
 
+Operational runbook (Access scope, CI targeting, A/B build parity, secrets matrix): `HOWTO.md`.
+
 ## Architecture
 
 | Component        | Cloudflare Service             | Purpose                                             |
