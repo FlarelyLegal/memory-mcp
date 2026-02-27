@@ -32,6 +32,10 @@ import { registerAdminTools } from "./tools/admin.js";
 export { ReindexWorkflow } from "./workflows/reindex.js";
 export { ConsolidationWorkflow } from "./workflows/consolidation.js";
 
+/** Idle session timeout: 24 hours in seconds. */
+const SESSION_IDLE_TIMEOUT_S = 24 * 60 * 60;
+const EXPIRY_SCHEDULE_TYPE = "delayed" as const;
+
 export class MemoryGraphMCP extends McpAgent<Env, SessionState, AuthProps> {
   server = new McpServer({
     name: SERVER_DISPLAY_NAME,
@@ -46,6 +50,31 @@ export class MemoryGraphMCP extends McpAgent<Env, SessionState, AuthProps> {
     const e = this.props?.email;
     if (!e) throw new Error("Not authenticated");
     return e;
+  }
+
+  /**
+   * Called every time the DO wakes up for a new connection.
+   * Resets the idle expiry timer so inactive sessions are cleaned up.
+   */
+  async onStart(props?: AuthProps) {
+    await super.onStart(props);
+    await this.resetIdleTimer();
+  }
+
+  /** Cancel any existing expiry schedule and set a fresh one. */
+  private async resetIdleTimer() {
+    // Cancel all prior expiry schedules
+    const existing = this.getSchedules({ type: EXPIRY_SCHEDULE_TYPE });
+    for (const s of existing) {
+      await this.cancelSchedule(s.id);
+    }
+    // Schedule cleanup after idle timeout
+    await this.schedule(SESSION_IDLE_TIMEOUT_S, "expireSession");
+  }
+
+  /** Called by the scheduler when idle timeout fires. Destroys all DO state. */
+  async expireSession() {
+    await this.destroy();
   }
 
   async init() {

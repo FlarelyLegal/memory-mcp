@@ -9,6 +9,8 @@ export interface ServiceTokenMapping {
   email: string;
   label: string;
   created_at: number;
+  /** Set when revoked — soft-delete for consistency (KV is eventually consistent). */
+  revoked_at?: number;
 }
 
 export interface ServiceTokenBindChallenge {

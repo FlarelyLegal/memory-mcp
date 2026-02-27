@@ -57,9 +57,9 @@ Indexed on: `(namespace_id, created_at)`, `(email, created_at)`, `(action, creat
 
 ### R2 archive format
 
-One file per day: `audit/2026-02-27.ndjson`
+Audit events are written as individual R2 objects at `audit/events/{YYYY-MM-DD}/{id}.json` (one PUT per event, no read-modify-write race). The consolidation workflow merges these into daily NDJSON files at `audit/{YYYY-MM-DD}.ndjson` and deletes the individual objects.
 
-Each line is a JSON object:
+Each line in the daily NDJSON file:
 
 ```json
 {

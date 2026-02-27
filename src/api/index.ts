@@ -61,29 +61,33 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   const url = new URL(request.url);
   const { pathname } = url;
 
+  // Resolve CORS origin once per request
+  const reqOrigin = request.headers.get("Origin");
+  const allowedOrigin = await resolveOrigin(reqOrigin, url, env);
+
   // --- Public endpoints (no auth) ---
 
   if (pathname === "/api/openapi.json" && request.method === "GET") {
     const serverUrl = `${url.protocol}//${url.host}`;
-    return withCors(request, json(buildOpenApiSpec(serverUrl)));
+    return applyCors(request, json(buildOpenApiSpec(serverUrl)), allowedOrigin);
   }
 
   if (pathname === "/api/docs" && request.method === "GET") {
     const specUrl = `${url.protocol}//${url.host}/api/openapi.json`;
-    return withCors(request, renderScalarDocs(specUrl));
+    return applyCors(request, renderScalarDocs(specUrl), allowedOrigin);
   }
 
   // --- CORS preflight ---
 
   if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders() });
+    return new Response(null, { status: 204, headers: corsHeaders(allowedOrigin) });
   }
 
   // --- Route matching ---
 
   const matched = matchRoute(request.method as HttpMethod, pathname);
   if (!matched) {
-    return withCors(request, jsonError("Not found", 404));
+    return applyCors(request, jsonError("Not found", 404), allowedOrigin);
   }
 
   const { route, params } = matched;
@@ -102,7 +106,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     const result = await authenticateIdentity(request, env, {
       allowUnboundServiceToken: route.allowUnboundServiceToken,
     });
-    if (result instanceof Response) return withCors(request, result);
+    if (result instanceof Response) return applyCors(request, result, allowedOrigin);
 
     const ctx = {
       env,
@@ -113,7 +117,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       query: url.searchParams,
     };
     const response = await route.handler(ctx, request);
-    return withBookmark(db, withCors(request, response));
+    return withBookmark(db, applyCors(request, response, allowedOrigin));
   }
 
   const ctx = {
@@ -125,18 +129,42 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     query: url.searchParams,
   };
   const response = await route.handler(ctx, request);
-  return withBookmark(db, withCors(request, response));
+  return withBookmark(db, applyCors(request, response, allowedOrigin));
 }
 
-function corsHeaders(): Record<string, string> {
-  return {
-    "Access-Control-Allow-Origin": "*",
+// ---------------------------------------------------------------------------
+// CORS — Origin allowlist from KV (key: "cors:origins", comma-separated)
+// ---------------------------------------------------------------------------
+
+const CORS_KEY = "cors:origins";
+const CORS_CACHE_TTL = 5 * 60 * 1000; // 5 min in-memory cache
+let corsCache: { origins: Set<string>; ts: number } | null = null;
+
+async function getAllowedOrigins(env: Env): Promise<Set<string>> {
+  if (corsCache && Date.now() - corsCache.ts < CORS_CACHE_TTL) return corsCache.origins;
+  const raw = await env.CACHE.get(CORS_KEY);
+  const origins = raw
+    ? new Set(
+        raw
+          .split(",")
+          .map((o) => o.trim().toLowerCase())
+          .filter(Boolean),
+      )
+    : new Set<string>();
+  corsCache = { origins, ts: Date.now() };
+  return origins;
+}
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers":
       "Content-Type, Authorization, Cf-Access-Jwt-Assertion, cf-access-token, CF-Access-Client-Id, X-D1-Bookmark",
     "Access-Control-Expose-Headers": "X-D1-Bookmark",
     "Access-Control-Max-Age": "86400",
   };
+  if (origin) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
 }
 
 function supportsGzip(request: Request): boolean {
@@ -167,9 +195,28 @@ async function maybeGzip(request: Request, response: Response): Promise<Response
   return new Response(stream.readable, { status: response.status, headers });
 }
 
-async function withCors(request: Request, response: Response): Promise<Response> {
+/**
+ * Resolve whether to reflect the request Origin in CORS headers.
+ * - Same-origin requests always allowed.
+ * - Cross-origin requests allowed if Origin is in the KV allowlist.
+ * - No Origin header → null (non-browser client, no CORS needed).
+ */
+async function resolveOrigin(reqOrigin: string | null, url: URL, env: Env): Promise<string | null> {
+  if (!reqOrigin) return null; // Non-browser client
+  const self = `${url.protocol}//${url.host}`;
+  if (reqOrigin.toLowerCase() === self.toLowerCase()) return reqOrigin;
+  const allowed = await getAllowedOrigins(env);
+  if (allowed.has(reqOrigin.toLowerCase())) return reqOrigin;
+  return null; // Cross-origin not in allowlist — omit ACAO header
+}
+
+async function applyCors(
+  request: Request,
+  response: Response,
+  origin: string | null,
+): Promise<Response> {
   const patched = new Response(response.body, response);
-  for (const [k, v] of Object.entries(corsHeaders())) {
+  for (const [k, v] of Object.entries(corsHeaders(origin))) {
     patched.headers.set(k, v);
   }
   return maybeGzip(request, patched);

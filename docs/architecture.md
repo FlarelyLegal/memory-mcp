@@ -97,12 +97,12 @@ Code is organized into focused modules with a 250-line cap per file:
 
 ### Observability
 
-- `src/audit.ts` -- D1 hot window + R2 NDJSON archive, `audit()`, `queryAuditLogs()`, `purgeAuditLogs()`
+- `src/audit.ts` -- D1 hot window + R2 individual event objects, `audit()`, `consolidateAuditR2()`, `queryAuditLogs()`, `purgeAuditLogs()`
 
 ### Workflows
 
 - `src/workflows/reindex.ts` -- `ReindexWorkflow`: durable batch re-embedding
-- `src/workflows/consolidation.ts` -- `ConsolidationWorkflow`: 5-step pipeline (decay, dedup, AI summaries, memory purge, audit purge)
+- `src/workflows/consolidation.ts` -- `ConsolidationWorkflow`: 6-step pipeline (decay, dedup, AI summaries, memory purge, R2 audit consolidation, D1 audit purge)
 - `src/reindex.ts` -- Shared chunk logic used by reindex workflow + REST API
 
 ## Design decisions
