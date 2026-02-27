@@ -15,7 +15,7 @@
       "key": "d1_database",
       "name": "D1 (SQLite)",
       "type": "tool",
-      "summary": "Cloudflare D1 stores the structured graph: entities, relations, memories, conversations, and messages across 7 tables.",
+      "summary": "Cloudflare D1 stores the structured graph across 8 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, and audit_logs. Read replication via Sessions API routes reads to nearest replica.",
       "metadata": { "docs": "https://developers.cloudflare.com/d1/" }
     },
     {
@@ -29,20 +29,25 @@
       "key": "workers_ai",
       "name": "Workers AI",
       "type": "tool",
-      "summary": "Generates text embeddings using the bge-large-en-v1.5 model (1024 dimensions). Runs on Cloudflare's inference network.",
-      "metadata": { "model": "@cf/baai/bge-large-en-v1.5", "dimensions": 1024 }
+      "summary": "Three AI models on Cloudflare's inference network: bge-m3 for text embeddings (1024d), bge-reranker-base for cross-encoder reranking, and Llama 3.1 8B for memory merge summaries and entity summary generation.",
+      "metadata": {
+        "embedding_model": "@cf/baai/bge-m3",
+        "reranker_model": "@cf/baai/bge-reranker-base",
+        "llm_model": "@cf/meta/llama-3.1-8b-instruct-fp8",
+        "dimensions": 1024
+      }
     },
     {
       "key": "durable_objects",
       "name": "Durable Objects",
       "type": "tool",
-      "summary": "Each MCP session runs inside a Durable Object, providing stateful per-session context for the MCP agent."
+      "summary": "Each MCP session runs inside a Durable Object, providing stateful per-session context with automatic 24-hour idle expiry."
     },
     {
       "key": "kv_store",
       "name": "Workers KV",
       "type": "tool",
-      "summary": "Key-value store used for OAuth state management, JWKS caching, and service-token-to-email bindings."
+      "summary": "Key-value store used for OAuth state management, JWKS caching, service-token-to-email bindings, admin allowlist, and CORS origin configuration."
     },
     {
       "key": "cloudflare_access",
@@ -50,6 +55,13 @@
       "type": "tool",
       "summary": "Zero Trust authentication layer. Interactive users authenticate via OIDC; service tokens use challenge-based binding for programmatic access.",
       "metadata": { "docs": "https://developers.cloudflare.com/cloudflare-one/applications/" }
+    },
+    {
+      "key": "r2_storage",
+      "name": "R2 (Object Storage)",
+      "type": "tool",
+      "summary": "Cloudflare R2 stores audit event logs as individual JSON objects, consolidated into daily NDJSON files. Retained indefinitely as the cold archive.",
+      "metadata": { "docs": "https://developers.cloudflare.com/r2/" }
     },
     {
       "key": "knowledge_graph",
@@ -61,7 +73,7 @@
       "key": "semantic_search",
       "name": "Semantic Search",
       "type": "concept",
-      "summary": "Vector similarity search across entities, memories, and messages. Context mode enriches matches with graph neighbors and linked memories."
+      "summary": "Two-stage search pipeline: Vectorize ANN over-fetches 3x candidates, then bge-reranker-base cross-encoder re-scores for precision. Context mode enriches matches with graph neighbors and linked memories."
     },
     {
       "key": "temporal_decay",
@@ -73,14 +85,14 @@
       "key": "mcp_protocol",
       "name": "Model Context Protocol",
       "type": "concept",
-      "summary": "Open protocol for connecting LLMs to external tools and data sources. The server exposes 14 tools across 6 domains.",
+      "summary": "Open protocol for connecting LLMs to external tools and data sources. The server exposes 17 tools across 8 domains: namespace, entity, relation, traversal, memory, conversation, search, and admin.",
       "metadata": { "spec": "https://modelcontextprotocol.io" }
     },
     {
       "key": "rest_api",
       "name": "REST API",
       "type": "concept",
-      "summary": "Full HTTP API with OpenAPI 3.1 spec, Scalar docs UI, field projection, cursor pagination, and gzip compression."
+      "summary": "Full HTTP API mirroring MCP tools with OpenAPI 3.1 spec, Scalar docs UI, field projection, cursor pagination, and gzip compression."
     },
     {
       "key": "service_token_auth",
@@ -92,14 +104,61 @@
       "key": "openapi_spec",
       "name": "OpenAPI Specification",
       "type": "concept",
-      "summary": "Auto-generated OpenAPI 3.1 spec assembled dynamically from route registrations. No separate spec file to maintain."
+      "summary": "Auto-generated OpenAPI 3.1 spec assembled dynamically from route registrations. Schemas derived from shared Zod definitions via toJSONSchema(). No separate spec file to maintain."
     },
     {
-      "key": "r2_storage",
-      "name": "R2 (Object Storage)",
-      "type": "tool",
-      "summary": "Cloudflare R2 provides S3-compatible object storage. Used for audit event logs with date-partitioned keys under audit/YYYY-MM-DD/.",
-      "metadata": { "docs": "https://developers.cloudflare.com/r2/" }
+      "key": "fts5_search",
+      "name": "FTS5 Full-Text Search",
+      "type": "concept",
+      "summary": "Three FTS5 virtual tables (entities_fts, memories_fts, messages_fts) with auto-sync triggers provide BM25-ranked keyword search alongside vector semantic search."
+    },
+    {
+      "key": "two_stage_search",
+      "name": "Two-Stage Search Pipeline",
+      "type": "concept",
+      "summary": "Vectorize ANN retrieves 3x candidates, then bge-reranker-base cross-encoder re-scores for precision. Falls back to single-stage when AI is unavailable."
+    },
+    {
+      "key": "memory_merge",
+      "name": "Memory Merge",
+      "type": "concept",
+      "summary": "Pairwise cosine similarity clusters similar memories (threshold 0.85), then Llama 3.1 8B generates merged summaries. Originals are deleted and entity links preserved."
+    },
+    {
+      "key": "consolidation_workflow",
+      "name": "Consolidation Workflow",
+      "type": "concept",
+      "summary": "7-step durable pipeline: (1) decay sweep, (2) duplicate detection, (3) memory merge, (4) entity summary refresh, (5) archive purge, (6) R2 audit consolidation, (7) D1 audit purge."
+    },
+    {
+      "key": "audit_logging",
+      "name": "Audit Logging",
+      "type": "concept",
+      "summary": "All write operations are dual-logged to D1 (queryable hot window, 90-day retention) and R2 (individual JSON objects consolidated into daily NDJSON, retained indefinitely). Both writes are fire-and-forget."
+    },
+    {
+      "key": "elicitation",
+      "name": "Elicitation",
+      "type": "concept",
+      "summary": "Destructive MCP operations prompt the user for confirmation via the MCP elicitation protocol. Gracefully degrades if the client doesn't support it — operations proceed without confirmation."
+    },
+    {
+      "key": "session_state",
+      "name": "Session State",
+      "type": "concept",
+      "summary": "Per-session Durable Object state tracks current namespace, recent entities (capped at 10), and current conversation. Tools auto-resolve omitted namespace_id and conversation_id from session state."
+    },
+    {
+      "key": "shared_schemas",
+      "name": "Shared Zod Schemas",
+      "type": "concept",
+      "summary": "Single source of truth in tool-schemas.ts: MCP tools import Zod directly, REST validators compose from them, OpenAPI specs derive JSON Schema via Zod v4's toJSONSchema(). No field constraint duplication."
+    },
+    {
+      "key": "namespace_visibility",
+      "name": "Namespace Visibility",
+      "type": "concept",
+      "summary": "Namespaces have private or public visibility. Public namespaces appear in every user's list and allow read access for any authenticated user. Write access requires ownership or admin role."
     }
   ],
   "relations": [
@@ -152,6 +211,24 @@
       "weight": 0.9
     },
     {
+      "source_key": "memory_graph_mcp",
+      "target_key": "r2_storage",
+      "relation_type": "depends_on",
+      "weight": 0.5
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "audit_logging",
+      "relation_type": "uses",
+      "weight": 0.8
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "fts5_search",
+      "relation_type": "uses",
+      "weight": 0.8
+    },
+    {
       "source_key": "rest_api",
       "target_key": "service_token_auth",
       "relation_type": "uses",
@@ -164,6 +241,12 @@
       "weight": 0.7
     },
     {
+      "source_key": "rest_api",
+      "target_key": "shared_schemas",
+      "relation_type": "uses",
+      "weight": 0.8
+    },
+    {
       "source_key": "semantic_search",
       "target_key": "vectorize",
       "relation_type": "depends_on",
@@ -171,9 +254,15 @@
     },
     {
       "source_key": "semantic_search",
+      "target_key": "two_stage_search",
+      "relation_type": "implements",
+      "weight": 0.9
+    },
+    {
+      "source_key": "two_stage_search",
       "target_key": "workers_ai",
       "relation_type": "depends_on",
-      "weight": 1.0
+      "weight": 0.9
     },
     {
       "source_key": "knowledge_graph",
@@ -206,37 +295,97 @@
       "weight": 1.0
     },
     {
+      "source_key": "d1_database",
+      "target_key": "fts5_search",
+      "relation_type": "enables",
+      "weight": 0.9
+    },
+    {
       "source_key": "vectorize",
       "target_key": "semantic_search",
       "relation_type": "enables",
       "weight": 1.0
     },
     {
-      "source_key": "memory_graph_mcp",
-      "target_key": "r2_storage",
+      "source_key": "consolidation_workflow",
+      "target_key": "memory_merge",
+      "relation_type": "uses",
+      "weight": 0.9
+    },
+    {
+      "source_key": "consolidation_workflow",
+      "target_key": "temporal_decay",
+      "relation_type": "uses",
+      "weight": 0.8
+    },
+    {
+      "source_key": "consolidation_workflow",
+      "target_key": "audit_logging",
+      "relation_type": "uses",
+      "weight": 0.7
+    },
+    {
+      "source_key": "memory_merge",
+      "target_key": "workers_ai",
       "relation_type": "depends_on",
-      "weight": 0.5
+      "weight": 0.9
+    },
+    {
+      "source_key": "audit_logging",
+      "target_key": "d1_database",
+      "relation_type": "stores",
+      "weight": 0.8
+    },
+    {
+      "source_key": "audit_logging",
+      "target_key": "r2_storage",
+      "relation_type": "stores",
+      "weight": 0.8
+    },
+    {
+      "source_key": "durable_objects",
+      "target_key": "session_state",
+      "relation_type": "provides",
+      "weight": 0.9
+    },
+    {
+      "source_key": "mcp_protocol",
+      "target_key": "elicitation",
+      "relation_type": "uses",
+      "weight": 0.7
+    },
+    {
+      "source_key": "mcp_protocol",
+      "target_key": "shared_schemas",
+      "relation_type": "uses",
+      "weight": 0.8
+    },
+    {
+      "source_key": "knowledge_graph",
+      "target_key": "namespace_visibility",
+      "relation_type": "uses",
+      "weight": 0.7
     }
   ],
   "memories": [
     {
       "type": "fact",
-      "content": "The structured graph is stored in D1 across 7 tables: namespaces, entities, relations, conversations, messages, memories, and memory_entity_links. Vectors live in Vectorize.",
+      "content": "The structured graph is stored in D1 across 8 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, and audit_logs. Three FTS5 virtual tables provide BM25-ranked keyword search. Vectors live in Vectorize.",
       "importance": 0.9,
       "source": "schemas/schema.sql",
-      "entity_keys": ["d1_database", "vectorize"]
+      "entity_keys": ["d1_database", "vectorize", "fts5_search"]
     },
     {
       "type": "fact",
-      "content": "Text embeddings are generated by Workers AI using bge-large-en-v1.5, producing 1024-dimension vectors for semantic similarity search.",
+      "content": "Text embeddings are generated by Workers AI using bge-m3 (1024 dimensions, 60K token context, 100+ languages). 16x cheaper than the previous bge-large-en-v1.5 model with the same dimensionality.",
       "importance": 0.7,
       "entity_keys": ["workers_ai", "vectorize"]
     },
     {
       "type": "fact",
-      "content": "The server exposes 14 MCP tools across 6 domains: namespace, entity, relation, memory, conversation, and search. Each tool has Zod-validated inputs with max-length bounds.",
+      "content": "The server exposes 17 MCP tools across 8 domains: namespace, entity, relation, traversal, memory, conversation, search, and admin. Each tool has Zod-validated inputs with max-length bounds from shared schemas in tool-schemas.ts.",
       "importance": 0.9,
-      "entity_keys": ["memory_graph_mcp", "mcp_protocol"]
+      "entity_keys": ["memory_graph_mcp", "mcp_protocol", "shared_schemas"]
     },
     {
       "type": "fact",
@@ -247,9 +396,81 @@
     },
     {
       "type": "fact",
-      "content": "The OpenAPI 3.1 spec is assembled dynamically from route registrations in the registry — there is no separate spec file to maintain. Interactive docs use Scalar UI at /api/docs.",
+      "content": "The OpenAPI 3.1 spec is assembled dynamically from route registrations in the registry �� there is no separate spec file to maintain. Schemas are derived from shared Zod definitions via toJSONSchema(). Interactive docs use Scalar UI at /api/docs.",
       "importance": 0.6,
-      "entity_keys": ["openapi_spec", "rest_api"]
+      "entity_keys": ["openapi_spec", "rest_api", "shared_schemas"]
+    },
+    {
+      "type": "fact",
+      "content": "Semantic search uses a two-stage pipeline: Vectorize ANN retrieves 3x the requested candidates, then bge-reranker-base cross-encoder re-scores for precision. Falls back to single-stage when Workers AI is unavailable.",
+      "importance": 0.8,
+      "entity_keys": ["semantic_search", "two_stage_search", "workers_ai"]
+    },
+    {
+      "type": "fact",
+      "content": "Context-mode semantic search enriches each vector match with the entity's graph neighborhood: up to 5 outgoing relations, 5 incoming relations, 5 linked memories, plus top decay-ranked memories.",
+      "importance": 0.8,
+      "entity_keys": ["semantic_search", "knowledge_graph"]
+    },
+    {
+      "type": "fact",
+      "content": "The consolidation workflow is a 7-step durable pipeline: (1) decay sweep archives low-relevance memories, (2) duplicate detection removes exact duplicates, (3) memory merge clusters similar memories via cosine similarity and LLM-merges them, (4) entity summary refresh re-summarizes entities using linked memories, (5) purge hard-deletes archived memories older than 30 days, (6) R2 audit consolidation merges individual events into daily NDJSON, (7) D1 audit purge removes logs older than 90 days.",
+      "importance": 0.9,
+      "entity_keys": ["consolidation_workflow", "memory_merge", "temporal_decay", "audit_logging"]
+    },
+    {
+      "type": "fact",
+      "content": "Memory merge uses pairwise cosine similarity (default threshold 0.85) to cluster similar memories, then Llama 3.1 8B generates a merged summary. Original memories are deleted and entity links are preserved on the merged memory.",
+      "importance": 0.8,
+      "entity_keys": ["memory_merge", "workers_ai"]
+    },
+    {
+      "type": "fact",
+      "content": "All write operations (MCP tools and REST API) are audit-logged to both D1 (queryable hot window, 90-day retention) and R2 (individual JSON objects at audit/events/{day}/{id}.json, retained indefinitely). Both writes are fire-and-forget — failures never block the request.",
+      "importance": 0.7,
+      "entity_keys": ["audit_logging", "d1_database", "r2_storage"]
+    },
+    {
+      "type": "fact",
+      "content": "D1 read replication uses the Sessions API: write operations use first-primary, reads use first-unconstrained for lowest latency. API routes pass X-D1-Bookmark header for cross-request sequential consistency.",
+      "importance": 0.7,
+      "entity_keys": ["d1_database"]
+    },
+    {
+      "type": "fact",
+      "content": "D1 write operations are wrapped with withRetry() — up to 3 retries with jitter backoff on transient errors (network loss, object reset, code update, transient resolution failures).",
+      "importance": 0.6,
+      "entity_keys": ["d1_database"]
+    },
+    {
+      "type": "fact",
+      "content": "Destructive MCP operations (delete entity/relation/memory, consolidate, reindex-all, claim namespaces) prompt the user for confirmation via the MCP elicitation protocol. If the client doesn't support elicitation, operations proceed without confirmation.",
+      "importance": 0.7,
+      "entity_keys": ["elicitation", "mcp_protocol"]
+    },
+    {
+      "type": "fact",
+      "content": "Session state tracks current namespace, recent entities (capped at 10), and current conversation inside the Durable Object. Tools auto-resolve omitted namespace_id and conversation_id from session state.",
+      "importance": 0.7,
+      "entity_keys": ["session_state", "durable_objects"]
+    },
+    {
+      "type": "fact",
+      "content": "Shared Zod schemas in tool-schemas.ts are the single source of truth for field definitions. MCP tools import directly, REST validators compose from them, and OpenAPI specs derive JSON Schema via Zod v4's native toJSONSchema(). This eliminates triple duplication across MCP, REST, and OpenAPI layers.",
+      "importance": 0.7,
+      "entity_keys": ["shared_schemas", "mcp_protocol", "rest_api"]
+    },
+    {
+      "type": "fact",
+      "content": "Namespaces have private or public visibility. Public namespaces appear in every user's list and allow read operations for any authenticated user. Write access requires ownership or admin role. Admins can set visibility via manage_namespace tool or PATCH /api/v1/namespaces/:id.",
+      "importance": 0.7,
+      "entity_keys": ["namespace_visibility", "knowledge_graph"]
+    },
+    {
+      "type": "fact",
+      "content": "Conversations track interaction history with four message roles: user, assistant, system, and tool. User and assistant messages are automatically embedded into Vectorize for semantic search across conversation history.",
+      "importance": 0.7,
+      "entity_keys": ["memory_graph_mcp", "d1_database"]
     },
     {
       "type": "observation",
@@ -259,29 +480,21 @@
     },
     {
       "type": "observation",
-      "content": "Context-mode semantic search enriches each vector match with the entity's graph neighborhood: up to 5 outgoing relations, 5 incoming relations, 5 linked memories, plus top decay-ranked memories.",
-      "importance": 0.8,
-      "entity_keys": ["semantic_search", "knowledge_graph"]
-    },
-    {
-      "type": "observation",
       "content": "Vectorize requires explicit metadata index declarations for namespace_id and kind. Filtering on unindexed fields silently returns empty results.",
       "importance": 0.7,
       "entity_keys": ["vectorize"]
     },
     {
-      "type": "preference",
-      "content": "Protect only /api/v1 paths with Cloudflare Access. Keep /api/docs and /api/openapi.json outside the Access policy so API documentation stays publicly reachable.",
-      "importance": 0.7,
-      "source": "HOWTO.md",
-      "entity_keys": ["cloudflare_access", "rest_api"]
+      "type": "observation",
+      "content": "The JWKS cache uses a 5-minute TTL with a single forced refresh on kid miss. This handles key rotation without breaking active sessions, at the cost of up to one extra fetch per rotation event.",
+      "importance": 0.6,
+      "entity_keys": ["cloudflare_access", "kv_store"]
     },
     {
-      "type": "fact",
-      "content": "Conversations track interaction history with four message roles: user, assistant, system, and tool. User and assistant messages are automatically embedded into Vectorize for semantic search across conversation history.",
+      "type": "preference",
+      "content": "Protect only /api/v1 paths with Cloudflare Access. Keep /api/docs, /api/openapi.json, and /api/demo outside the Access policy so API documentation and the demo snapshot stay publicly reachable.",
       "importance": 0.7,
-      "source": "README.md",
-      "entity_keys": ["memory_graph_mcp", "d1_database"]
+      "entity_keys": ["cloudflare_access", "rest_api"]
     },
     {
       "type": "instruction",
@@ -299,14 +512,7 @@
       "type": "observation",
       "content": "Graph traversal uses breadth-first search from a start entity, following outgoing relations up to 5 hops deep. Relation-type filtering lets you walk only specific edge types like depends_on or part_of.",
       "importance": 0.7,
-      "source": "README.md",
       "entity_keys": ["knowledge_graph"]
-    },
-    {
-      "type": "observation",
-      "content": "The JWKS cache uses a 5-minute TTL with a single forced refresh on kid miss. This handles key rotation without breaking active sessions, at the cost of up to one extra fetch per rotation event.",
-      "importance": 0.6,
-      "entity_keys": ["cloudflare_access", "kv_store"]
     }
   ]
 }
