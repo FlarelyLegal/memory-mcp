@@ -59,7 +59,7 @@ For Vectorize filtering to work, add metadata indexes for:
 
 You need a [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) application to protect your Worker. This provides authentication for both interactive (MCP) and programmatic (REST API) access.
 
-1. In the [Zero Trust dashboard](https://one.dash.cloudflare.com/), go to **Access > Applications**
+1. In the [Zero Trust dashboard](https://dash.cloudflare.com/one/), go to **Access > Applications**
 2. Create a **Self-hosted** application for your Workers domain (e.g. `memory-graph-mcp.<subdomain>.workers.dev`)
 3. Add an **Allow** policy for your identity provider (Google, GitHub, etc.)
 4. If you plan to use service tokens for programmatic access, add a **Service Auth** policy (`non_identity`, include `any_valid_service_token` or specific token)
@@ -153,7 +153,7 @@ Your client opens the Cloudflare Access login page. You authenticate with your I
 
 For agents, scripts, and CI pipelines that need programmatic access.
 
-**1. Create a service token** in the [Zero Trust dashboard](https://one.dash.cloudflare.com/) under Access > Service Auth > Service Tokens. Save the **Client ID** and **Client Secret** (secret is only shown once).
+**1. Create a service token** in the [Zero Trust dashboard](https://dash.cloudflare.com/one/) under Access > Service Auth > Service Tokens. Save the **Client ID** and **Client Secret** (secret is only shown once).
 
 **2. Add a Service Auth policy** to your Access application (Access > Applications > your app > Policies) that allows the service token.
 
@@ -208,7 +208,7 @@ The Worker resolves the service token to your email via KV. All operations run w
 
 - **OpenAPI spec:** `GET /api/openapi.json`
 - **Interactive docs:** `GET /api/docs` (Scalar UI)
-- Live docs URL: `https://memory.flarelylegal.com/api/docs`
+- Live docs URL: [https://memory.flarelylegal.com/api/docs](https://memory.flarelylegal.com/api/docs)
 - Both endpoints are unauthenticated in Worker code; keep them outside Access path protection.
 
 ### API response shaping
