@@ -1,11 +1,12 @@
 /**
  * Workers AI embedding generation.
  *
- * Thin wrapper around the bge-large-en-v1.5 embedding model.
+ * Uses bge-m3: 1024 dimensions, 100+ languages, 60K token context.
+ * Drop-in replacement for bge-large-en-v1.5 (same 1024 dims), 16x cheaper.
  * Used by vectorize.ts for vector CRUD and reindex.ts for batch operations.
  */
 
-const EMBEDDING_MODEL = "@cf/baai/bge-large-en-v1.5";
+const EMBEDDING_MODEL = "@cf/baai/bge-m3";
 
 /** Generate an embedding vector for the given text using Workers AI. */
 export async function embed(ai: Ai, text: string): Promise<number[]> {

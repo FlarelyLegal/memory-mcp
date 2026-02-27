@@ -38,17 +38,15 @@ Tracked improvements for memory-graph-mcp. Cross off as completed.
 
 ---
 
-## 3. Upgrade to bge-m3 Embedding Model
+## 3. ~~Upgrade to bge-m3 Embedding Model~~ DONE
 
 **Impact:** High — 16x cheaper ($0.012 vs $0.20/M tokens), 100+ languages, 60K token context, same 1024 dims (drop-in).
 
-- [ ] Verify bge-m3 produces 1024-dim vectors (confirmed in research)
-- [ ] Update `EMBEDDING_MODEL` constant in `src/embeddings.ts`
-- [ ] Test embedding generation locally (Workers AI not available locally — test on remote)
-- [ ] Deploy to both accounts
-- [ ] Run `reindex_vectors` on all namespaces (both accounts) to re-embed existing content
-- [ ] Evaluate bge-m3's built-in reranking mode as potential replacement for separate bge-reranker-base call
-- [ ] Update README/AGENTS.md model reference
+- [x] Update `EMBEDDING_MODEL` constant in `src/embeddings.ts` to `@cf/baai/bge-m3`
+- [x] Update README + AGENTS.md model references
+- [ ] Deploy to both accounts (infra)
+- [ ] Run `reindex_vectors` on all namespaces to re-embed with bge-m3 (infra)
+- [ ] Evaluate bge-m3's built-in reranking mode vs separate bge-reranker-base (future)
 
 ---
 

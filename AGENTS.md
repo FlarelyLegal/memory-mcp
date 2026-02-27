@@ -6,7 +6,7 @@
 
 Memory Graph MCP — a remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory (knowledge graphs, semantic search, conversation history, temporal decay). Single-package TypeScript project using npm.
 
-Built on: **D1** (graph + memories), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-large-en-v1.5`), **KV** (caching + OAuth state), **R2** (blob storage), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
+Built on: **D1** (graph + memories), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-m3`), **KV** (caching + OAuth state), **R2** (blob storage), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
 
 ### Key commands
 
