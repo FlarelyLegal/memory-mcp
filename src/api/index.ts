@@ -147,7 +147,9 @@ async function maybeGzip(request: Request, response: Response): Promise<Response
   if (!supportsGzip(request)) return response;
   if (response.headers.has("Content-Encoding")) return response;
   const contentType = response.headers.get("content-type") ?? "";
-  if (!/^(application\/json|text\/plain|text\/html)/.test(contentType)) return response;
+  // Avoid manual gzip for JSON: some API clients expect transparent decode and
+  // can surface compressed bytes directly for .json() parsing.
+  if (!/^(text\/plain|text\/html)/.test(contentType)) return response;
 
   const text = await response.clone().text();
   // Keep CPU overhead low; Cloudflare edge compression also applies.
