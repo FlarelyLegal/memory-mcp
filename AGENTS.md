@@ -66,7 +66,7 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/memories.ts` — Memory CRUD + temporal-decay recall ranking
 - `src/conversations.ts` — Conversation and message history
 - `src/utils.ts` — `generateId`, `decayScore`, JSON helpers
-- `src/response-helpers.ts` — Shared MCP response helpers (`txt`, `ok`, `cap`)
+- `src/response-helpers.ts` — Shared MCP response helpers (`txt`, `ok`, `err`, `safeMeta`, `toolHandler`, `cap`, `trunc`)
 - `src/reindex.ts` — Shared batch-reindex logic (entity/memory chunk embedding + Vectorize upsert) used by both MCP tools and REST API
 - `src/tools/` — One file per tool domain (namespace, entity, relation, traversal, memory, conversation, search, admin). Each exports a `register*Tools(server, env, email)` function.
 - `src/graph/` — D1 operations split by domain (namespaces, entities, relations, traversal) with barrel re-export via `index.ts`.

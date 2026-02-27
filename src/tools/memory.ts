@@ -5,7 +5,16 @@ import type { Env } from "../types.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess, assertMemoryAccess } from "../auth.js";
-import { txt, ok, cap, trunc } from "../response-helpers.js";
+import {
+  txt,
+  err,
+  ok,
+  cap,
+  trunc,
+  safeMeta,
+  isMetaError,
+  toolHandler,
+} from "../response-helpers.js";
 
 export function registerMemoryTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -33,66 +42,69 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({
-      action,
-      id,
-      namespace_id,
-      content,
-      type,
-      importance,
-      source,
-      entity_ids,
-      metadata,
-    }) => {
-      const meta = metadata ? JSON.parse(metadata) : undefined;
-      switch (action) {
-        case "create": {
-          if (!namespace_id || !content) return ok("Error: namespace_id, content required");
-          await assertNamespaceAccess(env.DB, namespace_id, email);
-          const mid = await memories.createMemory(env.DB, {
-            namespace_id,
-            content,
-            type,
-            importance,
-            source,
-            entity_ids,
-            metadata: meta,
-          });
-          await vectorize.upsertMemoryVector(env, {
-            memory_id: mid,
-            namespace_id,
-            content,
-            type: type ?? "fact",
-          });
-          return txt({ id: mid, type: type ?? "fact" });
-        }
-        case "update": {
-          if (!id) return ok("Error: id required");
-          if (!content && !type && importance === undefined && !metadata)
-            return ok("Error: at least one field (content, type, importance, metadata) required");
-          await assertMemoryAccess(env.DB, id, email);
-          await memories.updateMemory(env.DB, id, { content, type, importance, metadata: meta });
-          if (content) {
-            const m = await memories.getMemory(env.DB, id);
-            if (m)
-              await vectorize.upsertMemoryVector(env, {
-                memory_id: id,
-                namespace_id: m.namespace_id,
-                content: m.content,
-                type: m.type,
-              });
+    toolHandler(
+      async ({
+        action,
+        id,
+        namespace_id,
+        content,
+        type,
+        importance,
+        source,
+        entity_ids,
+        metadata,
+      }) => {
+        const meta = safeMeta(metadata);
+        if (isMetaError(meta)) return meta;
+        switch (action) {
+          case "create": {
+            if (!namespace_id || !content) return err("namespace_id, content required");
+            await assertNamespaceAccess(env.DB, namespace_id, email);
+            const mid = await memories.createMemory(env.DB, {
+              namespace_id,
+              content,
+              type,
+              importance,
+              source,
+              entity_ids,
+              metadata: meta,
+            });
+            await vectorize.upsertMemoryVector(env, {
+              memory_id: mid,
+              namespace_id,
+              content,
+              type: type ?? "fact",
+            });
+            return txt({ id: mid, type: type ?? "fact" });
           }
-          return ok(`Updated ${id}`);
+          case "update": {
+            if (!id) return err("id required");
+            if (!content && !type && importance === undefined && !metadata)
+              return err("at least one field (content, type, importance, metadata) required");
+            await assertMemoryAccess(env.DB, id, email);
+            await memories.updateMemory(env.DB, id, { content, type, importance, metadata: meta });
+            if (content) {
+              const m = await memories.getMemory(env.DB, id);
+              if (m)
+                await vectorize.upsertMemoryVector(env, {
+                  memory_id: id,
+                  namespace_id: m.namespace_id,
+                  content: m.content,
+                  type: m.type,
+                });
+            }
+            return ok(`Updated ${id}`);
+          }
+          case "delete": {
+            if (!id) return err("id required");
+            await assertMemoryAccess(env.DB, id, email);
+            await memories.deleteMemory(env.DB, id);
+            await vectorize.deleteVector(env, "memory", id);
+            return ok(`Deleted ${id}`);
+          }
         }
-        case "delete": {
-          if (!id) return ok("Error: id required");
-          await assertMemoryAccess(env.DB, id, email);
-          await memories.deleteMemory(env.DB, id);
-          await vectorize.deleteVector(env, "memory", id);
-          return ok(`Deleted ${id}`);
-        }
-      }
-    },
+      },
+    ),
   );
 
   server.tool(
@@ -113,7 +125,7 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
       readOnlyHint: true,
       openWorldHint: false,
     },
-    async ({ mode, namespace_id, entity_id, query, type, limit, compact, verbose }) => {
+    toolHandler(async ({ mode, namespace_id, entity_id, query, type, limit, compact, verbose }) => {
       const n = cap(limit, 50, 20);
       const isCompact = compact ?? true;
       const full = verbose ?? false;
@@ -135,13 +147,13 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
             };
       switch (mode) {
         case "recall": {
-          if (!namespace_id) return ok("Error: namespace_id required");
+          if (!namespace_id) return err("namespace_id required");
           await assertNamespaceAccess(env.DB, namespace_id, email);
           const rows = await memories.recallMemories(env.DB, namespace_id, { type, limit: n });
           return txt(rows.map(mapMemory));
         }
         case "search": {
-          if (!namespace_id || !query) return ok("Error: namespace_id, query required");
+          if (!namespace_id || !query) return err("namespace_id, query required");
           await assertNamespaceAccess(env.DB, namespace_id, email);
           const rows = await memories.searchMemories(env.DB, namespace_id, {
             query,
@@ -151,12 +163,12 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
           return txt(rows.map(mapMemory));
         }
         case "entity": {
-          if (!entity_id) return ok("Error: entity_id required");
+          if (!entity_id) return err("entity_id required");
           await assertEntityAccess(env.DB, entity_id, email);
           const rows = await memories.getMemoriesForEntity(env.DB, entity_id, { limit: n });
           return txt(rows.map(mapMemory));
         }
       }
-    },
+    }),
   );
 }

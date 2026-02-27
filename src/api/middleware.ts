@@ -174,6 +174,9 @@ export function handleError(error: unknown): Response {
   if (error instanceof AccessDeniedError) {
     return jsonError(error.message, 403);
   }
+  if (error instanceof SyntaxError) {
+    return jsonError("Invalid JSON body", 400);
+  }
   // eslint-disable-next-line no-console
   console.error("API error:", error);
   return jsonError("Internal server error", 500);

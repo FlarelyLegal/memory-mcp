@@ -6,7 +6,7 @@ import * as graph from "../graph/index.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess } from "../auth.js";
-import { txt, cap, trunc } from "../response-helpers.js";
+import { txt, cap, trunc, toolHandler } from "../response-helpers.js";
 
 export function registerSearchTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -31,7 +31,7 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
       readOnlyHint: true,
       openWorldHint: false,
     },
-    async ({ namespace_id, query, mode, kind, type, limit, compact, verbose }) => {
+    toolHandler(async ({ namespace_id, query, mode, kind, type, limit, compact, verbose }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
       const n = cap(limit, 20, mode === "context" ? 5 : 10);
       const isCompact = compact ?? true;
@@ -112,6 +112,6 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
             : { content: full ? m.content : trunc(m.content), importance: m.importance }),
         })),
       });
-    },
+    }),
   );
 }

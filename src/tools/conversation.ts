@@ -6,7 +6,7 @@ import * as conversations from "../conversations.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../auth.js";
 import { toISO } from "../utils.js";
-import { txt, ok, cap, trunc } from "../response-helpers.js";
+import { txt, err, cap, trunc, safeMeta, isMetaError, toolHandler } from "../response-helpers.js";
 
 export function registerConversationTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -27,13 +27,15 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ action, namespace_id, title, metadata, limit, compact }) => {
+    toolHandler(async ({ action, namespace_id, title, metadata, limit, compact }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
       if (action === "create") {
+        const meta = safeMeta(metadata);
+        if (isMetaError(meta)) return meta;
         const id = await conversations.createConversation(env.DB, {
           namespace_id,
           title,
-          metadata: metadata ? JSON.parse(metadata) : undefined,
+          metadata: meta,
         });
         return txt({ id, title });
       }
@@ -54,7 +56,7 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
               },
         ),
       );
-    },
+    }),
   );
 
   server.tool(
@@ -73,13 +75,15 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ conversation_id, role, content, metadata }) => {
+    toolHandler(async ({ conversation_id, role, content, metadata }) => {
       await assertConversationAccess(env.DB, conversation_id, email);
+      const meta = safeMeta(metadata);
+      if (isMetaError(meta)) return meta;
       const id = await conversations.addMessage(env.DB, {
         conversation_id,
         role,
         content,
-        metadata: metadata ? JSON.parse(metadata) : undefined,
+        metadata: meta,
       });
       if (role === "user" || role === "assistant") {
         const convo = await conversations.getConversation(env.DB, conversation_id);
@@ -93,7 +97,7 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
           });
       }
       return txt({ id, role });
-    },
+    }),
   );
 
   server.tool(
@@ -125,7 +129,7 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       readOnlyHint: true,
       openWorldHint: false,
     },
-    async ({ conversation_id, namespace_id, query, limit, compact, verbose }) => {
+    toolHandler(async ({ conversation_id, namespace_id, query, limit, compact, verbose }) => {
       const n = cap(limit, 100, 50);
       const isCompact = compact ?? true;
       const full = verbose ?? false;
@@ -152,10 +156,10 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
         const rows = await conversations.searchMessages(env.DB, namespace_id, query, { limit: n });
         return txt(rows.map(mapMsg));
       }
-      if (!conversation_id) return ok("Error: conversation_id or namespace_id+query required");
+      if (!conversation_id) return err("conversation_id or namespace_id+query required");
       await assertConversationAccess(env.DB, conversation_id, email);
       const rows = await conversations.getMessages(env.DB, conversation_id, { limit: n });
       return txt(rows.map(mapMsg));
-    },
+    }),
   );
 }

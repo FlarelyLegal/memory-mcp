@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Env } from "../types.js";
 import * as graph from "../graph/index.js";
 import { assertEntityAccess } from "../auth.js";
-import { txt } from "../response-helpers.js";
+import { txt, toolHandler } from "../response-helpers.js";
 
 export function registerTraversalTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -20,7 +20,7 @@ export function registerTraversalTools(server: McpServer, env: Env, email: strin
       readOnlyHint: true,
       openWorldHint: false,
     },
-    async ({ entity_id, max_depth, relation_types }) => {
+    toolHandler(async ({ entity_id, max_depth, relation_types }) => {
       await assertEntityAccess(env.DB, entity_id, email);
       return txt(
         await graph.traverse(env.DB, entity_id, {
@@ -28,6 +28,6 @@ export function registerTraversalTools(server: McpServer, env: Env, email: strin
           relationTypes: relation_types,
         }),
       );
-    },
+    }),
   );
 }

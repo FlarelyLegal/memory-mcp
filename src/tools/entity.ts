@@ -6,7 +6,16 @@ import * as graph from "../graph/index.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess } from "../auth.js";
 import { parseJson, toISO } from "../utils.js";
-import { txt, ok, cap, trunc } from "../response-helpers.js";
+import {
+  txt,
+  err,
+  ok,
+  cap,
+  trunc,
+  safeMeta,
+  isMetaError,
+  toolHandler,
+} from "../response-helpers.js";
 
 export function registerEntityTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -29,12 +38,12 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ action, id, namespace_id, name, type, summary, metadata, compact }) => {
-      const meta = metadata ? JSON.parse(metadata) : undefined;
+    toolHandler(async ({ action, id, namespace_id, name, type, summary, metadata, compact }) => {
+      const meta = safeMeta(metadata);
+      if (isMetaError(meta)) return meta;
       switch (action) {
         case "create": {
-          if (!namespace_id || !name || !type)
-            return ok("Error: namespace_id, name, type required");
+          if (!namespace_id || !name || !type) return err("namespace_id, name, type required");
           await assertNamespaceAccess(env.DB, namespace_id, email);
           const eid = await graph.createEntity(env.DB, {
             namespace_id,
@@ -53,10 +62,10 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
           return txt({ id: eid, name, type });
         }
         case "get": {
-          if (!id) return ok("Error: id required");
+          if (!id) return err("id required");
           await assertEntityAccess(env.DB, id, email);
           const e = await graph.getEntity(env.DB, id);
-          if (!e) return ok("Not found");
+          if (!e) return err("Not found");
           const isCompact = compact ?? true;
           return txt(
             isCompact
@@ -76,9 +85,9 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
           );
         }
         case "update": {
-          if (!id) return ok("Error: id required");
+          if (!id) return err("id required");
           if (!name && !type && !summary && !metadata)
-            return ok("Error: at least one field (name, type, summary, metadata) required");
+            return err("at least one field (name, type, summary, metadata) required");
           await assertEntityAccess(env.DB, id, email);
           await graph.updateEntity(env.DB, id, { name, type, summary, metadata: meta });
           if (name || type || summary) {
@@ -95,14 +104,14 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
           return ok(`Updated ${id}`);
         }
         case "delete": {
-          if (!id) return ok("Error: id required");
+          if (!id) return err("id required");
           await assertEntityAccess(env.DB, id, email);
           await graph.deleteEntity(env.DB, id);
           await vectorize.deleteVector(env, "entity", id);
           return ok(`Deleted ${id}`);
         }
       }
-    },
+    }),
   );
 
   server.tool(
@@ -121,7 +130,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
       readOnlyHint: true,
       openWorldHint: false,
     },
-    async ({ namespace_id, query, type, limit, compact, verbose }) => {
+    toolHandler(async ({ namespace_id, query, type, limit, compact, verbose }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
       const results = await graph.searchEntities(env.DB, namespace_id, {
         query,
@@ -143,6 +152,6 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
               },
         ),
       );
-    },
+    }),
   );
 }
