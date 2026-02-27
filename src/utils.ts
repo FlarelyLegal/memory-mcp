@@ -23,6 +23,19 @@ export function toJson(obj: Record<string, unknown> | null | undefined): string 
 }
 
 /**
+ * Escape FTS5 special characters and add prefix matching for each term.
+ * Produces an FTS5 query like `"term1"* "term2"*` (implicit AND, prefix match).
+ */
+export function ftsEscape(query: string): string {
+  const terms = query
+    .replace(/[":(){}[\]^~*\\]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+  if (terms.length === 0) return '""';
+  return terms.map((t) => `"${t}"*`).join(" ");
+}
+
+/**
  * Temporal decay scoring.
  * Returns a value in [0, 1] where 1 = just accessed, approaching 0 as time passes.
  *

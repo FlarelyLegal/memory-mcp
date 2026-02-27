@@ -97,3 +97,61 @@ CREATE TABLE IF NOT EXISTS memory_entity_links (
   PRIMARY KEY (memory_id, entity_id)
 );
 CREATE INDEX IF NOT EXISTS idx_mel_entity ON memory_entity_links(entity_id);
+
+-- FTS5 full-text search indexes (BM25 ranking, much faster than LIKE)
+CREATE VIRTUAL TABLE IF NOT EXISTS entities_fts USING fts5(
+  name, type, summary,
+  content='entities', content_rowid='rowid'
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+  content,
+  content='memories', content_rowid='rowid'
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+  content,
+  content='messages', content_rowid='rowid'
+);
+
+-- Triggers to keep FTS indexes in sync
+CREATE TRIGGER IF NOT EXISTS entities_fts_insert AFTER INSERT ON entities BEGIN
+  INSERT INTO entities_fts(rowid, name, type, summary)
+    VALUES (new.rowid, new.name, new.type, new.summary);
+END;
+CREATE TRIGGER IF NOT EXISTS entities_fts_delete AFTER DELETE ON entities BEGIN
+  INSERT INTO entities_fts(entities_fts, rowid, name, type, summary)
+    VALUES ('delete', old.rowid, old.name, old.type, old.summary);
+END;
+CREATE TRIGGER IF NOT EXISTS entities_fts_update AFTER UPDATE ON entities BEGIN
+  INSERT INTO entities_fts(entities_fts, rowid, name, type, summary)
+    VALUES ('delete', old.rowid, old.name, old.type, old.summary);
+  INSERT INTO entities_fts(rowid, name, type, summary)
+    VALUES (new.rowid, new.name, new.type, new.summary);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memories_fts_insert AFTER INSERT ON memories BEGIN
+  INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS memories_fts_delete AFTER DELETE ON memories BEGIN
+  INSERT INTO memories_fts(memories_fts, rowid, content)
+    VALUES ('delete', old.rowid, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS memories_fts_update AFTER UPDATE ON memories BEGIN
+  INSERT INTO memories_fts(memories_fts, rowid, content)
+    VALUES ('delete', old.rowid, old.content);
+  INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages BEGIN
+  INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, content)
+    VALUES ('delete', old.rowid, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE ON messages BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, content)
+    VALUES ('delete', old.rowid, old.content);
+  INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
+END;

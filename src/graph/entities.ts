@@ -1,6 +1,6 @@
 /** Entity CRUD operations against D1. */
 import type { EntityRow } from "../types.js";
-import { generateId, now, toJson } from "../utils.js";
+import { generateId, now, toJson, ftsEscape } from "../utils.js";
 
 export async function createEntity(
   db: D1Database,
@@ -48,9 +48,39 @@ export async function searchEntities(
   namespace_id: string,
   opts: { query?: string; type?: string; limit?: number; offset?: number },
 ): Promise<EntityRow[]> {
+  const limit = opts.limit ?? 20;
+  const offset = opts.offset ?? 0;
+
+  // FTS5 path: use MATCH + BM25 ranking when a query is provided
+  if (opts.query) {
+    try {
+      const clauses: string[] = ["e.namespace_id = ?"];
+      const params: unknown[] = [namespace_id];
+      if (opts.type) {
+        clauses.push("e.type = ?");
+        params.push(opts.type);
+      }
+      // Escape FTS5 special chars and add prefix matching
+      const ftsQuery = ftsEscape(opts.query);
+      params.push(ftsQuery, limit, offset);
+      const sql =
+        `SELECT e.*, bm25(entities_fts) AS rank FROM entities e` +
+        ` JOIN entities_fts ON entities_fts.rowid = e.rowid` +
+        ` WHERE ${clauses.join(" AND ")} AND entities_fts MATCH ?` +
+        ` ORDER BY rank LIMIT ? OFFSET ?`;
+      const result = await db
+        .prepare(sql)
+        .bind(...params)
+        .all<EntityRow>();
+      if (result.results.length > 0 || result.success) return result.results;
+    } catch {
+      // FTS table doesn't exist yet — fall through to LIKE
+    }
+  }
+
+  // Fallback: LIKE-based search
   const clauses: string[] = ["namespace_id = ?"];
   const params: unknown[] = [namespace_id];
-
   if (opts.type) {
     clauses.push("type = ?");
     params.push(opts.type);
@@ -59,10 +89,7 @@ export async function searchEntities(
     clauses.push("(name LIKE ? OR summary LIKE ?)");
     params.push(`%${opts.query}%`, `%${opts.query}%`);
   }
-
-  const limit = opts.limit ?? 20;
-  params.push(limit, opts.offset ?? 0);
-
+  params.push(limit, offset);
   const sql =
     `SELECT * FROM entities WHERE ${clauses.join(" AND ")}` +
     ` ORDER BY last_accessed_at DESC LIMIT ? OFFSET ?`;
