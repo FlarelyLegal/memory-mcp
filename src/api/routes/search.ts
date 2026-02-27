@@ -1,10 +1,12 @@
 /** Semantic search REST endpoint + OpenAPI definition. */
 import { defineRoute } from "../registry.js";
-import { json, jsonError, handleError } from "../middleware.js";
+import { json, parseBodyWithSchema, handleError } from "../middleware.js";
 import { assertNamespaceAccess } from "../../auth.js";
 import { semanticSearch } from "../../embeddings.js";
 import { getEntity, getRelationsFrom, getRelationsTo } from "../../graph/index.js";
 import { recallMemories, getMemoriesForEntity } from "../../memories.js";
+import { semanticSearchSchema } from "../validators.js";
+import { parseFields, projectRows } from "../fields.js";
 
 export function registerSearchRoutes(): void {
   defineRoute(
@@ -13,17 +15,13 @@ export function registerSearchRoutes(): void {
     async (ctx, request) => {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
-        const body = (await request.json()) as {
-          query?: string;
-          mode?: string;
-          kind?: string;
-          limit?: number;
-        };
-        if (!body.query) return jsonError("query is required", 400);
+        const body = await parseBodyWithSchema(request, semanticSearchSchema);
+        if (body instanceof Response) return body;
+        const fields = parseFields(ctx.query, ["id", "kind", "score", "metadata"]);
 
         const mode = body.mode ?? "semantic";
         const limit = Math.min(body.limit ?? (mode === "context" ? 5 : 10), 20);
-        const kind = body.kind as "entity" | "memory" | "message" | undefined;
+        const kind = body.kind;
 
         const matches = await semanticSearch(ctx.env, body.query, ctx.params.namespace_id, {
           kind,
@@ -31,7 +29,7 @@ export function registerSearchRoutes(): void {
         });
 
         if (mode === "semantic") {
-          return json({ matches });
+          return json({ matches: projectRows(matches, fields) });
         }
 
         // Context mode: enrich entity matches with graph + memories
@@ -56,7 +54,7 @@ export function registerSearchRoutes(): void {
           limit: Math.max(1, limit - entityIds.length),
         });
 
-        return json({ matches, entities, top_memories: topMemories });
+        return json({ matches: projectRows(matches, fields), entities, top_memories: topMemories });
       } catch (e) {
         return handleError(e);
       }
@@ -70,6 +68,12 @@ export function registerSearchRoutes(): void {
       operationId: "semanticSearch",
       parameters: [
         { name: "namespace_id", in: "path", required: true, schema: { type: "string" } },
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated match fields to include",
+          schema: { type: "string" },
+        },
       ],
       requestBody: {
         required: true,

@@ -10,6 +10,7 @@ import {
   conversationSchema,
   metadataSchema,
 } from "../schemas.js";
+import { parseFields, projectRows } from "../fields.js";
 
 export function registerConversationRoutes(): void {
   defineRoute(
@@ -19,8 +20,16 @@ export function registerConversationRoutes(): void {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
         const limit = queryLimit(ctx.query, 50);
+        const fields = parseFields(ctx.query, [
+          "id",
+          "namespace_id",
+          "title",
+          "metadata",
+          "created_at",
+          "updated_at",
+        ]);
         const rows = await listConversations(ctx.env.DB, ctx.params.namespace_id, { limit });
-        return json(rows);
+        return json(projectRows(rows, fields));
       } catch (e) {
         return handleError(e);
       }
@@ -29,7 +38,16 @@ export function registerConversationRoutes(): void {
       summary: "List conversations",
       tags: ["Conversations"],
       operationId: "listConversations",
-      parameters: [nsPathParam(), limitQueryParam(50)],
+      parameters: [
+        nsPathParam(),
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+        limitQueryParam(50),
+      ],
       responses: {
         "200": {
           description: "Array of conversations",

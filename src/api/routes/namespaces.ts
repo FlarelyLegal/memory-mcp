@@ -3,6 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
 import { createNamespace, listNamespaces } from "../../graph/index.js";
 import { namespaceSchema } from "../schemas.js";
+import { parseFields, projectRows } from "../fields.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
@@ -10,8 +11,17 @@ export function registerNamespaceRoutes(): void {
     "/api/v1/namespaces",
     async (ctx) => {
       try {
+        const fields = parseFields(ctx.query, [
+          "id",
+          "name",
+          "description",
+          "owner",
+          "metadata",
+          "created_at",
+          "updated_at",
+        ]);
         const rows = await listNamespaces(ctx.env.DB, ctx.email);
-        return json(rows);
+        return json(projectRows(rows, fields));
       } catch (e) {
         return handleError(e);
       }
@@ -21,6 +31,14 @@ export function registerNamespaceRoutes(): void {
       description: "List all namespaces owned by the authenticated user.",
       tags: ["Namespaces"],
       operationId: "listNamespaces",
+      parameters: [
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+      ],
       responses: {
         "200": {
           description: "Array of namespaces",

@@ -1,6 +1,6 @@
 /** Entity list + create REST endpoints + OpenAPI definitions. */
 import { defineRoute } from "../registry.js";
-import { json, jsonError, parseBody, handleError } from "../middleware.js";
+import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { createEntity, searchEntities } from "../../graph/index.js";
 import { assertNamespaceAccess } from "../../auth.js";
 import { upsertEntityVector } from "../../embeddings.js";
@@ -12,6 +12,8 @@ import {
   metadataSchema,
 } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
+import { entityCreateSchema, entityListQuerySchema } from "../validators.js";
+import { parseFields, projectRows } from "../fields.js";
 
 export function registerEntityRoutes(): void {
   defineRoute(
@@ -20,15 +22,33 @@ export function registerEntityRoutes(): void {
     async (ctx) => {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
-        const query = ctx.query.get("q") ?? undefined;
-        const type = ctx.query.get("type") ?? undefined;
+        const queryInput = entityListQuerySchema.safeParse({
+          q: ctx.query.get("q") ?? undefined,
+          type: ctx.query.get("type") ?? undefined,
+        });
+        if (!queryInput.success) {
+          return jsonError(queryInput.error.issues[0]?.message ?? "Invalid query", 400);
+        }
+        const { q: query, type } = queryInput.data;
         const limit = queryLimit(ctx.query, 50);
+        const fields = parseFields(ctx.query, [
+          "id",
+          "namespace_id",
+          "name",
+          "type",
+          "summary",
+          "metadata",
+          "created_at",
+          "updated_at",
+          "last_accessed_at",
+          "access_count",
+        ]);
         const rows = await searchEntities(ctx.env.DB, ctx.params.namespace_id, {
           query,
           type,
           limit,
         });
-        return json(rows.map(parseEntityRow));
+        return json(projectRows(rows.map(parseEntityRow), fields));
       } catch (e) {
         return handleError(e);
       }
@@ -45,6 +65,12 @@ export function registerEntityRoutes(): void {
           name: "type",
           in: "query",
           description: "Filter by entity type",
+          schema: { type: "string" },
+        },
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
           schema: { type: "string" },
         },
         limitQueryParam(50),
@@ -66,14 +92,8 @@ export function registerEntityRoutes(): void {
     async (ctx, request) => {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
-        const body = await parseBody<{
-          name?: string;
-          type?: string;
-          summary?: string;
-          metadata?: Record<string, unknown>;
-        }>(request);
+        const body = await parseBodyWithSchema(request, entityCreateSchema);
         if (body instanceof Response) return body;
-        if (!body.name || !body.type) return jsonError("name and type are required", 400);
 
         const id = await createEntity(ctx.env.DB, {
           namespace_id: ctx.params.namespace_id,

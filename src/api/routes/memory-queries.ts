@@ -13,6 +13,7 @@ import {
 } from "../schemas.js";
 import { parseMemoryRow } from "../row-parsers.js";
 import type { MemoryType } from "../../types.js";
+import { parseFields, projectRows } from "../fields.js";
 
 export function registerMemoryQueryRoutes(): void {
   defineRoute(
@@ -24,6 +25,19 @@ export function registerMemoryQueryRoutes(): void {
         const mode = ctx.query.get("mode") ?? "recall";
         const type = ctx.query.get("type") as MemoryType | undefined;
         const limit = queryLimit(ctx.query, 50);
+        const fields = parseFields(ctx.query, [
+          "id",
+          "namespace_id",
+          "content",
+          "type",
+          "source",
+          "importance",
+          "metadata",
+          "created_at",
+          "updated_at",
+          "last_accessed_at",
+          "access_count",
+        ]);
 
         if (mode === "search") {
           const query = ctx.query.get("q");
@@ -33,10 +47,10 @@ export function registerMemoryQueryRoutes(): void {
             type,
             limit,
           });
-          return json(rows.map(parseMemoryRow));
+          return json(projectRows(rows.map(parseMemoryRow), fields));
         }
         const rows = await recallMemories(ctx.env.DB, ctx.params.namespace_id, { type, limit });
-        return json(rows.map(parseMemoryRow));
+        return json(projectRows(rows.map(parseMemoryRow), fields));
       } catch (e) {
         return handleError(e);
       }
@@ -60,6 +74,12 @@ export function registerMemoryQueryRoutes(): void {
           in: "query",
           schema: memoryTypeEnum(),
         },
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
         limitQueryParam(50),
       ],
       responses: {
@@ -80,8 +100,21 @@ export function registerMemoryQueryRoutes(): void {
       try {
         await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
         const limit = queryLimit(ctx.query, 50);
+        const fields = parseFields(ctx.query, [
+          "id",
+          "namespace_id",
+          "content",
+          "type",
+          "source",
+          "importance",
+          "metadata",
+          "created_at",
+          "updated_at",
+          "last_accessed_at",
+          "access_count",
+        ]);
         const rows = await getMemoriesForEntity(ctx.env.DB, ctx.params.id, { limit });
-        return json(rows.map(parseMemoryRow));
+        return json(projectRows(rows.map(parseMemoryRow), fields));
       } catch (e) {
         return handleError(e);
       }
@@ -91,7 +124,16 @@ export function registerMemoryQueryRoutes(): void {
       description: "Get memories linked to a specific entity.",
       tags: ["Memories"],
       operationId: "getEntityMemories",
-      parameters: [idPathParam("Entity ID"), limitQueryParam(50)],
+      parameters: [
+        idPathParam("Entity ID"),
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+        limitQueryParam(50),
+      ],
       responses: {
         "200": {
           description: "Array of memories",
