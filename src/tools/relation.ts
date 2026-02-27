@@ -5,7 +5,7 @@ import type { Env } from "../types.js";
 import * as graph from "../graph/index.js";
 import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../auth.js";
 import { parseJson } from "../utils.js";
-import { txt, ok, cap } from "../response-helpers.js";
+import { txt, err, ok, cap, safeMeta, isMetaError, toolHandler } from "../response-helpers.js";
 
 export function registerRelationTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -33,31 +33,43 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ action, id, namespace_id, source_id, target_id, relation_type, weight, metadata }) => {
-      if (action === "create") {
-        if (!namespace_id || !source_id || !target_id || !relation_type)
-          return ok("Error: namespace_id, source_id, target_id, relation_type required");
-        await assertNamespaceAccess(env.DB, namespace_id, email);
-        // Verify both entities exist and belong to this namespace.
-        const srcNs = await assertEntityAccess(env.DB, source_id, email);
-        const tgtNs = await assertEntityAccess(env.DB, target_id, email);
-        if (srcNs !== namespace_id || tgtNs !== namespace_id)
-          return ok("Error: source and target entities must belong to the specified namespace");
-        const rid = await graph.createRelation(env.DB, {
-          namespace_id,
-          source_id,
-          target_id,
-          relation_type,
-          weight,
-          metadata: metadata ? JSON.parse(metadata) : undefined,
-        });
-        return txt({ id: rid, source_id, target_id, relation_type });
-      }
-      if (!id) return ok("Error: id required");
-      await assertRelationAccess(env.DB, id, email);
-      await graph.deleteRelation(env.DB, id);
-      return ok(`Deleted ${id}`);
-    },
+    toolHandler(
+      async ({
+        action,
+        id,
+        namespace_id,
+        source_id,
+        target_id,
+        relation_type,
+        weight,
+        metadata,
+      }) => {
+        if (action === "create") {
+          if (!namespace_id || !source_id || !target_id || !relation_type)
+            return err("namespace_id, source_id, target_id, relation_type required");
+          await assertNamespaceAccess(env.DB, namespace_id, email);
+          const srcNs = await assertEntityAccess(env.DB, source_id, email);
+          const tgtNs = await assertEntityAccess(env.DB, target_id, email);
+          if (srcNs !== namespace_id || tgtNs !== namespace_id)
+            return err("source and target entities must belong to the specified namespace");
+          const meta = safeMeta(metadata);
+          if (isMetaError(meta)) return meta;
+          const rid = await graph.createRelation(env.DB, {
+            namespace_id,
+            source_id,
+            target_id,
+            relation_type,
+            weight,
+            metadata: meta,
+          });
+          return txt({ id: rid, source_id, target_id, relation_type });
+        }
+        if (!id) return err("id required");
+        await assertRelationAccess(env.DB, id, email);
+        await graph.deleteRelation(env.DB, id);
+        return ok(`Deleted ${id}`);
+      },
+    ),
   );
 
   server.tool(
@@ -75,7 +87,7 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       readOnlyHint: true,
       openWorldHint: false,
     },
-    async ({ entity_id, direction, relation_type, limit, compact }) => {
+    toolHandler(async ({ entity_id, direction, relation_type, limit, compact }) => {
       await assertEntityAccess(env.DB, entity_id, email);
       const dir = direction ?? "both";
       const n = cap(limit, 50, 20);
@@ -120,6 +132,6 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
         results.push(...rels.map(mapRel));
       }
       return txt(results);
-    },
+    }),
   );
 }

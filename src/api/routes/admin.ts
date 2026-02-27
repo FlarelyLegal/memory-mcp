@@ -1,6 +1,6 @@
 /** Admin REST endpoints + OpenAPI definitions. */
 import { defineRoute } from "../registry.js";
-import { json, jsonError, handleError } from "../middleware.js";
+import { json, jsonError, parseBody, handleError } from "../middleware.js";
 import { assertNamespaceAccess, isAdmin } from "../../auth.js";
 import { listNamespaces, claimUnownedNamespaces, searchEntities } from "../../graph/index.js";
 import { searchMemories } from "../../memories.js";
@@ -19,7 +19,8 @@ export function registerAdminRoutes(): void {
       try {
         if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
           return jsonError("Admin access required", 403);
-        const body = (await request.json()) as { namespace_id?: string };
+        const body = await parseBody<{ namespace_id?: string }>(request);
+        if (body instanceof Response) return body;
         if (!body.namespace_id) return jsonError("namespace_id is required", 400);
 
         let namespaceIds: string[];

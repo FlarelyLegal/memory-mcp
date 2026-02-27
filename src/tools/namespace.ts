@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
 import * as graph from "../graph/index.js";
-import { txt, ok } from "../response-helpers.js";
+import { txt, err, toolHandler } from "../response-helpers.js";
 
 export function registerNamespaceTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -22,9 +22,9 @@ export function registerNamespaceTools(server: McpServer, env: Env, email: strin
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ action, name, description, compact }) => {
+    toolHandler(async ({ action, name, description, compact }) => {
       if (action === "create") {
-        if (!name) return ok("Error: name required");
+        if (!name) return err("name required");
         const id = await graph.createNamespace(env.DB, {
           name,
           description,
@@ -41,6 +41,6 @@ export function registerNamespaceTools(server: McpServer, env: Env, email: strin
             : { id: r.id, name: r.name, description: r.description },
         ),
       );
-    },
+    }),
   );
 }
