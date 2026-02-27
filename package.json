@@ -3,6 +3,7 @@
   "version": "0.6.0",
   "description": "FlarelyLegal Memory MCP Server",
   "author": "Timothy Schneider <tim@taslabs.net>",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "engines": {
