@@ -1,9 +1,10 @@
 /** Namespace CRUD operations against D1. */
 import type { NamespaceRow } from "../types.js";
+import type { DbHandle } from "../db.js";
 import { generateId, toJson } from "../utils.js";
 
 export async function createNamespace(
-  db: D1Database,
+  db: DbHandle,
   opts: { name: string; description?: string; owner?: string; metadata?: Record<string, unknown> },
 ): Promise<string> {
   const id = generateId();
@@ -22,12 +23,12 @@ export async function createNamespace(
   return id;
 }
 
-export async function getNamespace(db: D1Database, id: string): Promise<NamespaceRow | null> {
+export async function getNamespace(db: DbHandle, id: string): Promise<NamespaceRow | null> {
   return db.prepare(`SELECT * FROM namespaces WHERE id = ?`).bind(id).first<NamespaceRow>();
 }
 
 export async function listNamespaces(
-  db: D1Database,
+  db: DbHandle,
   owner?: string,
   opts?: { limit?: number; offset?: number },
 ): Promise<NamespaceRow[]> {
@@ -51,7 +52,7 @@ export async function listNamespaces(
  * Claim all unowned namespaces (owner IS NULL) for the given owner.
  * Returns the number of namespaces claimed.
  */
-export async function claimUnownedNamespaces(db: D1Database, owner: string): Promise<number> {
+export async function claimUnownedNamespaces(db: DbHandle, owner: string): Promise<number> {
   const result = await db
     .prepare(`UPDATE namespaces SET owner = ? WHERE owner IS NULL`)
     .bind(owner)

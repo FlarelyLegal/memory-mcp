@@ -24,7 +24,7 @@ export function registerMessageRoutes(): void {
     "/api/v1/conversations/:id/messages",
     async (ctx) => {
       try {
-        await assertConversationAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        await assertConversationAccess(ctx.db, ctx.params.id, ctx.email);
         const limit = queryLimit(ctx.query, 100, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
@@ -39,7 +39,7 @@ export function registerMessageRoutes(): void {
           compact: ["id", "role", "created_at"],
           full: allowed,
         });
-        const rows = await getMessages(ctx.env.DB, ctx.params.id, {
+        const rows = await getMessages(ctx.db, ctx.params.id, {
           limit: limit + 1,
           offset,
         });
@@ -90,11 +90,11 @@ export function registerMessageRoutes(): void {
     "/api/v1/conversations/:id/messages",
     async (ctx, request) => {
       try {
-        await assertConversationAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        await assertConversationAccess(ctx.db, ctx.params.id, ctx.email);
         const body = await parseBodyWithSchema(request, messageCreateSchema);
         if (body instanceof Response) return body;
 
-        const msgId = await addMessage(ctx.env.DB, {
+        const msgId = await addMessage(ctx.db, {
           conversation_id: ctx.params.id,
           role: body.role as "user" | "assistant" | "system" | "tool",
           content: body.content,
@@ -102,7 +102,7 @@ export function registerMessageRoutes(): void {
         });
 
         if (body.role === "user" || body.role === "assistant") {
-          const conv = await getConversation(ctx.env.DB, ctx.params.id);
+          const conv = await getConversation(ctx.db, ctx.params.id);
           if (conv) {
             await upsertMessageVector(ctx.env, {
               message_id: msgId,
@@ -161,7 +161,7 @@ export function registerMessageRoutes(): void {
     "/api/v1/namespaces/:namespace_id/messages",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const rl = await enforceSearchRateLimit(ctx, "message-search");
         if (rl) return rl;
         const queryInput = searchMessagesQuerySchema.safeParse({
@@ -185,7 +185,7 @@ export function registerMessageRoutes(): void {
           compact: ["id", "role", "created_at"],
           full: allowed,
         });
-        const rows = await searchMessages(ctx.env.DB, ctx.params.namespace_id, query, {
+        const rows = await searchMessages(ctx.db, ctx.params.namespace_id, query, {
           limit: limit + 1,
           offset,
         });

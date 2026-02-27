@@ -27,7 +27,7 @@ export function registerRelationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/relations",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const body = await parseBody(request);
         if (body instanceof Response) return body;
         const parsed = relationCreateSchema.safeParse(body);
@@ -36,12 +36,12 @@ export function registerRelationRoutes(): void {
         }
         const payload = parsed.data;
 
-        await assertEntityAccess(ctx.env.DB, payload.source_id, ctx.email);
-        await assertEntityAccess(ctx.env.DB, payload.target_id, ctx.email);
+        await assertEntityAccess(ctx.db, payload.source_id, ctx.email);
+        await assertEntityAccess(ctx.db, payload.target_id, ctx.email);
 
         const [source, target] = await Promise.all([
-          getEntity(ctx.env.DB, payload.source_id),
-          getEntity(ctx.env.DB, payload.target_id),
+          getEntity(ctx.db, payload.source_id),
+          getEntity(ctx.db, payload.target_id),
         ]);
         if (!source || !target) {
           return jsonError("source_id and target_id must exist", 400);
@@ -53,7 +53,7 @@ export function registerRelationRoutes(): void {
           return jsonError("source_id and target_id must belong to namespace_id", 400);
         }
 
-        const id = await createRelation(ctx.env.DB, {
+        const id = await createRelation(ctx.db, {
           namespace_id: ctx.params.namespace_id,
           source_id: payload.source_id,
           target_id: payload.target_id,
@@ -128,7 +128,7 @@ export function registerRelationRoutes(): void {
     "/api/v1/entities/:id/relations",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
         const direction = ctx.query.get("direction") ?? "both";
         const relationType = ctx.query.get("relation_type") ?? undefined;
         const limit = queryLimit(ctx.query, 50);
@@ -136,10 +136,10 @@ export function registerRelationRoutes(): void {
 
         const results: unknown[] = [];
         if (direction === "from" || direction === "both") {
-          results.push(...(await getRelationsFrom(ctx.env.DB, ctx.params.id, opts)));
+          results.push(...(await getRelationsFrom(ctx.db, ctx.params.id, opts)));
         }
         if (direction === "to" || direction === "both") {
-          results.push(...(await getRelationsTo(ctx.env.DB, ctx.params.id, opts)));
+          results.push(...(await getRelationsTo(ctx.db, ctx.params.id, opts)));
         }
         return json((results as import("../../types.js").RelationRow[]).map(parseRelationRow));
       } catch (e) {
@@ -177,8 +177,8 @@ export function registerRelationRoutes(): void {
     "/api/v1/relations/:id",
     async (ctx) => {
       try {
-        await assertRelationAccess(ctx.env.DB, ctx.params.id, ctx.email);
-        await deleteRelation(ctx.env.DB, ctx.params.id);
+        await assertRelationAccess(ctx.db, ctx.params.id, ctx.email);
+        await deleteRelation(ctx.db, ctx.params.id);
         return json({ ok: true });
       } catch (e) {
         return handleError(e);

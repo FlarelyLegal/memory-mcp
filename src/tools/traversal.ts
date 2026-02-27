@@ -2,6 +2,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
+import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import { assertEntityAccess } from "../auth.js";
 import { txt, toolHandler } from "../response-helpers.js";
@@ -21,9 +22,10 @@ export function registerTraversalTools(server: McpServer, env: Env, email: strin
       openWorldHint: false,
     },
     toolHandler(async ({ entity_id, max_depth, relation_types }) => {
-      await assertEntityAccess(env.DB, entity_id, email);
+      const db = session(env.DB, "first-unconstrained");
+      await assertEntityAccess(db, entity_id, email);
       return txt(
-        await graph.traverse(env.DB, entity_id, {
+        await graph.traverse(db, entity_id, {
           maxDepth: Math.min(max_depth ?? 2, 5),
           relationTypes: relation_types,
         }),

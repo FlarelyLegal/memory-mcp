@@ -1,9 +1,10 @@
 /** Relation CRUD operations against D1. */
 import type { RelationRow } from "../types.js";
+import type { DbHandle } from "../db.js";
 import { generateId, now, toJson } from "../utils.js";
 
 export async function createRelation(
-  db: D1Database,
+  db: DbHandle,
   opts: {
     namespace_id: string;
     source_id: string;
@@ -36,7 +37,7 @@ export async function createRelation(
 }
 
 export async function getRelationsFrom(
-  db: D1Database,
+  db: DbHandle,
   entity_id: string,
   opts?: { relation_type?: string; limit?: number },
 ): Promise<(RelationRow & { target_name: string; target_type: string })[]> {
@@ -66,7 +67,7 @@ export async function getRelationsFrom(
 }
 
 export async function getRelationsTo(
-  db: D1Database,
+  db: DbHandle,
   entity_id: string,
   opts?: { relation_type?: string; limit?: number },
 ): Promise<(RelationRow & { source_name: string; source_type: string })[]> {
@@ -95,6 +96,6 @@ export async function getRelationsTo(
   return result.results;
 }
 
-export async function deleteRelation(db: D1Database, id: string): Promise<void> {
+export async function deleteRelation(db: DbHandle, id: string): Promise<void> {
   await db.prepare(`DELETE FROM relations WHERE id = ?`).bind(id).run();
 }

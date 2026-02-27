@@ -1,5 +1,6 @@
 /** Shared types for the REST API layer. */
 import type { Env } from "../types.js";
+import type { DbHandle } from "../db.js";
 
 export type AuthIdentity =
   | { type: "human"; email: string }
@@ -8,6 +9,8 @@ export type AuthIdentity =
 /** Authenticated request context passed to every route handler. */
 export interface ApiContext {
   env: Env;
+  /** D1 session for this request. Use instead of env.DB for read replication. */
+  db: DbHandle;
   email: string;
   auth: AuthIdentity;
   params: Record<string, string>;

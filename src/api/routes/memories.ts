@@ -22,11 +22,11 @@ export function registerMemoryRoutes(): void {
     "/api/v1/namespaces/:namespace_id/memories",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const body = await parseBodyWithSchema(request, memoryCreateSchema);
         if (body instanceof Response) return body;
 
-        const id = await createMemory(ctx.env.DB, {
+        const id = await createMemory(ctx.db, {
           namespace_id: ctx.params.namespace_id,
           content: body.content,
           type: body.type as MemoryType | undefined,
@@ -92,8 +92,8 @@ export function registerMemoryRoutes(): void {
     "/api/v1/memories/:id",
     async (ctx) => {
       try {
-        await assertMemoryAccess(ctx.env.DB, ctx.params.id, ctx.email);
-        const row = await getMemory(ctx.env.DB, ctx.params.id);
+        await assertMemoryAccess(ctx.db, ctx.params.id, ctx.email);
+        const row = await getMemory(ctx.db, ctx.params.id);
         if (!row) return jsonError("Memory not found", 404);
         return json(parseMemoryRow(row));
       } catch (e) {
@@ -121,12 +121,12 @@ export function registerMemoryRoutes(): void {
     "/api/v1/memories/:id",
     async (ctx, request) => {
       try {
-        await assertMemoryAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        await assertMemoryAccess(ctx.db, ctx.params.id, ctx.email);
         const body = await parseBodyWithSchema(request, memoryUpdateSchema);
         if (body instanceof Response) return body;
-        await updateMemory(ctx.env.DB, ctx.params.id, body);
+        await updateMemory(ctx.db, ctx.params.id, body);
         if (body.content) {
-          const updated = await getMemory(ctx.env.DB, ctx.params.id);
+          const updated = await getMemory(ctx.db, ctx.params.id);
           if (updated) {
             await upsertMemoryVector(ctx.env, {
               memory_id: ctx.params.id,
@@ -177,8 +177,8 @@ export function registerMemoryRoutes(): void {
     "/api/v1/memories/:id",
     async (ctx) => {
       try {
-        await assertMemoryAccess(ctx.env.DB, ctx.params.id, ctx.email);
-        await deleteMemory(ctx.env.DB, ctx.params.id);
+        await assertMemoryAccess(ctx.db, ctx.params.id, ctx.email);
+        await deleteMemory(ctx.db, ctx.params.id);
         await deleteVector(ctx.env, "memory", ctx.params.id);
         return json({ ok: true });
       } catch (e) {

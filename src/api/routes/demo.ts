@@ -19,7 +19,7 @@ export function registerDemoRoutes(): void {
     "/api/demo",
     async (ctx) => {
       try {
-        const db = ctx.env.DB;
+        const db = ctx.db;
 
         // Find the demo namespace by name
         const ns = await db

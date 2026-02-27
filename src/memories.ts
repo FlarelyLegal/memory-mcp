@@ -2,10 +2,11 @@
  * Memory operations: standalone knowledge fragments with temporal decay.
  */
 import type { MemoryRow } from "./types.js";
+import type { DbHandle } from "./db.js";
 import { generateId, now, toJson, decayScore, ftsEscape } from "./utils.js";
 
 export async function createMemory(
-  db: D1Database,
+  db: DbHandle,
   opts: {
     namespace_id: string;
     content: string;
@@ -44,7 +45,7 @@ export async function createMemory(
   return id;
 }
 
-export async function getMemory(db: D1Database, id: string): Promise<MemoryRow | null> {
+export async function getMemory(db: DbHandle, id: string): Promise<MemoryRow | null> {
   const [selectResult] = await db.batch([
     db.prepare(`SELECT * FROM memories WHERE id = ?`).bind(id),
     db
@@ -58,7 +59,7 @@ export async function getMemory(db: D1Database, id: string): Promise<MemoryRow |
 }
 
 export async function searchMemories(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   opts: { query?: string; type?: string; limit?: number; offset?: number },
 ): Promise<MemoryRow[]> {
@@ -117,7 +118,7 @@ export async function searchMemories(
  * Retrieve memories ranked by temporal decay + importance.
  */
 export async function recallMemories(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   opts?: { type?: string; limit?: number; halfLifeHours?: number; offset?: number },
 ): Promise<(MemoryRow & { relevance_score: number })[]> {
@@ -150,7 +151,7 @@ export async function recallMemories(
 }
 
 export async function getMemoriesForEntity(
-  db: D1Database,
+  db: DbHandle,
   entity_id: string,
   opts?: { limit?: number; offset?: number },
 ): Promise<MemoryRow[]> {
@@ -170,7 +171,7 @@ export async function getMemoriesForEntity(
 }
 
 export async function updateMemory(
-  db: D1Database,
+  db: DbHandle,
   id: string,
   updates: {
     content?: string;
@@ -206,6 +207,6 @@ export async function updateMemory(
     .run();
 }
 
-export async function deleteMemory(db: D1Database, id: string): Promise<void> {
+export async function deleteMemory(db: DbHandle, id: string): Promise<void> {
   await db.prepare(`DELETE FROM memories WHERE id = ?`).bind(id).run();
 }

@@ -2,6 +2,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
+import { session } from "../db.js";
 import { assertNamespaceAccess, isAdmin } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { txt, err, ok, toolHandler } from "../response-helpers.js";
@@ -23,9 +24,10 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       openWorldHint: false,
     },
     toolHandler(async ({ namespace_id }) => {
+      const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       if (namespace_id !== "all") {
-        await assertNamespaceAccess(env.DB, namespace_id, email);
+        await assertNamespaceAccess(db, namespace_id, email);
       }
 
       let entityCount = 0;
@@ -37,7 +39,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
         namespace_id === "all"
           ? "SELECT e.id, e.namespace_id, e.name, e.type, e.summary FROM entities e JOIN namespaces n ON n.id = e.namespace_id WHERE n.owner = ?"
           : "SELECT id, namespace_id, name, type, summary FROM entities WHERE namespace_id = ?";
-      const entityResult = await env.DB.prepare(entityQuery)
+      const entityResult = await db
+        .prepare(entityQuery)
         .bind(namespace_id === "all" ? email : namespace_id)
         .all<ReindexEntityItem>();
 
@@ -54,7 +57,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
         namespace_id === "all"
           ? "SELECT m.id, m.namespace_id, m.content, m.type FROM memories m JOIN namespaces n ON n.id = m.namespace_id WHERE n.owner = ?"
           : "SELECT id, namespace_id, content, type FROM memories WHERE namespace_id = ?";
-      const memoryResult = await env.DB.prepare(memoryQuery)
+      const memoryResult = await db
+        .prepare(memoryQuery)
         .bind(namespace_id === "all" ? email : namespace_id)
         .all<ReindexMemoryItem>();
 
@@ -82,8 +86,9 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       openWorldHint: false,
     },
     toolHandler(async () => {
+      const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
-      const claimed = await claimUnownedNamespaces(env.DB, email);
+      const claimed = await claimUnownedNamespaces(db, email);
       if (claimed === 0) return ok("No unowned namespaces found.");
       return txt({ claimed, owner: email });
     }),

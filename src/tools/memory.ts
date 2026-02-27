@@ -2,6 +2,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
+import { session } from "../db.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess, assertMemoryAccess } from "../auth.js";
@@ -54,13 +55,14 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
         entity_ids,
         metadata,
       }) => {
+        const db = session(env.DB, "first-primary");
         const meta = safeMeta(metadata);
         if (isMetaError(meta)) return meta;
         switch (action) {
           case "create": {
             if (!namespace_id || !content) return err("namespace_id, content required");
-            await assertNamespaceAccess(env.DB, namespace_id, email);
-            const mid = await memories.createMemory(env.DB, {
+            await assertNamespaceAccess(db, namespace_id, email);
+            const mid = await memories.createMemory(db, {
               namespace_id,
               content,
               type,
@@ -81,10 +83,10 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
             if (!id) return err("id required");
             if (!content && !type && importance === undefined && !metadata)
               return err("at least one field (content, type, importance, metadata) required");
-            await assertMemoryAccess(env.DB, id, email);
-            await memories.updateMemory(env.DB, id, { content, type, importance, metadata: meta });
+            await assertMemoryAccess(db, id, email);
+            await memories.updateMemory(db, id, { content, type, importance, metadata: meta });
             if (content) {
-              const m = await memories.getMemory(env.DB, id);
+              const m = await memories.getMemory(db, id);
               if (m)
                 await vectorize.upsertMemoryVector(env, {
                   memory_id: id,
@@ -97,8 +99,8 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
           }
           case "delete": {
             if (!id) return err("id required");
-            await assertMemoryAccess(env.DB, id, email);
-            await memories.deleteMemory(env.DB, id);
+            await assertMemoryAccess(db, id, email);
+            await memories.deleteMemory(db, id);
             await vectorize.deleteVector(env, "memory", id);
             return ok(`Deleted ${id}`);
           }
@@ -126,6 +128,7 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
       openWorldHint: false,
     },
     toolHandler(async ({ mode, namespace_id, entity_id, query, type, limit, compact, verbose }) => {
+      const db = session(env.DB, "first-unconstrained");
       const n = cap(limit, 50, 20);
       const isCompact = compact ?? true;
       const full = verbose ?? false;
@@ -148,14 +151,14 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
       switch (mode) {
         case "recall": {
           if (!namespace_id) return err("namespace_id required");
-          await assertNamespaceAccess(env.DB, namespace_id, email);
-          const rows = await memories.recallMemories(env.DB, namespace_id, { type, limit: n });
+          await assertNamespaceAccess(db, namespace_id, email);
+          const rows = await memories.recallMemories(db, namespace_id, { type, limit: n });
           return txt(rows.map(mapMemory));
         }
         case "search": {
           if (!namespace_id || !query) return err("namespace_id, query required");
-          await assertNamespaceAccess(env.DB, namespace_id, email);
-          const rows = await memories.searchMemories(env.DB, namespace_id, {
+          await assertNamespaceAccess(db, namespace_id, email);
+          const rows = await memories.searchMemories(db, namespace_id, {
             query,
             type,
             limit: n,
@@ -164,8 +167,8 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
         }
         case "entity": {
           if (!entity_id) return err("entity_id required");
-          await assertEntityAccess(env.DB, entity_id, email);
-          const rows = await memories.getMemoriesForEntity(env.DB, entity_id, { limit: n });
+          await assertEntityAccess(db, entity_id, email);
+          const rows = await memories.getMemoriesForEntity(db, entity_id, { limit: n });
           return txt(rows.map(mapMemory));
         }
       }

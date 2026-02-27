@@ -19,7 +19,7 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const limit = queryLimit(ctx.query, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
@@ -34,7 +34,7 @@ export function registerConversationRoutes(): void {
           compact: ["id", "title", "updated_at"],
           full: allowed,
         });
-        const rows = await listConversations(ctx.env.DB, ctx.params.namespace_id, {
+        const rows = await listConversations(ctx.db, ctx.params.namespace_id, {
           limit: limit + 1,
           offset,
         });
@@ -84,13 +84,13 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const body = await parseBody<{ title?: string; metadata?: Record<string, unknown> }>(
           request,
         );
         if (body instanceof Response) return body;
 
-        const id = await createConversation(ctx.env.DB, {
+        const id = await createConversation(ctx.db, {
           namespace_id: ctx.params.namespace_id,
           title: body.title,
           metadata: body.metadata,

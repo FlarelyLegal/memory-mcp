@@ -2,10 +2,11 @@
  * Conversation and message history operations.
  */
 import type { ConversationRow, MessageRow } from "./types.js";
+import type { DbHandle } from "./db.js";
 import { generateId, now, toJson, ftsEscape } from "./utils.js";
 
 export async function createConversation(
-  db: D1Database,
+  db: DbHandle,
   opts: { namespace_id: string; title?: string; metadata?: Record<string, unknown> },
 ): Promise<string> {
   const id = generateId();
@@ -16,12 +17,12 @@ export async function createConversation(
   return id;
 }
 
-export async function getConversation(db: D1Database, id: string): Promise<ConversationRow | null> {
+export async function getConversation(db: DbHandle, id: string): Promise<ConversationRow | null> {
   return db.prepare(`SELECT * FROM conversations WHERE id = ?`).bind(id).first<ConversationRow>();
 }
 
 export async function listConversations(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   opts?: { limit?: number; offset?: number },
 ): Promise<ConversationRow[]> {
@@ -37,7 +38,7 @@ export async function listConversations(
 }
 
 export async function addMessage(
-  db: D1Database,
+  db: DbHandle,
   opts: {
     conversation_id: string;
     role: "user" | "assistant" | "system" | "tool";
@@ -62,7 +63,7 @@ export async function addMessage(
 }
 
 export async function getMessages(
-  db: D1Database,
+  db: DbHandle,
   conversation_id: string,
   opts?: { limit?: number; before?: number; offset?: number },
 ): Promise<MessageRow[]> {
@@ -89,7 +90,7 @@ export async function getMessages(
 }
 
 export async function searchMessages(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   query: string,
   opts?: { limit?: number; offset?: number },
@@ -132,6 +133,6 @@ export async function searchMessages(
   return result.results;
 }
 
-export async function deleteConversation(db: D1Database, id: string): Promise<void> {
+export async function deleteConversation(db: DbHandle, id: string): Promise<void> {
   await db.prepare(`DELETE FROM conversations WHERE id = ?`).bind(id).run();
 }

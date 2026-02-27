@@ -25,10 +25,10 @@ export function registerAdminRoutes(): void {
 
         let namespaceIds: string[];
         if (body.namespace_id === "all") {
-          const owned = await listNamespaces(ctx.env.DB, ctx.email);
+          const owned = await listNamespaces(ctx.db, ctx.email);
           namespaceIds = owned.map((n) => n.id);
         } else {
-          await assertNamespaceAccess(ctx.env.DB, body.namespace_id, ctx.email);
+          await assertNamespaceAccess(ctx.db, body.namespace_id, ctx.email);
           namespaceIds = [body.namespace_id];
         }
 
@@ -37,7 +37,7 @@ export function registerAdminRoutes(): void {
         let errorCount = 0;
 
         for (const nsId of namespaceIds) {
-          const entities = await searchEntities(ctx.env.DB, nsId, { limit: 1000 });
+          const entities = await searchEntities(ctx.db, nsId, { limit: 1000 });
           for (const batch of chunks(entities, REINDEX_BATCH_SIZE)) {
             try {
               entityCount += await reindexEntityChunk(ctx.env, batch);
@@ -46,7 +46,7 @@ export function registerAdminRoutes(): void {
             }
           }
 
-          const memories = await searchMemories(ctx.env.DB, nsId, { limit: 1000 });
+          const memories = await searchMemories(ctx.db, nsId, { limit: 1000 });
           for (const batch of chunks(memories, REINDEX_BATCH_SIZE)) {
             try {
               memoryCount += await reindexMemoryChunk(ctx.env, batch);
@@ -110,7 +110,7 @@ export function registerAdminRoutes(): void {
       try {
         if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
           return jsonError("Admin access required", 403);
-        const claimed = await claimUnownedNamespaces(ctx.env.DB, ctx.email);
+        const claimed = await claimUnownedNamespaces(ctx.db, ctx.email);
         return json({ claimed, owner: ctx.email });
       } catch (e) {
         return handleError(e);

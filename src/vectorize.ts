@@ -6,6 +6,7 @@
  * 2. bge-reranker-base (cross-encoder, precise) re-scores and returns top N
  */
 import type { Env } from "./types.js";
+import type { DbHandle } from "./db.js";
 import { embed } from "./embeddings.js";
 import { rerank, hydrateTexts } from "./reranker.js";
 
@@ -126,6 +127,7 @@ export interface SemanticSearchResult {
  */
 export async function semanticSearch(
   env: Env,
+  db: DbHandle,
   query: string,
   namespace_id: string,
   opts?: {
@@ -158,7 +160,7 @@ export async function semanticSearch(
   if (candidates.length === 0) return [];
 
   // Stage 2: Rerank with cross-encoder
-  const texts = await hydrateTexts(env.DB, candidates);
+  const texts = await hydrateTexts(db, candidates);
   const reranked = await rerank(env.AI, query, texts);
 
   if (reranked) {

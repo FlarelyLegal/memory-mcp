@@ -14,8 +14,8 @@ export function registerEntityCrudRoutes(): void {
     "/api/v1/entities/:id",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
-        const entity = await getEntity(ctx.env.DB, ctx.params.id);
+        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
+        const entity = await getEntity(ctx.db, ctx.params.id);
         if (!entity) return jsonError("Entity not found", 404);
         return json(parseEntityRow(entity));
       } catch (e) {
@@ -43,12 +43,12 @@ export function registerEntityCrudRoutes(): void {
     "/api/v1/entities/:id",
     async (ctx, request) => {
       try {
-        await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
         const body = await parseBodyWithSchema(request, entityUpdateSchema);
         if (body instanceof Response) return body;
-        await updateEntity(ctx.env.DB, ctx.params.id, body);
+        await updateEntity(ctx.db, ctx.params.id, body);
         if (body.name || body.type || body.summary !== undefined) {
-          const updated = await getEntity(ctx.env.DB, ctx.params.id);
+          const updated = await getEntity(ctx.db, ctx.params.id);
           if (updated) {
             await upsertEntityVector(ctx.env, {
               entity_id: ctx.params.id,
@@ -95,8 +95,8 @@ export function registerEntityCrudRoutes(): void {
     "/api/v1/entities/:id",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
-        await deleteEntity(ctx.env.DB, ctx.params.id);
+        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
+        await deleteEntity(ctx.db, ctx.params.id);
         await deleteVector(ctx.env, "entity", ctx.params.id);
         return json({ ok: true });
       } catch (e) {

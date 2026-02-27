@@ -1,9 +1,10 @@
 /** Entity CRUD operations against D1. */
 import type { EntityRow } from "../types.js";
+import type { DbHandle } from "../db.js";
 import { generateId, now, toJson, ftsEscape } from "../utils.js";
 
 export async function createEntity(
-  db: D1Database,
+  db: DbHandle,
   opts: {
     namespace_id: string;
     name: string;
@@ -30,7 +31,7 @@ export async function createEntity(
   return id;
 }
 
-export async function getEntity(db: D1Database, id: string): Promise<EntityRow | null> {
+export async function getEntity(db: DbHandle, id: string): Promise<EntityRow | null> {
   const [selectResult] = await db.batch([
     db.prepare(`SELECT * FROM entities WHERE id = ?`).bind(id),
     db
@@ -44,7 +45,7 @@ export async function getEntity(db: D1Database, id: string): Promise<EntityRow |
 }
 
 export async function searchEntities(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   opts: { query?: string; type?: string; limit?: number; offset?: number },
 ): Promise<EntityRow[]> {
@@ -101,7 +102,7 @@ export async function searchEntities(
 }
 
 export async function updateEntity(
-  db: D1Database,
+  db: DbHandle,
   id: string,
   updates: { name?: string; type?: string; summary?: string; metadata?: Record<string, unknown> },
 ): Promise<void> {
@@ -132,6 +133,6 @@ export async function updateEntity(
     .run();
 }
 
-export async function deleteEntity(db: D1Database, id: string): Promise<void> {
+export async function deleteEntity(db: DbHandle, id: string): Promise<void> {
   await db.prepare(`DELETE FROM entities WHERE id = ?`).bind(id).run();
 }

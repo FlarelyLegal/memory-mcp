@@ -16,7 +16,7 @@ export function registerSearchRoutes(): void {
     "/api/v1/namespaces/:namespace_id/search",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const rl = await enforceSearchRateLimit(ctx, "semantic-search");
         if (rl) return rl;
         const body = await parseBodyWithSchema(request, semanticSearchSchema);
@@ -33,7 +33,7 @@ export function registerSearchRoutes(): void {
         const kind = body.kind;
         const type = body.type;
 
-        const matches = await semanticSearch(ctx.env, body.query, ctx.params.namespace_id, {
+        const matches = await semanticSearch(ctx.env, ctx.db, body.query, ctx.params.namespace_id, {
           kind,
           type,
           limit: limit + offset + 1,
@@ -58,12 +58,12 @@ export function registerSearchRoutes(): void {
         const entities = (
           await Promise.all(
             entityIds.map(async (eid) => {
-              const entity = await getEntity(ctx.env.DB, eid);
+              const entity = await getEntity(ctx.db, eid);
               if (!entity) return null;
               const [from, to, mems] = await Promise.all([
-                getRelationsFrom(ctx.env.DB, eid, { limit: 5 }),
-                getRelationsTo(ctx.env.DB, eid, { limit: 5 }),
-                getMemoriesForEntity(ctx.env.DB, eid, { limit: 5 }),
+                getRelationsFrom(ctx.db, eid, { limit: 5 }),
+                getRelationsTo(ctx.db, eid, { limit: 5 }),
+                getMemoriesForEntity(ctx.db, eid, { limit: 5 }),
               ]);
               return {
                 entity: parseEntityRow(entity),
@@ -74,7 +74,7 @@ export function registerSearchRoutes(): void {
           )
         ).filter(Boolean);
 
-        const topMemories = await recallMemories(ctx.env.DB, ctx.params.namespace_id, {
+        const topMemories = await recallMemories(ctx.db, ctx.params.namespace_id, {
           limit: Math.max(1, limit - entityIds.length),
         });
 

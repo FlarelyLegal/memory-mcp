@@ -2,6 +2,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
+import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
@@ -32,11 +33,12 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
       openWorldHint: false,
     },
     toolHandler(async ({ namespace_id, query, mode, kind, type, limit, compact, verbose }) => {
-      await assertNamespaceAccess(env.DB, namespace_id, email);
+      const db = session(env.DB, "first-unconstrained");
+      await assertNamespaceAccess(db, namespace_id, email);
       const n = cap(limit, 20, mode === "context" ? 5 : 10);
       const isCompact = compact ?? true;
       const full = verbose ?? false;
-      const semanticResults = await vectorize.semanticSearch(env, query, namespace_id, {
+      const semanticResults = await vectorize.semanticSearch(env, db, query, namespace_id, {
         kind,
         type,
         limit: n,
@@ -61,10 +63,10 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
           .map(async (result) => {
             const eid = result.metadata.entity_id;
             const [entity, outRels, inRels, entityMems] = await Promise.all([
-              graph.getEntity(env.DB, eid),
-              graph.getRelationsFrom(env.DB, eid, { limit: 5 }),
-              graph.getRelationsTo(env.DB, eid, { limit: 5 }),
-              memories.getMemoriesForEntity(env.DB, eid, { limit: 5 }),
+              graph.getEntity(db, eid),
+              graph.getRelationsFrom(db, eid, { limit: 5 }),
+              graph.getRelationsTo(db, eid, { limit: 5 }),
+              memories.getMemoriesForEntity(db, eid, { limit: 5 }),
             ]);
             return {
               entity: entity
@@ -98,7 +100,7 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
           }),
       );
       const entityIds = semanticResults.filter((r) => r.kind === "entity").length;
-      const ranked = await memories.recallMemories(env.DB, namespace_id, {
+      const ranked = await memories.recallMemories(db, namespace_id, {
         limit: Math.max(1, n - entityIds),
       });
       return txt({

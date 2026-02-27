@@ -2,6 +2,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
+import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import { txt, err, toolHandler } from "../response-helpers.js";
 
@@ -23,9 +24,10 @@ export function registerNamespaceTools(server: McpServer, env: Env, email: strin
       openWorldHint: false,
     },
     toolHandler(async ({ action, name, description, compact }) => {
+      const db = session(env.DB, "first-primary");
       if (action === "create") {
         if (!name) return err("name required");
-        const id = await graph.createNamespace(env.DB, {
+        const id = await graph.createNamespace(db, {
           name,
           description,
           owner: email,
@@ -33,7 +35,7 @@ export function registerNamespaceTools(server: McpServer, env: Env, email: strin
         return txt({ id, name });
       }
       const isCompact = compact ?? true;
-      const rows = await graph.listNamespaces(env.DB, email);
+      const rows = await graph.listNamespaces(db, email);
       return txt(
         rows.map((r) =>
           isCompact

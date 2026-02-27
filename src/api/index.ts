@@ -7,6 +7,7 @@
  */
 import type { Env } from "../types.js";
 import type { HttpMethod } from "./types.js";
+import { session, getBookmark } from "../db.js";
 import { matchRoute } from "./registry.js";
 import { authenticateIdentity, json, jsonError } from "./middleware.js";
 import { buildOpenApiSpec } from "./openapi.js";
@@ -85,6 +86,14 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   const { route, params } = matched;
 
+  // --- D1 session ---
+  // Writes go to primary first; reads can hit any replica.
+  // If the client sends a bookmark, anchor the session there instead.
+  const bookmark = request.headers.get("X-D1-Bookmark");
+  const constraint: D1SessionConstraint =
+    request.method === "GET" ? "first-unconstrained" : "first-primary";
+  const db = session(env.DB, bookmark ?? constraint);
+
   // --- Auth (skip for explicitly public routes) ---
 
   if (!route.public) {
@@ -93,18 +102,28 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     });
     if (result instanceof Response) return withCors(request, result);
 
-    const ctx = { env, email: result.email ?? "", auth: result, params, query: url.searchParams };
-    return withCors(request, await route.handler(ctx, request));
+    const ctx = {
+      env,
+      db,
+      email: result.email ?? "",
+      auth: result,
+      params,
+      query: url.searchParams,
+    };
+    const response = await route.handler(ctx, request);
+    return withBookmark(db, withCors(request, response));
   }
 
   const ctx = {
     env,
+    db,
     email: "",
     auth: { type: "human", email: "" } as const,
     params,
     query: url.searchParams,
   };
-  return withCors(request, await route.handler(ctx, request));
+  const response = await route.handler(ctx, request);
+  return withBookmark(db, withCors(request, response));
 }
 
 function corsHeaders(): Record<string, string> {
@@ -112,7 +131,8 @@ function corsHeaders(): Record<string, string> {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, Cf-Access-Jwt-Assertion, cf-access-token, CF-Access-Client-Id",
+      "Content-Type, Authorization, Cf-Access-Jwt-Assertion, cf-access-token, CF-Access-Client-Id, X-D1-Bookmark",
+    "Access-Control-Expose-Headers": "X-D1-Bookmark",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -149,4 +169,17 @@ async function withCors(request: Request, response: Response): Promise<Response>
     patched.headers.set(k, v);
   }
   return maybeGzip(request, patched);
+}
+
+/** Attach the D1 session bookmark to the response for cross-request consistency. */
+async function withBookmark(
+  db: ReturnType<typeof session>,
+  responsePromise: Promise<Response>,
+): Promise<Response> {
+  const response = await responsePromise;
+  const bm = getBookmark(db);
+  if (bm) {
+    response.headers.set("X-D1-Bookmark", bm);
+  }
+  return response;
 }
