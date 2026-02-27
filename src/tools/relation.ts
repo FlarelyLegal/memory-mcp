@@ -4,7 +4,13 @@ import { z } from "zod";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
-import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../auth.js";
+import {
+  assertNamespaceWriteAccess,
+  assertEntityAccess,
+  assertEntityReadAccess,
+  assertRelationAccess,
+  isAdmin,
+} from "../auth.js";
 import { parseJson } from "../utils.js";
 import { track, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
@@ -66,13 +72,14 @@ export function registerRelationTools(
         metadata,
       }) => {
         const db = session(env.DB, "first-primary");
+        const admin = await isAdmin(env.CACHE, email);
         if (action === "create") {
           const namespace_id = resolveNamespace(nsParam, agent);
           if (!namespace_id || !source_id || !target_id || !relation_type)
             return err("namespace_id, source_id, target_id, relation_type required");
-          await assertNamespaceAccess(db, namespace_id, email);
-          const srcNs = await assertEntityAccess(db, source_id, email);
-          const tgtNs = await assertEntityAccess(db, target_id, email);
+          await assertNamespaceWriteAccess(db, namespace_id, email, admin);
+          const srcNs = await assertEntityAccess(db, source_id, email, admin);
+          const tgtNs = await assertEntityAccess(db, target_id, email, admin);
           if (srcNs !== namespace_id || tgtNs !== namespace_id)
             return err("source and target entities must belong to the specified namespace");
           const meta = safeMeta(metadata);
@@ -97,7 +104,7 @@ export function registerRelationTools(
           return txt({ id: rid, source_id, target_id, relation_type });
         }
         if (!id) return err("id required");
-        await assertRelationAccess(db, id, email);
+        await assertRelationAccess(db, id, email, admin);
         if (!(await confirm(server, `Delete relation ${id}?`))) return err("Cancelled");
         await graph.deleteRelation(db, id);
         await audit(db, env.STORAGE, {
@@ -128,7 +135,7 @@ export function registerRelationTools(
     },
     toolHandler(async ({ entity_id, direction, relation_type, limit, compact }) => {
       const db = session(env.DB, "first-unconstrained");
-      await assertEntityAccess(db, entity_id, email);
+      await assertEntityReadAccess(db, entity_id, email);
       track(agent, { entity: entity_id });
       const dir = direction ?? "both";
       const n = cap(limit, 50, 20);

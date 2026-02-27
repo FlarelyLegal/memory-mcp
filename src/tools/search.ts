@@ -6,7 +6,7 @@ import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
-import { assertNamespaceAccess } from "../auth.js";
+import { assertNamespaceReadAccess } from "../auth.js";
 import { track, resolveNamespace } from "../state.js";
 import { txt, err, cap, trunc, toolHandler } from "../response-helpers.js";
 
@@ -63,7 +63,7 @@ export function registerSearchTools(
         const namespace_id = resolveNamespace(nsParam, agent);
         if (!namespace_id) return err("namespace_id required");
         const db = session(env.DB, "first-unconstrained");
-        await assertNamespaceAccess(db, namespace_id, email);
+        await assertNamespaceReadAccess(db, namespace_id, email);
         track(agent, { namespace: namespace_id });
         const n = cap(limit, 20, mode === "context" ? 5 : 10);
         const isCompact = compact ?? true;

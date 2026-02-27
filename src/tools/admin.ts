@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
-import { assertNamespaceAccess, isAdmin } from "../auth.js";
+import { assertNamespaceWriteAccess, isAdmin } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { getNamespaceStats } from "../consolidation.js";
 import { track } from "../state.js";
@@ -28,7 +28,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       if (namespace_id !== "all") {
-        await assertNamespaceAccess(db, namespace_id, email);
+        await assertNamespaceWriteAccess(db, namespace_id, email, true);
       }
       if (namespace_id === "all") {
         if (!(await confirm(server, "Re-embed ALL entities and memories across all namespaces?")))
@@ -86,7 +86,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
     toolHandler(async ({ namespace_id, decay_threshold, skip_summaries, purge_after_days }) => {
       const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
-      await assertNamespaceAccess(db, namespace_id, email);
+      await assertNamespaceWriteAccess(db, namespace_id, email, true);
       track(agent, { namespace: namespace_id });
       if (
         !(await confirm(
@@ -154,7 +154,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
     },
     toolHandler(async ({ namespace_id }) => {
       const db = session(env.DB, "first-unconstrained");
-      await assertNamespaceAccess(db, namespace_id, email);
+      await assertNamespaceWriteAccess(db, namespace_id, email, true);
       track(agent, { namespace: namespace_id });
       const stats = await getNamespaceStats(db, namespace_id);
       return txt(stats);

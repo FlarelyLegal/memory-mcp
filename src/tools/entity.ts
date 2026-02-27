@@ -5,7 +5,13 @@ import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import * as vectorize from "../vectorize.js";
-import { assertNamespaceAccess, assertEntityAccess } from "../auth.js";
+import {
+  assertNamespaceWriteAccess,
+  assertNamespaceReadAccess,
+  assertEntityAccess,
+  assertEntityReadAccess,
+  isAdmin,
+} from "../auth.js";
 import { parseJson, toISO } from "../utils.js";
 import { track, untrack, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
@@ -56,11 +62,12 @@ export function registerEntityTools(
         const db = session(env.DB, "first-primary");
         const meta = safeMeta(metadata);
         if (isMetaError(meta)) return meta;
+        const admin = action !== "get" ? await isAdmin(env.CACHE, email) : false;
         switch (action) {
           case "create": {
             const namespace_id = resolveNamespace(nsParam, agent);
             if (!namespace_id || !name || !type) return err("namespace_id, name, type required");
-            await assertNamespaceAccess(db, namespace_id, email);
+            await assertNamespaceWriteAccess(db, namespace_id, email, admin);
             const eid = await graph.createEntity(db, {
               namespace_id,
               name,
@@ -88,7 +95,7 @@ export function registerEntityTools(
           }
           case "get": {
             if (!id) return err("id required");
-            await assertEntityAccess(db, id, email);
+            await assertEntityReadAccess(db, id, email);
             const e = await graph.getEntity(db, id);
             if (!e) return err("Not found");
             track(agent, { namespace: e.namespace_id, entity: id });
@@ -114,7 +121,7 @@ export function registerEntityTools(
             if (!id) return err("id required");
             if (!name && !type && !summary && !metadata)
               return err("at least one field (name, type, summary, metadata) required");
-            await assertEntityAccess(db, id, email);
+            await assertEntityAccess(db, id, email, admin);
             await graph.updateEntity(db, id, { name, type, summary, metadata: meta });
             if (name || type || summary) {
               const e = await graph.getEntity(db, id);
@@ -139,7 +146,7 @@ export function registerEntityTools(
           }
           case "delete": {
             if (!id) return err("id required");
-            await assertEntityAccess(db, id, email);
+            await assertEntityAccess(db, id, email, admin);
             const entity = await graph.getEntity(db, id);
             const label = entity ? `entity "${entity.name}" (${entity.type})` : `entity ${id}`;
             if (!(await confirm(server, `Delete ${label} and all its relations?`)))
@@ -182,7 +189,7 @@ export function registerEntityTools(
       const namespace_id = resolveNamespace(nsParam, agent);
       if (!namespace_id) return err("namespace_id required");
       const db = session(env.DB, "first-unconstrained");
-      await assertNamespaceAccess(db, namespace_id, email);
+      await assertNamespaceReadAccess(db, namespace_id, email);
       track(agent, { namespace: namespace_id });
       const results = await graph.searchEntities(db, namespace_id, {
         query,

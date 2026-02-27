@@ -5,7 +5,13 @@ import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as conversations from "../conversations.js";
 import * as vectorize from "../vectorize.js";
-import { assertNamespaceAccess, assertConversationAccess } from "../auth.js";
+import {
+  assertNamespaceWriteAccess,
+  assertNamespaceReadAccess,
+  assertConversationAccess,
+  assertConversationReadAccess,
+  isAdmin,
+} from "../auth.js";
 import { toISO } from "../utils.js";
 import { track, resolveNamespace, resolveConversation } from "../state.js";
 import { audit } from "../audit.js";
@@ -38,10 +44,11 @@ export function registerConversationTools(
     toolHandler(async ({ action, namespace_id: nsParam, title, metadata, limit, compact }) => {
       const namespace_id = resolveNamespace(nsParam, agent);
       if (!namespace_id) return err("namespace_id required");
-      const db = session(env.DB, "first-primary");
-      await assertNamespaceAccess(db, namespace_id, email);
-      track(agent, { namespace: namespace_id });
       if (action === "create") {
+        const db = session(env.DB, "first-primary");
+        const admin = await isAdmin(env.CACHE, email);
+        await assertNamespaceWriteAccess(db, namespace_id, email, admin);
+        track(agent, { namespace: namespace_id });
         const meta = safeMeta(metadata);
         if (isMetaError(meta)) return meta;
         const id = await conversations.createConversation(db, {
@@ -60,6 +67,9 @@ export function registerConversationTools(
         });
         return txt({ id, title });
       }
+      const db = session(env.DB, "first-unconstrained");
+      await assertNamespaceReadAccess(db, namespace_id, email);
+      track(agent, { namespace: namespace_id });
       const isCompact = compact ?? true;
       const rows = await conversations.listConversations(db, namespace_id, {
         limit: cap(limit, 50, 20),
@@ -100,7 +110,8 @@ export function registerConversationTools(
       const conversation_id = resolveConversation(cParam, agent);
       if (!conversation_id) return err("conversation_id required");
       const db = session(env.DB, "first-primary");
-      await assertConversationAccess(db, conversation_id, email);
+      const admin = await isAdmin(env.CACHE, email);
+      await assertConversationAccess(db, conversation_id, email, admin);
       track(agent, { conversation: conversation_id });
       const meta = safeMeta(metadata);
       if (isMetaError(meta)) return meta;
@@ -194,14 +205,14 @@ export function registerConversationTools(
               };
         const namespace_id = resolveNamespace(nsParam, agent);
         if (query && namespace_id) {
-          await assertNamespaceAccess(db, namespace_id, email);
+          await assertNamespaceReadAccess(db, namespace_id, email);
           track(agent, { namespace: namespace_id });
           const rows = await conversations.searchMessages(db, namespace_id, query, { limit: n });
           return txt(rows.map(mapMsg));
         }
         const conversation_id = resolveConversation(cParam, agent);
         if (!conversation_id) return err("conversation_id or namespace_id+query required");
-        await assertConversationAccess(db, conversation_id, email);
+        await assertConversationReadAccess(db, conversation_id, email);
         track(agent, { conversation: conversation_id });
         const rows = await conversations.getMessages(db, conversation_id, { limit: n });
         return txt(rows.map(mapMsg));
