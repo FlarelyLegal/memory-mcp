@@ -52,13 +52,14 @@ See [Deployment](docs/deployment.md) for full setup with Cloudflare resources.
 {
   "mcpServers": {
     "memory-graph": {
-      "url": "https://memory-graph-mcp.<your-subdomain>.workers.dev/mcp"
+      "url": "https://memory.flarelylegal.com/mcp"
     }
   }
 }
 ```
 
 Works with Claude Desktop, Cursor, OpenCode, or any MCP-compatible client.
+Access is gated by Cloudflare Access — to request a test account, open an issue or reach out.
 
 ## MCP Tools (17)
 
