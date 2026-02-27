@@ -2,15 +2,9 @@
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { createEntity, searchEntities } from "../../graph/index.js";
-import { assertNamespaceAccess } from "../../auth.js";
+import { assertNamespaceWriteAccess, assertNamespaceReadAccess, isAdmin } from "../../auth.js";
 import { upsertEntityVector } from "../../vectorize.js";
-import {
-  nsPathParam,
-  limitQueryParam,
-  queryLimit,
-  entitySchema,
-  metadataSchema,
-} from "../schemas.js";
+import { nsPathParam, limitQueryParam, queryLimit, entitySchema, zodSchema } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
 import { entityCreateSchema, entityListQuerySchema } from "../validators.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
@@ -22,7 +16,7 @@ export function registerEntityRoutes(): void {
     "/api/v1/namespaces/:namespace_id/entities",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const queryInput = entityListQuerySchema.safeParse({
           q: ctx.query.get("q") ?? undefined,
           type: ctx.query.get("type") ?? undefined,
@@ -109,7 +103,8 @@ export function registerEntityRoutes(): void {
     "/api/v1/namespaces/:namespace_id/entities",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
         const body = await parseBodyWithSchema(request, entityCreateSchema);
         if (body instanceof Response) return body;
 
@@ -148,24 +143,7 @@ export function registerEntityRoutes(): void {
       parameters: [nsPathParam()],
       requestBody: {
         required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["name", "type"],
-              properties: {
-                name: { type: "string", maxLength: 200 },
-                type: {
-                  type: "string",
-                  maxLength: 200,
-                  description: "e.g. person, concept, project",
-                },
-                summary: { type: "string", maxLength: 10000 },
-                metadata: metadataSchema(),
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(entityCreateSchema) } },
       },
       responses: {
         "201": {

@@ -32,11 +32,11 @@ The server tracks active context across tool calls:
 
 ### Namespace
 
-| Tool               | Description                      |
-| ------------------ | -------------------------------- |
-| `manage_namespace` | Create or list memory namespaces |
+| Tool               | Description                                   |
+| ------------------ | --------------------------------------------- |
+| `manage_namespace` | Create, list, or set visibility on namespaces |
 
-Actions: `create` (requires `name`), `list`.
+Actions: `create` (requires `name`), `list`, `set_visibility` (admin only, requires `id` + `visibility`).
 
 ### Entity
 
@@ -102,13 +102,13 @@ Modes:
 
 ### Admin
 
-| Tool                  | Description                                                |
-| --------------------- | ---------------------------------------------------------- |
-| `reindex_vectors`     | Trigger durable reindex workflow (returns instance ID)     |
-| `consolidate_memory`  | Trigger consolidation workflow (decay, dedup, summarize)   |
-| `get_workflow_status` | Check status of a running workflow instance                |
-| `namespace_stats`     | Entity/memory/relation/conversation counts for a namespace |
-| `claim_namespaces`    | Claim all unowned namespaces for current user              |
+| Tool                  | Description                                                     |
+| --------------------- | --------------------------------------------------------------- |
+| `reindex_vectors`     | Trigger durable reindex workflow (returns instance ID)          |
+| `consolidate_memory`  | Trigger consolidation workflow (decay, dedup, merge, summarize) |
+| `get_workflow_status` | Check status of a running workflow instance                     |
+| `namespace_stats`     | Entity/memory/relation/conversation counts for a namespace      |
+| `claim_namespaces`    | Claim all unowned namespaces for current user                   |
 
 Admin tools require the user's email to be in the `admin:emails` KV allowlist. Destructive operations prompt for confirmation.
 

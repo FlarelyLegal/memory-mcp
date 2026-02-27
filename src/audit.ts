@@ -20,7 +20,7 @@ import { generateId, now } from "./utils.js";
 // ---------------------------------------------------------------------------
 
 export type AuditAction =
-  | "namespace.create" | "namespace.claim"
+  | "namespace.create" | "namespace.claim" | "namespace.set_visibility"
   | "entity.create" | "entity.update" | "entity.delete"
   | "relation.create" | "relation.delete"
   | "memory.create" | "memory.update" | "memory.delete"

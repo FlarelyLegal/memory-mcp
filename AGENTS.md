@@ -54,6 +54,8 @@ See `package.json` scripts. Summary:
 - **D1 read replication:** All D1 queries go through `D1DatabaseSession` (via `src/db.ts`). Read-only operations use `"first-unconstrained"` (any replica), write operations use `"first-primary"` (primary first). API routes accept/return `X-D1-Bookmark` header for cross-request consistency. All data-layer functions accept `DbHandle` (union of `D1Database` and `D1DatabaseSession`) — never raw `D1Database`.
 - **D1 write retry:** All data-layer write operations are wrapped with `withRetry()` from `src/db.ts`. Retries up to 3 times with jitter backoff on transient D1 errors (`"Network connection lost"`, `"storage caused object to be reset"`, etc.). Workflow steps have their own retry mechanism and don't need `withRetry`.
 - **Audit logging:** All write operations (MCP tools + REST API) are audit-logged via `audit()` from `src/audit.ts`. Each call writes to D1 `audit_logs` (queryable hot window) and an individual R2 object at `audit/events/{day}/{id}.json`. Both writes are fire-and-forget — failures never block the request flow. The consolidation workflow merges individual R2 events into daily NDJSON files (`audit/{YYYY-MM-DD}.ndjson`), then purges D1 audit logs older than 90 days. R2 archive is retained indefinitely.
+- **Namespace visibility:** Namespaces have a `visibility` column (`private` | `public`, default `private`). Public namespaces appear in every user's namespace list and allow read operations (get, find, search, traverse, query memories, get messages) for any authenticated user. Write operations require `owner === email` OR (`isAdmin` AND `visibility = 'public'`). Use `manage_namespace` `set_visibility` action (admin only) or `PATCH /api/v1/namespaces/:id`.
+- **Relation ownership:** `manage_relation` create verifies both `source_id` and `target_id` belong to the specified namespace — cross-namespace relations are rejected.
 - **Elicitation (human-in-the-loop):** Destructive MCP tool operations (entity/relation/memory delete, consolidate, reindex-all, claim namespaces) prompt the user for confirmation via `server.server.elicitInput()`. The `confirm()` helper in `response-helpers.ts` checks `getClientCapabilities().elicitation.form` first ��� if the client doesn't support elicitation, operations proceed without confirmation (graceful degradation).
 
 ### File structure
@@ -65,19 +67,23 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/types.ts` — `Env` interface (all bindings), `AuthProps`, `SessionState`, `StateHandle`, domain types + DB row types
 - `src/db.ts` — D1 Sessions API helpers: `DbHandle` type, `session()`, `getBookmark()`, `withRetry()` (jitter backoff for transient D1 write errors)
 - `src/access-handler.ts` — OAuth route handler (`/authorize`, `/callback`, `/health`, `/`, `/api/*`)
-- `src/auth.ts` — Per-user authorization: `assertNamespaceAccess`, `assertEntityAccess`, `assertMemoryAccess`, `assertConversationAccess`, `assertRelationAccess`
+- `src/auth.ts` — Per-user authorization: read/write access checks with namespace visibility support (`assertNamespaceReadAccess`, `assertNamespaceWriteAccess`, `assertEntityReadAccess`, `assertEntityAccess`, etc.), `isAdmin()` KV lookup, `AccessDeniedError`
 - `src/jwt.ts` — JWT verification (RSA signature + expiry + audience validation)
 - `src/embeddings.ts` — Vectorize + Workers AI: embed, upsert, delete, semantic search
 - `src/memories.ts` — Memory CRUD + temporal-decay recall ranking
 - `src/conversations.ts` — Conversation and message history
 - `src/utils.ts` — `generateId`, `decayScore`, JSON helpers
+- `src/tool-schemas.ts` — Shared Zod schemas, enums, and field definitions used by MCP tools, REST validators, and OpenAPI specs
 - `src/response-helpers.ts` — Shared MCP response helpers (`txt`, `ok`, `err`, `safeMeta`, `toolHandler`, `cap`, `trunc`, `confirm`)
 - `src/state.ts` — Session state helpers: `track`, `untrack`, `resolveNamespace`, `resolveConversation`
 - `src/reindex.ts` — Shared batch-reindex logic (entity/memory chunk embedding + Vectorize upsert) used by workflows and REST API
 - `src/audit.ts` — Audit logging: D1 hot window + R2 individual event objects, `audit()`, `consolidateAuditR2()`, `queryAuditLogs()`, `purgeAuditLogs()`
-- `src/consolidation.ts` — Data-layer for consolidation: decay sweep, duplicate detection, archive purge, entity summary helpers, namespace stats
+- `src/consolidation.ts` — Data-layer for consolidation: decay sweep, duplicate detection, archive, purge
+- `src/stats.ts` — Namespace aggregate statistics (`NamespaceStats`, `getNamespaceStats`)
+- `src/summaries.ts` — Entity summary generation via Workers AI (`generateEntitySummary`, `getEntityWithMemories`)
+- `src/merge.ts` — Memory merge: pairwise cosine clustering + LLM summarization (`findMemoryClusters`, `mergeCluster`, `writeMergedMemory`)
 - `src/workflows/reindex.ts` — `ReindexWorkflow` WorkflowEntrypoint: durable batch re-embedding with chunked steps and retries
-- `src/workflows/consolidation.ts` — `ConsolidationWorkflow` WorkflowEntrypoint: 6-step pipeline (decay sweep, dedup, entity summary refresh via Workers AI, archive purge, R2 audit consolidation, D1 audit purge)
+- `src/workflows/consolidation.ts` — `ConsolidationWorkflow` WorkflowEntrypoint: 7-step pipeline (decay sweep, dedup, memory merge, entity summary refresh, archive purge, R2 audit consolidation, D1 audit purge)
 - `src/tools/` — One file per tool domain (namespace, entity, relation, traversal, memory, conversation, search, admin). Each exports a `register*Tools(server, env, email)` function.
 - `src/graph/` — D1 operations split by domain (namespaces, entities, relations, traversal) with barrel re-export via `index.ts`.
 - `src/api/` — REST API layer (OpenAPI 3.1 + Scalar docs):
@@ -88,7 +94,7 @@ Code is organized into focused modules with a 250-line cap per file:
   - `service-tokens.ts` — `ST_PREFIX` constant and `ServiceTokenMapping` type (shared by middleware + token routes)
   - `row-parsers.ts` — `parseEntityRow`, `parseMemoryRow` (shared by collection + CRUD route files)
   - `openapi.ts` — Assembles OpenAPI 3.1 spec dynamically from registered routes
-  - `schemas.ts` — Shared OpenAPI schema fragments, parameter helpers, `queryLimit()`, enum helpers (`memoryTypeEnum`, `roleEnum`, `metadataSchema`)
+  - `schemas.ts` — OpenAPI response schemas, parameter helpers, `queryLimit()`, `zodSchema()` (Zod → OpenAPI converter)
   - `docs.ts` — Scalar API reference UI
   - `routes/` — One file per domain (namespaces, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, workflows, tokens, token-crud, demo). Each registers routes + their OpenAPI path definitions.
 - `src/oauth/` — OAuth utilities split by concern (error, sanitize, csrf, state, approval) with barrel re-export via `index.ts`.
@@ -96,22 +102,22 @@ Code is organized into focused modules with a 250-line cap per file:
 
 ### MCP tools (17 total)
 
-| Tool                  | Domain       | Description                                                |
-| --------------------- | ------------ | ---------------------------------------------------------- |
-| `manage_namespace`    | namespace    | Create or list memory namespaces                           |
-| `manage_entity`       | entity       | CRUD for graph entities with embedding upsert              |
-| `find_entities`       | entity       | Search entities by name/type/keyword                       |
-| `manage_relation`     | relation     | Create or delete directed relations (with ownership check) |
-| `get_relations`       | relation     | Query relations from/to an entity                          |
-| `traverse_graph`      | traversal    | BFS from an entity up to max_depth hops                    |
-| `manage_memory`       | memory       | Create/update/delete memories with embedding               |
-| `query_memories`      | memory       | Recall (decay-ranked), search (keyword), or entity-linked  |
-| `manage_conversation` | conversation | Create or list conversations                               |
-| `add_message`         | conversation | Add a message and embed for search                         |
-| `get_messages`        | conversation | Get or search messages                                     |
-| `search`              | search       | Semantic vector search; context mode enriches with graph   |
-| `reindex_vectors`     | admin        | Trigger durable reindex workflow (returns instance ID)     |
-| `consolidate_memory`  | admin        | Trigger consolidation workflow (decay, dedup, summarize)   |
-| `get_workflow_status` | admin        | Check status of a running workflow instance                |
-| `namespace_stats`     | admin        | Entity/memory/relation/conversation counts for a namespace |
-| `claim_namespaces`    | admin        | Claim all unowned namespaces for current user              |
+| Tool                  | Domain       | Description                                                     |
+| --------------------- | ------------ | --------------------------------------------------------------- |
+| `manage_namespace`    | namespace    | Create, list, or set visibility on namespaces                   |
+| `manage_entity`       | entity       | CRUD for graph entities with embedding upsert                   |
+| `find_entities`       | entity       | Search entities by name/type/keyword                            |
+| `manage_relation`     | relation     | Create or delete directed relations (with ownership check)      |
+| `get_relations`       | relation     | Query relations from/to an entity                               |
+| `traverse_graph`      | traversal    | BFS from an entity up to max_depth hops                         |
+| `manage_memory`       | memory       | Create/update/delete memories with embedding                    |
+| `query_memories`      | memory       | Recall (decay-ranked), search (keyword), or entity-linked       |
+| `manage_conversation` | conversation | Create or list conversations                                    |
+| `add_message`         | conversation | Add a message and embed for search                              |
+| `get_messages`        | conversation | Get or search messages                                          |
+| `search`              | search       | Semantic vector search; context mode enriches with graph        |
+| `reindex_vectors`     | admin        | Trigger durable reindex workflow (returns instance ID)          |
+| `consolidate_memory`  | admin        | Trigger consolidation workflow (decay, dedup, merge, summarize) |
+| `get_workflow_status` | admin        | Check status of a running workflow instance                     |
+| `namespace_stats`     | admin        | Entity/memory/relation/conversation counts for a namespace      |
+| `claim_namespaces`    | admin        | Claim all unowned namespaces for current user                   |

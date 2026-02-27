@@ -1,72 +1,87 @@
 /** Runtime validators for REST API inputs. */
 import { z } from "zod";
-
-const metadata = z.record(z.string(), z.unknown());
-const memoryType = z.enum(["fact", "observation", "preference", "instruction"]);
-const messageRole = z.enum(["user", "assistant", "system", "tool"]);
+import {
+  nameField,
+  typeField,
+  typeFilter,
+  summaryField,
+  metadataObject,
+  memoryContent,
+  memoryType,
+  importance,
+  sourceField,
+  entityIds,
+  messageRole,
+  messageContent,
+  queryField,
+  relationType,
+  relationWeight,
+  SEARCH_MODES,
+  SEARCH_KINDS,
+} from "../tool-schemas.js";
 
 export const entityListQuerySchema = z.object({
-  q: z.string().max(1000).optional(),
-  type: z.string().max(200).optional(),
+  q: queryField.optional(),
+  type: typeFilter.optional(),
 });
 
 export const entityCreateSchema = z.object({
-  name: z.string().min(1).max(200),
-  type: z.string().min(1).max(200),
-  summary: z.string().max(10_000).optional(),
-  metadata: metadata.optional(),
+  name: nameField,
+  type: typeField,
+  summary: summaryField.optional(),
+  metadata: metadataObject.optional(),
 });
 
 export const entityUpdateSchema = z
   .object({
-    name: z.string().min(1).max(200).optional(),
-    type: z.string().min(1).max(200).optional(),
-    summary: z.string().max(10_000).optional(),
-    metadata: metadata.optional(),
+    name: nameField.optional(),
+    type: typeField.optional(),
+    summary: summaryField.optional(),
+    metadata: metadataObject.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "At least one field is required");
 
 export const relationCreateSchema = z.object({
   source_id: z.string().uuid(),
   target_id: z.string().uuid(),
-  relation_type: z.string().min(1).max(200),
-  weight: z.number().min(0).max(1).optional(),
-  metadata: metadata.optional(),
+  relation_type: relationType,
+  weight: relationWeight.optional(),
+  metadata: metadataObject.optional(),
 });
 
 export const memoryCreateSchema = z.object({
-  content: z.string().min(1).max(10_000),
+  content: memoryContent,
   type: memoryType.optional(),
-  importance: z.number().min(0).max(1).optional(),
-  source: z.string().max(500).optional(),
-  entity_ids: z.array(z.string().uuid()).max(100).optional(),
-  metadata: metadata.optional(),
+  importance: importance.optional(),
+  source: sourceField.optional(),
+  entity_ids: entityIds.optional(),
+  metadata: metadataObject.optional(),
 });
 
 export const memoryUpdateSchema = z
   .object({
-    content: z.string().min(1).max(10_000).optional(),
+    content: memoryContent.optional(),
     type: memoryType.optional(),
-    importance: z.number().min(0).max(1).optional(),
-    metadata: metadata.optional(),
+    importance: importance.optional(),
+    metadata: metadataObject.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "At least one field is required");
 
 export const messageCreateSchema = z.object({
   role: messageRole,
-  content: z.string().min(1).max(50_000),
-  metadata: metadata.optional(),
+  content: messageContent,
+  metadata: metadataObject.optional(),
 });
 
 export const searchMessagesQuerySchema = z.object({
-  q: z.string().min(1).max(1000),
+  q: queryField,
 });
 
 export const semanticSearchSchema = z.object({
-  query: z.string().min(1).max(1000),
-  mode: z.enum(["semantic", "context"]).optional(),
-  kind: z.enum(["entity", "memory", "message"]).optional(),
-  type: z.string().max(200).optional(),
+  query: queryField,
+  mode: z.enum(SEARCH_MODES).optional(),
+  kind: z.enum(SEARCH_KINDS).optional(),
+  type: typeFilter.optional(),
   after: z.coerce.number().int().optional(),
   before: z.coerce.number().int().optional(),
   role: messageRole.optional(),

@@ -1,10 +1,22 @@
 /** Tool registration: manage_relation, get_relations */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  relationType,
+  relationWeight,
+  metadataJsonStr,
+  RELATION_DIRECTIONS,
+} from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
-import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../auth.js";
+import {
+  assertNamespaceWriteAccess,
+  assertEntityAccess,
+  assertEntityReadAccess,
+  assertRelationAccess,
+  isAdmin,
+} from "../auth.js";
 import { parseJson } from "../utils.js";
 import { track, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
@@ -38,14 +50,9 @@ export function registerRelationTools(
         .describe("Required for create (defaults to last-used)"),
       source_id: z.string().uuid().optional().describe("From entity"),
       target_id: z.string().uuid().optional().describe("To entity"),
-      relation_type: z
-        .string()
-        .min(1)
-        .max(200)
-        .optional()
-        .describe("knows, uses, depends_on, part_of, etc."),
-      weight: z.number().min(0).max(1).optional(),
-      metadata: z.string().max(5000).optional(),
+      relation_type: relationType.optional().describe("knows, uses, depends_on, part_of, etc."),
+      weight: relationWeight.optional(),
+      metadata: metadataJsonStr.optional(),
     },
     {
       title: "Manage Relation",
@@ -66,13 +73,14 @@ export function registerRelationTools(
         metadata,
       }) => {
         const db = session(env.DB, "first-primary");
+        const admin = await isAdmin(env.CACHE, email);
         if (action === "create") {
           const namespace_id = resolveNamespace(nsParam, agent);
           if (!namespace_id || !source_id || !target_id || !relation_type)
             return err("namespace_id, source_id, target_id, relation_type required");
-          await assertNamespaceAccess(db, namespace_id, email);
-          const srcNs = await assertEntityAccess(db, source_id, email);
-          const tgtNs = await assertEntityAccess(db, target_id, email);
+          await assertNamespaceWriteAccess(db, namespace_id, email, admin);
+          const srcNs = await assertEntityAccess(db, source_id, email, admin);
+          const tgtNs = await assertEntityAccess(db, target_id, email, admin);
           if (srcNs !== namespace_id || tgtNs !== namespace_id)
             return err("source and target entities must belong to the specified namespace");
           const meta = safeMeta(metadata);
@@ -97,7 +105,7 @@ export function registerRelationTools(
           return txt({ id: rid, source_id, target_id, relation_type });
         }
         if (!id) return err("id required");
-        await assertRelationAccess(db, id, email);
+        await assertRelationAccess(db, id, email, admin);
         if (!(await confirm(server, `Delete relation ${id}?`))) return err("Cancelled");
         await graph.deleteRelation(db, id);
         await audit(db, env.STORAGE, {
@@ -116,8 +124,8 @@ export function registerRelationTools(
     "Get relations from/to an entity.",
     {
       entity_id: z.string().uuid(),
-      direction: z.enum(["from", "to", "both"]).optional(),
-      relation_type: z.string().max(200).optional(),
+      direction: z.enum(RELATION_DIRECTIONS).optional(),
+      relation_type: relationType.optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
@@ -128,7 +136,7 @@ export function registerRelationTools(
     },
     toolHandler(async ({ entity_id, direction, relation_type, limit, compact }) => {
       const db = session(env.DB, "first-unconstrained");
-      await assertEntityAccess(db, entity_id, email);
+      await assertEntityReadAccess(db, entity_id, email);
       track(agent, { entity: entity_id });
       const dir = direction ?? "both";
       const n = cap(limit, 50, 20);

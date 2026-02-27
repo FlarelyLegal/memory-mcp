@@ -17,7 +17,7 @@
 
 | Table                 | Purpose                                                   |
 | --------------------- | --------------------------------------------------------- |
-| `namespaces`          | Scopes for organizing data, owned by an email             |
+| `namespaces`          | Scopes for organizing data; `visibility` (private/public) |
 | `entities`            | Graph nodes (person, concept, project, tool, etc.)        |
 | `relations`           | Directed edges between entities with type and weight      |
 | `memories`            | Knowledge fragments with type, importance, temporal decay |
@@ -33,7 +33,7 @@ Full schema: `schemas/schema.sql`
 ### Write path
 
 1. MCP tool or REST API handler validates input (Zod schemas)
-2. Auth check: namespace/entity/memory ownership verified against email
+2. Auth check: read-access (owner or public) for reads, write-access (owner or admin+public) for writes
 3. Data-layer function writes to D1 (wrapped in `withRetry` for transient errors)
 4. Vectorize upsert for searchable content (entities, memories, messages)
 5. Audit log written to D1 + R2 (best-effort, never blocks)
@@ -78,7 +78,14 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/conversations.ts` -- Conversation and message history
 - `src/embeddings.ts` -- Vectorize + Workers AI embed/upsert/delete/search
 - `src/vectorize.ts` -- Vector CRUD + semantic search
-- `src/consolidation.ts` -- Decay sweep, duplicate detection, stats, entity summaries
+- `src/consolidation.ts` -- Decay sweep, duplicate detection, archive, purge
+- `src/stats.ts` -- Namespace aggregate statistics
+- `src/summaries.ts` -- Entity summary generation via Workers AI
+- `src/merge.ts` -- Memory merge: cosine clustering + LLM summarization
+
+### Shared schemas
+
+- `src/tool-schemas.ts` -- Shared Zod schemas, enums, field definitions (single source of truth for MCP tools, REST validators, and OpenAPI specs)
 
 ### MCP tools
 
@@ -102,12 +109,12 @@ Code is organized into focused modules with a 250-line cap per file:
 ### Workflows
 
 - `src/workflows/reindex.ts` -- `ReindexWorkflow`: durable batch re-embedding
-- `src/workflows/consolidation.ts` -- `ConsolidationWorkflow`: 6-step pipeline (decay, dedup, AI summaries, memory purge, R2 audit consolidation, D1 audit purge)
+- `src/workflows/consolidation.ts` -- `ConsolidationWorkflow`: 7-step pipeline (decay, dedup, memory merge, AI summaries, memory purge, R2 audit consolidation, D1 audit purge)
 - `src/reindex.ts` -- Shared chunk logic used by reindex workflow + REST API
 
 ## Design decisions
 
-- **Per-user data isolation:** All data is scoped by namespace ownership. No cross-user access.
+- **Per-user data isolation:** All data is scoped by namespace ownership. Public namespaces allow read access to any authenticated user; write access requires owner OR admin.
 - **Best-effort audit:** Audit writes never fail the primary operation. D1 + R2 writes fire concurrently via `Promise.allSettled`.
 - **Elicitation for destructive ops:** Delete operations prompt for confirmation via MCP elicitation. Graceful degradation if client doesn't support it.
 - **Session state:** Active namespace, recent entities, and current conversation are tracked in Durable Object state for smarter defaults across tool calls.

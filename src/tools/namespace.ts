@@ -1,12 +1,14 @@
 /** Tool registration: manage_namespace */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { nameField, descriptionField, visibility } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
+import { assertNamespaceWriteAccess, isAdmin } from "../auth.js";
 import { track } from "../state.js";
 import { audit } from "../audit.js";
-import { txt, err, toolHandler } from "../response-helpers.js";
+import { txt, err, ok, toolHandler } from "../response-helpers.js";
 
 export function registerNamespaceTools(
   server: McpServer,
@@ -16,11 +18,13 @@ export function registerNamespaceTools(
 ) {
   server.tool(
     "manage_namespace",
-    "Create or list memory namespaces (scopes for organizing data).",
+    "Create, list, or set visibility on memory namespaces.",
     {
-      action: z.enum(["create", "list"]),
-      name: z.string().min(1).max(200).optional().describe("Required for create"),
-      description: z.string().max(2000).optional(),
+      action: z.enum(["create", "list", "set_visibility"]),
+      id: z.string().uuid().optional().describe("Required for set_visibility"),
+      name: nameField.optional().describe("Required for create"),
+      description: descriptionField.optional(),
+      visibility: visibility.optional().describe("Required for set_visibility (admin only)"),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
     {
@@ -30,33 +34,55 @@ export function registerNamespaceTools(
       idempotentHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ action, name, description, compact }) => {
-      const db = session(env.DB, "first-primary");
+    toolHandler(async ({ action, id, name, description, visibility, compact }) => {
       if (action === "create") {
+        const db = session(env.DB, "first-primary");
         if (!name) return err("name required");
-        const id = await graph.createNamespace(db, {
+        const nsId = await graph.createNamespace(db, {
           name,
           description,
           owner: email,
         });
-        track(agent, { namespace: id });
+        track(agent, { namespace: nsId });
         await audit(db, env.STORAGE, {
           action: "namespace.create",
+          email,
+          namespace_id: nsId,
+          resource_type: "namespace",
+          resource_id: nsId,
+          detail: { name },
+        });
+        return txt({ id: nsId, name });
+      }
+      if (action === "set_visibility") {
+        if (!id || !visibility) return err("id and visibility required");
+        if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+        const db = session(env.DB, "first-primary");
+        await assertNamespaceWriteAccess(db, id, email, true);
+        await graph.updateNamespaceVisibility(db, id, visibility);
+        await audit(db, env.STORAGE, {
+          action: "namespace.set_visibility",
           email,
           namespace_id: id,
           resource_type: "namespace",
           resource_id: id,
-          detail: { name },
+          detail: { visibility },
         });
-        return txt({ id, name });
+        return ok(`Visibility set to ${visibility}`);
       }
+      const db = session(env.DB, "first-unconstrained");
       const isCompact = compact ?? true;
       const rows = await graph.listNamespaces(db, email);
       return txt(
         rows.map((r) =>
           isCompact
-            ? { id: r.id, name: r.name }
-            : { id: r.id, name: r.name, description: r.description },
+            ? { id: r.id, name: r.name, visibility: r.visibility }
+            : {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                visibility: r.visibility,
+              },
         ),
       );
     }),

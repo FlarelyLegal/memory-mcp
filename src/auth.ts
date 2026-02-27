@@ -1,9 +1,11 @@
 /**
  * Per-user authorization helpers.
  *
- * Namespaces have an `owner` column (email). These helpers enforce that the
- * authenticated user can only access namespaces they own. Unowned namespaces
- * must be claimed via the claim_namespaces admin action before use.
+ * Namespaces have an `owner` column and a `visibility` column:
+ * - `private`: only the owner can read or write.
+ * - `public`: any authenticated user can read; only owner or admin can write.
+ *
+ * Unowned namespaces (owner IS NULL) are inaccessible — claim them first.
  */
 
 import type { NamespaceRow } from "./types.js";
@@ -30,71 +32,175 @@ export class AccessDeniedError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Namespace-level access checks
+// ---------------------------------------------------------------------------
+
+/** Fetch a namespace or throw. */
+async function fetchNamespace(db: DbHandle, namespaceId: string): Promise<NamespaceRow> {
+  const ns = await db
+    .prepare(`SELECT * FROM namespaces WHERE id = ?`)
+    .bind(namespaceId)
+    .first<NamespaceRow>();
+  if (!ns) throw new AccessDeniedError("Namespace not found");
+  return ns;
+}
+
+/** Can the user read? Owner always can; public namespaces allow any authenticated user. */
+function canRead(ns: NamespaceRow, email: string): boolean {
+  return ns.owner === email || ns.visibility === "public";
+}
+
+/** Can the user write? Owner always can; admins can write to public namespaces. */
+function canWrite(ns: NamespaceRow, email: string, admin: boolean): boolean {
+  return ns.owner === email || (admin && ns.visibility === "public");
+}
+
 /**
- * Verify the authenticated user owns the given namespace.
- * Unowned namespaces (owner IS NULL) are inaccessible — claim them first.
+ * Assert the user can read the namespace.
+ * Allowed if: owner OR namespace is public.
+ */
+export async function assertNamespaceReadAccess(
+  db: DbHandle,
+  namespaceId: string,
+  email: string,
+): Promise<NamespaceRow> {
+  const ns = await fetchNamespace(db, namespaceId);
+  if (!canRead(ns, email)) throw new AccessDeniedError("You do not have access to this namespace");
+  return ns;
+}
+
+/**
+ * Assert the user can write to the namespace.
+ * Allowed if: owner OR (admin AND namespace is public).
+ */
+export async function assertNamespaceWriteAccess(
+  db: DbHandle,
+  namespaceId: string,
+  email: string,
+  admin = false,
+): Promise<NamespaceRow> {
+  const ns = await fetchNamespace(db, namespaceId);
+  if (!canWrite(ns, email, admin)) {
+    throw new AccessDeniedError("You do not have write access to this namespace");
+  }
+  return ns;
+}
+
+/**
+ * Legacy alias — equivalent to assertNamespaceWriteAccess without admin bypass.
+ * Kept for backward compatibility; prefer the explicit read/write variants.
  */
 export async function assertNamespaceAccess(
   db: DbHandle,
   namespaceId: string,
   email: string,
 ): Promise<NamespaceRow> {
-  const ns = await db
-    .prepare(`SELECT * FROM namespaces WHERE id = ?`)
-    .bind(namespaceId)
-    .first<NamespaceRow>();
-
-  if (!ns) {
-    throw new AccessDeniedError("Namespace not found");
-  }
-
-  if (ns.owner !== email) {
-    throw new AccessDeniedError("You do not have access to this namespace");
-  }
-
-  return ns;
+  return assertNamespaceWriteAccess(db, namespaceId, email, false);
 }
 
-/**
- * Generic: look up a resource's namespace and verify ownership in a single JOIN.
- * Returns the namespace_id on success.
- */
-async function assertResourceAccess(
+// ---------------------------------------------------------------------------
+// Resource-level access checks (JOIN to namespace)
+// ---------------------------------------------------------------------------
+
+type NsJoinRow = { namespace_id: string; owner: string | null; visibility: string };
+
+async function fetchResourceNs(
   db: DbHandle,
   table: string,
   resourceId: string,
-  resourceLabel: string,
-  email: string,
-): Promise<string> {
+  label: string,
+): Promise<NsJoinRow> {
   const row = await db
     .prepare(
-      `SELECT r.namespace_id, n.owner FROM ${table} r ` +
+      `SELECT r.namespace_id, n.owner, n.visibility FROM ${table} r ` +
         `JOIN namespaces n ON n.id = r.namespace_id WHERE r.id = ?`,
     )
     .bind(resourceId)
-    .first<{ namespace_id: string; owner: string | null }>();
+    .first<NsJoinRow>();
+  if (!row) throw new AccessDeniedError(`${label} not found`);
+  return row;
+}
 
-  if (!row) throw new AccessDeniedError(`${resourceLabel} not found`);
-  if (row.owner !== email) throw new AccessDeniedError("You do not have access to this namespace");
+/** Assert read access to a resource's namespace. */
+export async function assertResourceReadAccess(
+  db: DbHandle,
+  table: string,
+  id: string,
+  label: string,
+  email: string,
+): Promise<string> {
+  const row = await fetchResourceNs(db, table, id, label);
+  if (row.owner !== email && row.visibility !== "public") {
+    throw new AccessDeniedError("You do not have access to this namespace");
+  }
   return row.namespace_id;
 }
 
-/** Look up which namespace an entity belongs to, then verify access. */
-export function assertEntityAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceAccess(db, "entities", id, "Entity", email);
+/** Assert write access to a resource's namespace. */
+async function assertResourceWriteAccess(
+  db: DbHandle,
+  table: string,
+  id: string,
+  label: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  const row = await fetchResourceNs(db, table, id, label);
+  if (row.owner !== email && !(admin && row.visibility === "public")) {
+    throw new AccessDeniedError("You do not have write access to this namespace");
+  }
+  return row.namespace_id;
 }
 
-/** Look up which namespace a memory belongs to, then verify access. */
-export function assertMemoryAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceAccess(db, "memories", id, "Memory", email);
+// --- Write access (owner, or admin for public namespaces) ---
+export function assertEntityAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  return assertResourceWriteAccess(db, "entities", id, "Entity", email, admin);
+}
+export function assertMemoryAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  return assertResourceWriteAccess(db, "memories", id, "Memory", email, admin);
+}
+export function assertConversationAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  return assertResourceWriteAccess(db, "conversations", id, "Conversation", email, admin);
+}
+export function assertRelationAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  return assertResourceWriteAccess(db, "relations", id, "Relation", email, admin);
 }
 
-/** Look up which namespace a conversation belongs to, then verify access. */
-export function assertConversationAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceAccess(db, "conversations", id, "Conversation", email);
+// --- Read access (owner OR public) ---
+export function assertEntityReadAccess(db: DbHandle, id: string, email: string): Promise<string> {
+  return assertResourceReadAccess(db, "entities", id, "Entity", email);
 }
-
-/** Look up which namespace a relation belongs to, then verify access. */
-export function assertRelationAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceAccess(db, "relations", id, "Relation", email);
+export function assertMemoryReadAccess(db: DbHandle, id: string, email: string): Promise<string> {
+  return assertResourceReadAccess(db, "memories", id, "Memory", email);
+}
+export function assertConversationReadAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+): Promise<string> {
+  return assertResourceReadAccess(db, "conversations", id, "Conversation", email);
+}
+export function assertRelationReadAccess(db: DbHandle, id: string, email: string): Promise<string> {
+  return assertResourceReadAccess(db, "relations", id, "Relation", email);
 }

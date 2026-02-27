@@ -3,6 +3,7 @@ export {
   createNamespace,
   getNamespace,
   listNamespaces,
+  updateNamespaceVisibility,
   claimUnownedNamespaces,
 } from "./namespaces.js";
 export { createEntity, getEntity, searchEntities, updateEntity, deleteEntity } from "./entities.js";

@@ -8,13 +8,15 @@ CREATE TABLE IF NOT EXISTS namespaces (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
-  owner TEXT,    -- email of the owning user (NULL = legacy/unowned)
-  metadata TEXT, -- JSON
+  owner TEXT,       -- email of the owning user (NULL = legacy/unowned)
+  visibility TEXT NOT NULL DEFAULT 'private', -- 'private' | 'public'
+  metadata TEXT,    -- JSON
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 CREATE INDEX IF NOT EXISTS idx_namespaces_owner ON namespaces(owner);
 CREATE INDEX IF NOT EXISTS idx_namespaces_name ON namespaces(name);
+CREATE INDEX IF NOT EXISTS idx_namespaces_visibility ON namespaces(visibility);
 
 -- Entities are the nodes of the graph
 CREATE TABLE IF NOT EXISTS entities (

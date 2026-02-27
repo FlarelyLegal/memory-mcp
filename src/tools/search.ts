@@ -1,12 +1,19 @@
 /** Tool registration: search (semantic + context) */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  queryField,
+  SEARCH_MODES,
+  SEARCH_KINDS,
+  typeFilter,
+  messageRole,
+} from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
-import { assertNamespaceAccess } from "../auth.js";
+import { assertNamespaceReadAccess } from "../auth.js";
 import { track, resolveNamespace } from "../state.js";
 import { txt, err, cap, trunc, toolHandler } from "../response-helpers.js";
 
@@ -21,20 +28,15 @@ export function registerSearchTools(
     "Semantic vector search across all memory types. Use mode=context to also pull graph relations and ranked memories for matched entities. Supports time-bounded search with after/before (epoch seconds).",
     {
       namespace_id: z.string().uuid().optional().describe("Defaults to last-used namespace"),
-      query: z.string().min(1).max(1000),
-      mode: z.enum(["semantic", "context"]).optional().describe("Default: semantic"),
-      kind: z.enum(["entity", "memory", "message"]).optional().describe("Filter by kind"),
-      type: z
-        .string()
-        .max(200)
+      query: queryField,
+      mode: z.enum(SEARCH_MODES).optional().describe("Default: semantic"),
+      kind: z.enum(SEARCH_KINDS).optional().describe("Filter by kind"),
+      type: typeFilter
         .optional()
         .describe("Filter by entity type or memory type (e.g. person, fact)"),
       after: z.number().optional().describe("Only results created after this epoch (seconds)"),
       before: z.number().optional().describe("Only results created before this epoch (seconds)"),
-      role: z
-        .enum(["user", "assistant", "system", "tool"])
-        .optional()
-        .describe("Filter messages by role"),
+      role: messageRole.optional().describe("Filter messages by role"),
       conversation_id: z.string().uuid().optional().describe("Filter messages by conversation"),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
@@ -63,7 +65,7 @@ export function registerSearchTools(
         const namespace_id = resolveNamespace(nsParam, agent);
         if (!namespace_id) return err("namespace_id required");
         const db = session(env.DB, "first-unconstrained");
-        await assertNamespaceAccess(db, namespace_id, email);
+        await assertNamespaceReadAccess(db, namespace_id, email);
         track(agent, { namespace: namespace_id });
         const n = cap(limit, 20, mode === "context" ? 5 : 10);
         const isCompact = compact ?? true;

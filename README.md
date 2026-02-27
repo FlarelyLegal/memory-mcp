@@ -25,6 +25,17 @@ Remote MCP server on Cloudflare Workers providing LLMs with persistent structure
 | Cold archive    | R2                     | Audit log NDJSON archive (Loki-compatible)               |
 | Background jobs | Workflows              | Durable reindex and consolidation pipelines              |
 
+## Public demo
+
+A live instance is running at **[memory.flarelylegal.com](https://memory.flarelylegal.com)** with the server modeled as its own knowledge graph.
+
+- **API docs:** [memory.flarelylegal.com/api/docs](https://memory.flarelylegal.com/api/docs)
+- **Demo snapshot** (no auth required):
+
+```bash
+curl -s https://memory.flarelylegal.com/api/demo | jq
+```
+
 ## Quick start
 
 ```bash
@@ -53,7 +64,7 @@ Works with Claude Desktop, Cursor, OpenCode, or any MCP-compatible client.
 
 | Tool                  | Description                                               |
 | --------------------- | --------------------------------------------------------- |
-| `manage_namespace`    | Create or list memory namespaces                          |
+| `manage_namespace`    | Create, list, or set visibility on namespaces             |
 | `manage_entity`       | CRUD for graph entities with embedding upsert             |
 | `find_entities`       | Search entities by name/type/keyword                      |
 | `manage_relation`     | Create or delete directed relations                       |

@@ -1,17 +1,19 @@
 /** Conversation REST endpoints + OpenAPI definitions. */
+import { z } from "zod";
 import { defineRoute } from "../registry.js";
 import { json, parseBody, handleError } from "../middleware.js";
 import { createConversation, listConversations } from "../../conversations.js";
-import { assertNamespaceAccess } from "../../auth.js";
+import { assertNamespaceWriteAccess, assertNamespaceReadAccess, isAdmin } from "../../auth.js";
 import {
   nsPathParam,
   limitQueryParam,
   queryLimit,
   conversationSchema,
-  metadataSchema,
+  zodSchema,
 } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseConversationRow } from "../row-parsers.js";
+import { titleField, metadataObject } from "../../tool-schemas.js";
 import { audit } from "../../audit.js";
 
 export function registerConversationRoutes(): void {
@@ -20,7 +22,7 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const limit = queryLimit(ctx.query, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
@@ -85,7 +87,8 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
         const body = await parseBody<{ title?: string; metadata?: Record<string, unknown> }>(
           request,
         );
@@ -117,13 +120,9 @@ export function registerConversationRoutes(): void {
       requestBody: {
         content: {
           "application/json": {
-            schema: {
-              type: "object",
-              properties: {
-                title: { type: "string", maxLength: 500 },
-                metadata: metadataSchema(),
-              },
-            },
+            schema: zodSchema(
+              z.object({ title: titleField.optional(), metadata: metadataObject.optional() }),
+            ),
           },
         },
       },

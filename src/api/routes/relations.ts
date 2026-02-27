@@ -8,7 +8,13 @@ import {
   getRelationsTo,
   deleteRelation,
 } from "../../graph/index.js";
-import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../../auth.js";
+import {
+  assertNamespaceWriteAccess,
+  assertEntityAccess,
+  assertEntityReadAccess,
+  assertRelationAccess,
+  isAdmin,
+} from "../../auth.js";
 import {
   nsPathParam,
   idPathParam,
@@ -16,7 +22,7 @@ import {
   queryLimit,
   relationSchema,
   okSchema,
-  metadataSchema,
+  zodSchema,
 } from "../schemas.js";
 import { relationCreateSchema } from "../validators.js";
 import { parseRelationRow } from "../row-parsers.js";
@@ -28,7 +34,8 @@ export function registerRelationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/relations",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
         const body = await parseBody(request);
         if (body instanceof Response) return body;
         const parsed = relationCreateSchema.safeParse(body);
@@ -37,8 +44,8 @@ export function registerRelationRoutes(): void {
         }
         const payload = parsed.data;
 
-        await assertEntityAccess(ctx.db, payload.source_id, ctx.email);
-        await assertEntityAccess(ctx.db, payload.target_id, ctx.email);
+        await assertEntityAccess(ctx.db, payload.source_id, ctx.email, admin);
+        await assertEntityAccess(ctx.db, payload.target_id, ctx.email, admin);
 
         const [source, target] = await Promise.all([
           getEntity(ctx.db, payload.source_id),
@@ -95,25 +102,7 @@ export function registerRelationRoutes(): void {
       parameters: [nsPathParam()],
       requestBody: {
         required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["source_id", "target_id", "relation_type"],
-              properties: {
-                source_id: { type: "string", description: "Source entity ID" },
-                target_id: { type: "string", description: "Target entity ID" },
-                relation_type: {
-                  type: "string",
-                  maxLength: 200,
-                  description: "e.g. knows, uses, depends_on",
-                },
-                weight: { type: "number", minimum: 0, maximum: 1 },
-                metadata: metadataSchema(),
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(relationCreateSchema) } },
       },
       responses: {
         "201": {
@@ -141,7 +130,7 @@ export function registerRelationRoutes(): void {
     "/api/v1/entities/:id/relations",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.email);
         const direction = ctx.query.get("direction") ?? "both";
         const relationType = ctx.query.get("relation_type") ?? undefined;
         const limit = queryLimit(ctx.query, 50);
@@ -190,7 +179,8 @@ export function registerRelationRoutes(): void {
     "/api/v1/relations/:id",
     async (ctx) => {
       try {
-        await assertRelationAccess(ctx.db, ctx.params.id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertRelationAccess(ctx.db, ctx.params.id, ctx.email, admin);
         await deleteRelation(ctx.db, ctx.params.id);
         await audit(ctx.db, ctx.env.STORAGE, {
           action: "relation.delete",

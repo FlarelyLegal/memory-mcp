@@ -4,10 +4,11 @@
  * Steps:
  * 1. Decay sweep: archive memories below relevance threshold
  * 2. Duplicate detection: find exact-duplicate memories and delete extras
- * 3. Entity summary refresh: re-summarize entities using linked memories + AI
- * 4. Purge: hard-delete archived memories older than 30 days
- * 5. Consolidate R2 audit: merge individual event objects into daily NDJSON
- * 6. Purge D1 audit logs older than 90 days
+ * 3. Memory merge: cluster similar memories via embeddings, LLM-merge
+ * 4. Entity summary refresh: re-summarize entities using linked memories + AI
+ * 5. Purge: hard-delete archived memories older than 30 days
+ * 6. Consolidate R2 audit: merge individual event objects into daily NDJSON
+ * 7. Purge D1 audit logs older than 90 days
  *
  * Triggered by the `consolidate_memory` MCP tool or POST /api/v1/admin/consolidate.
  */
@@ -15,33 +16,27 @@ import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from "cloudflare:work
 import type { Env } from "../types.js";
 import { now } from "../utils.js";
 
-/**
- * LLM for entity summary generation. Uses llama-3.1-8b-instruct-fp8:
- * - Free tier (no per-token cost)
- * - 128K context (more than enough for our prompts)
- * - In @cloudflare/workers-types (no type cast needed)
- * - Good enough quality for 1-2 sentence summaries
- */
-const SUMMARY_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8" as const;
-
 import {
   findDecayedMemories,
   archiveMemories,
   purgeArchivedMemories,
   findDuplicateMemories,
-  getEntityWithMemories,
-  updateEntitySummary,
   DEFAULT_DECAY_THRESHOLD,
 } from "../consolidation.js";
+import { generateEntitySummary } from "../summaries.js";
 import { purgeAuditLogs, consolidateAuditR2 } from "../audit.js";
-import { deleteVector } from "../vectorize.js";
-import { upsertEntityVector } from "../vectorize.js";
+import { deleteVector, upsertEntityVector, upsertMemoryVector } from "../vectorize.js";
+import { findMemoryClusters, mergeCluster, writeMergedMemory } from "../merge.js";
 
 export interface ConsolidationParams {
   namespace_id: string;
   email: string;
   /** Override decay threshold (default 0.15). */
   decay_threshold?: number;
+  /** Skip memory merge (default false). */
+  skip_merge?: boolean;
+  /** Cosine similarity threshold for merge (default 0.85). */
+  merge_threshold?: number;
   /** Skip entity summary refresh (default false). */
   skip_summaries?: boolean;
   /** Days before archived memories are purged (default 30). */
@@ -51,6 +46,7 @@ export interface ConsolidationParams {
 export interface ConsolidationResult {
   archived: number;
   duplicates_removed: number;
+  memories_merged: number;
   summaries_refreshed: number;
   purged: number;
   audit_consolidated: number;
@@ -72,7 +68,14 @@ export class ConsolidationWorkflow extends WorkflowEntrypoint<Env, Consolidation
     event: WorkflowEvent<ConsolidationParams>,
     step: WorkflowStep,
   ): Promise<ConsolidationResult> {
-    const { namespace_id, decay_threshold, skip_summaries, purge_after_days } = event.payload;
+    const {
+      namespace_id,
+      decay_threshold,
+      skip_merge,
+      merge_threshold,
+      skip_summaries,
+      purge_after_days,
+    } = event.payload;
     const threshold = decay_threshold ?? DEFAULT_DECAY_THRESHOLD;
     const purgeDays = purge_after_days ?? 30;
 
@@ -106,7 +109,49 @@ export class ConsolidationWorkflow extends WorkflowEntrypoint<Env, Consolidation
       return deleted;
     });
 
-    // Step 3: Entity summary refresh using Workers AI
+    // Step 3: Memory merge — cluster similar memories and LLM-merge
+    let memoriesMerged = 0;
+    if (!skip_merge) {
+      const clusters = await step.do("find-merge-clusters", STEP_RETRY, async () => {
+        const db = this.env.DB;
+        const found = await findMemoryClusters(db, this.env.AI, namespace_id, {
+          threshold: merge_threshold,
+        });
+        // Serialize for durable step return (MemoryRow objects)
+        return found.map((c) => ({ ids: c.memories.map((m) => m.id), memories: c.memories }));
+      });
+
+      for (let i = 0; i < clusters.length; i++) {
+        const merged = await step.do(`merge-cluster-${i}`, AI_STEP, async () => {
+          const db = this.env.DB;
+          const cluster = clusters[i];
+          const content = await mergeCluster(this.env.AI, { memories: cluster.memories });
+          if (!content) return null;
+          const newId = await writeMergedMemory(db, { memories: cluster.memories }, content);
+          if (!newId) return null;
+          // Re-embed merged memory
+          const type = cluster.memories[0]?.type ?? "fact";
+          await upsertMemoryVector(this.env, {
+            memory_id: newId,
+            namespace_id,
+            content,
+            type,
+          });
+          // Delete vectors for originals
+          for (const id of cluster.ids) {
+            try {
+              await deleteVector(this.env, "memory", id);
+            } catch {
+              /* best-effort */
+            }
+          }
+          return cluster.ids.length;
+        });
+        if (merged) memoriesMerged += merged;
+      }
+    }
+
+    // Step 4: Entity summary refresh using Workers AI
     let summariesRefreshed = 0;
     if (!skip_summaries) {
       // Fetch entity IDs that have linked memories
@@ -128,41 +173,15 @@ export class ConsolidationWorkflow extends WorkflowEntrypoint<Env, Consolidation
         const eid = entityIds[i];
         const refreshed = await step.do(`refresh-summary-${i}`, AI_STEP, async () => {
           const db = this.env.DB;
-          const data = await getEntityWithMemories(db, eid);
-          if (!data || data.memories.length === 0) return false;
-
-          const memoryText = data.memories
-            .slice(0, 10)
-            .map((m) => `- [${m.type}] ${m.content}`)
-            .join("\n");
-
-          const prompt = `Summarize this entity in 1-2 sentences based on the associated memories.
-
-Entity: ${data.entity.name} (${data.entity.type})
-Current summary: ${data.entity.summary ?? "none"}
-
-Associated memories:
-${memoryText}
-
-Write a concise, factual summary:`;
-
-          const result = (await this.env.AI.run(SUMMARY_MODEL, {
-            messages: [{ role: "user", content: prompt }],
-            max_tokens: 150,
-          })) as { response?: string };
-
-          const summary = result.response?.trim();
-          if (!summary) return false;
-
-          await updateEntitySummary(db, eid, summary);
-          // Re-embed the entity with updated summary
+          const result = await generateEntitySummary(db, this.env.AI, eid);
+          if (!result) return false;
           await upsertEntityVector(this.env, {
             entity_id: eid,
             namespace_id,
-            name: data.entity.name,
-            type: data.entity.type,
-            summary,
-            created_at: data.entity.created_at,
+            name: result.entity.name,
+            type: result.entity.type,
+            summary: result.summary,
+            created_at: result.entity.created_at,
           });
           return true;
         });
@@ -170,7 +189,7 @@ Write a concise, factual summary:`;
       }
     }
 
-    // Step 4: Purge archived memories older than N days
+    // Step 5: Purge archived memories older than N days
     const purged = await step.do("purge-archived", STEP_RETRY, async () => {
       const db = this.env.DB;
       const cutoff = now() - purgeDays * 86400;
@@ -186,7 +205,7 @@ Write a concise, factual summary:`;
       return result.deleted;
     });
 
-    // Step 5: Consolidate R2 audit events into daily NDJSON files
+    // Step 6: Consolidate R2 audit events into daily NDJSON files
     const auditConsolidated = await step.do("consolidate-audit-r2", STEP_RETRY, async () => {
       // Consolidate today and yesterday (covers events near midnight)
       const today = new Date().toISOString().slice(0, 10);
@@ -196,7 +215,7 @@ Write a concise, factual summary:`;
       return a + b;
     });
 
-    // Step 6: Purge old audit logs from D1 (R2 archive is retained)
+    // Step 7: Purge old audit logs from D1 (R2 archive is retained)
     const auditPurged = await step.do("purge-audit-logs", STEP_RETRY, async () => {
       const db = this.env.DB;
       const cutoff = now() - 90 * 86400; // 90 days
@@ -206,6 +225,7 @@ Write a concise, factual summary:`;
     return {
       archived,
       duplicates_removed: duplicatesRemoved,
+      memories_merged: memoriesMerged,
       summaries_refreshed: summariesRefreshed,
       purged,
       audit_consolidated: auditConsolidated,

@@ -91,10 +91,11 @@ All `/api/*` responses include `Access-Control-Allow-Origin: *`.
 
 ### Namespaces
 
-| Method | Endpoint             | Description      |
-| ------ | -------------------- | ---------------- |
-| `GET`  | `/api/v1/namespaces` | List namespaces  |
-| `POST` | `/api/v1/namespaces` | Create namespace |
+| Method  | Endpoint                 | Description                    |
+| ------- | ------------------------ | ------------------------------ |
+| `GET`   | `/api/v1/namespaces`     | List namespaces (own + public) |
+| `POST`  | `/api/v1/namespaces`     | Create namespace               |
+| `PATCH` | `/api/v1/namespaces/:id` | Set visibility (admin only)    |
 
 ### Entities
 

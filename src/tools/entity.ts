@@ -1,11 +1,25 @@
 /** Tool registration: manage_entity, find_entities */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  nameField,
+  typeField,
+  typeFilter,
+  summaryField,
+  metadataJsonStr,
+  queryField,
+} from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import * as vectorize from "../vectorize.js";
-import { assertNamespaceAccess, assertEntityAccess } from "../auth.js";
+import {
+  assertNamespaceWriteAccess,
+  assertNamespaceReadAccess,
+  assertEntityAccess,
+  assertEntityReadAccess,
+  isAdmin,
+} from "../auth.js";
 import { parseJson, toISO } from "../utils.js";
 import { track, untrack, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
@@ -38,10 +52,10 @@ export function registerEntityTools(
         .uuid()
         .optional()
         .describe("Required for create (defaults to last-used)"),
-      name: z.string().min(1).max(200).optional(),
-      type: z.string().min(1).max(200).optional().describe("person, concept, project, tool, etc."),
-      summary: z.string().max(10000).optional(),
-      metadata: z.string().max(5000).optional().describe("JSON string"),
+      name: nameField.optional(),
+      type: typeField.optional().describe("person, concept, project, tool, etc."),
+      summary: summaryField.optional(),
+      metadata: metadataJsonStr.optional().describe("JSON string"),
       compact: z.boolean().optional().describe("Default true: return minimal fields (get only)"),
     },
     {
@@ -56,11 +70,12 @@ export function registerEntityTools(
         const db = session(env.DB, "first-primary");
         const meta = safeMeta(metadata);
         if (isMetaError(meta)) return meta;
+        const admin = action !== "get" ? await isAdmin(env.CACHE, email) : false;
         switch (action) {
           case "create": {
             const namespace_id = resolveNamespace(nsParam, agent);
             if (!namespace_id || !name || !type) return err("namespace_id, name, type required");
-            await assertNamespaceAccess(db, namespace_id, email);
+            await assertNamespaceWriteAccess(db, namespace_id, email, admin);
             const eid = await graph.createEntity(db, {
               namespace_id,
               name,
@@ -88,7 +103,7 @@ export function registerEntityTools(
           }
           case "get": {
             if (!id) return err("id required");
-            await assertEntityAccess(db, id, email);
+            await assertEntityReadAccess(db, id, email);
             const e = await graph.getEntity(db, id);
             if (!e) return err("Not found");
             track(agent, { namespace: e.namespace_id, entity: id });
@@ -114,7 +129,7 @@ export function registerEntityTools(
             if (!id) return err("id required");
             if (!name && !type && !summary && !metadata)
               return err("at least one field (name, type, summary, metadata) required");
-            await assertEntityAccess(db, id, email);
+            await assertEntityAccess(db, id, email, admin);
             await graph.updateEntity(db, id, { name, type, summary, metadata: meta });
             if (name || type || summary) {
               const e = await graph.getEntity(db, id);
@@ -139,7 +154,7 @@ export function registerEntityTools(
           }
           case "delete": {
             if (!id) return err("id required");
-            await assertEntityAccess(db, id, email);
+            await assertEntityAccess(db, id, email, admin);
             const entity = await graph.getEntity(db, id);
             const label = entity ? `entity "${entity.name}" (${entity.type})` : `entity ${id}`;
             if (!(await confirm(server, `Delete ${label} and all its relations?`)))
@@ -167,8 +182,8 @@ export function registerEntityTools(
     "Search entities by name/type/keyword in a namespace.",
     {
       namespace_id: z.string().uuid().optional().describe("Defaults to last-used namespace"),
-      query: z.string().min(1).max(1000).optional(),
-      type: z.string().max(200).optional(),
+      query: queryField.optional(),
+      type: typeFilter.optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
@@ -182,7 +197,7 @@ export function registerEntityTools(
       const namespace_id = resolveNamespace(nsParam, agent);
       if (!namespace_id) return err("namespace_id required");
       const db = session(env.DB, "first-unconstrained");
-      await assertNamespaceAccess(db, namespace_id, email);
+      await assertNamespaceReadAccess(db, namespace_id, email);
       track(agent, { namespace: namespace_id });
       const results = await graph.searchEntities(db, namespace_id, {
         query,
