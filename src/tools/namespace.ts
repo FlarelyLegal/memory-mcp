@@ -5,10 +5,11 @@ import { nameField, descriptionField, visibility } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
+import { deleteVectorBatch } from "../vectorize.js";
 import { assertNamespaceWriteAccess, isAdmin } from "../auth.js";
 import { track } from "../state.js";
 import { audit } from "../audit.js";
-import { txt, err, ok, toolHandler } from "../response-helpers.js";
+import { txt, err, ok, confirm, toolHandler } from "../response-helpers.js";
 
 export function registerNamespaceTools(
   server: McpServer,
@@ -18,10 +19,10 @@ export function registerNamespaceTools(
 ) {
   server.tool(
     "manage_namespace",
-    "Create, list, or set visibility on memory namespaces.",
+    "Create, list, delete, or set visibility on memory namespaces.",
     {
-      action: z.enum(["create", "list", "set_visibility"]),
-      id: z.string().uuid().optional().describe("Required for set_visibility"),
+      action: z.enum(["create", "list", "delete", "set_visibility"]),
+      id: z.string().uuid().optional().describe("Required for delete and set_visibility"),
       name: nameField.optional().describe("Required for create"),
       description: descriptionField.optional(),
       visibility: visibility.optional().describe("Required for set_visibility (admin only)"),
@@ -30,8 +31,8 @@ export function registerNamespaceTools(
     {
       title: "Manage Namespace",
       readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
+      destructiveHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     },
     toolHandler(async ({ action, id, name, description, visibility, compact }) => {
@@ -53,6 +54,26 @@ export function registerNamespaceTools(
           detail: { name },
         });
         return txt({ id: nsId, name });
+      }
+      if (action === "delete") {
+        if (!id) return err("id required");
+        const db = session(env.DB, "first-primary");
+        const admin = await isAdmin(env.CACHE, email);
+        const ns = await assertNamespaceWriteAccess(db, id, email, admin);
+        if (!(await confirm(server, `Delete namespace "${ns.name}" and ALL its contents?`)))
+          return ok("Cancelled");
+        const vectorIds = await graph.collectNamespaceVectorIds(db, id);
+        await graph.deleteNamespace(db, id);
+        await deleteVectorBatch(env, vectorIds);
+        await audit(db, env.STORAGE, {
+          action: "namespace.delete",
+          email,
+          namespace_id: id,
+          resource_type: "namespace",
+          resource_id: id,
+          detail: { name: ns.name, vectors_deleted: vectorIds.length },
+        });
+        return ok(`Deleted namespace "${ns.name}" (${vectorIds.length} vectors removed)`);
       }
       if (action === "set_visibility") {
         if (!id || !visibility) return err("id and visibility required");

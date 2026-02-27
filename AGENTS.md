@@ -86,7 +86,7 @@ Code is organized into focused modules with a 250-line cap per file:
 
 | Tool                  | Domain       | Description                                                     |
 | --------------------- | ------------ | --------------------------------------------------------------- |
-| `manage_namespace`    | namespace    | Create, list, or set visibility on namespaces                   |
+| `manage_namespace`    | namespace    | Create, list, delete, or set visibility on namespaces           |
 | `manage_entity`       | entity       | CRUD for graph entities with embedding upsert                   |
 | `find_entities`       | entity       | Search entities by name/type/keyword                            |
 | `manage_relation`     | relation     | Create or delete directed relations (with ownership check)      |

@@ -4,6 +4,8 @@ export {
   getNamespace,
   listNamespaces,
   updateNamespaceVisibility,
+  collectNamespaceVectorIds,
+  deleteNamespace,
   claimUnownedNamespaces,
 } from "./namespaces.js";
 export { createEntity, getEntity, searchEntities, updateEntity, deleteEntity } from "./entities.js";
