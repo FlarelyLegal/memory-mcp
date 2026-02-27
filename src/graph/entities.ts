@@ -1,6 +1,6 @@
 /** Entity CRUD operations against D1. */
 import type { EntityRow } from "../types.js";
-import type { DbHandle } from "../db.js";
+import { type DbHandle, withRetry } from "../db.js";
 import { generateId, now, toJson, ftsEscape } from "../utils.js";
 
 export async function createEntity(
@@ -14,32 +14,36 @@ export async function createEntity(
   },
 ): Promise<string> {
   const id = generateId();
-  await db
-    .prepare(
-      `INSERT INTO entities (id, namespace_id, name, type, summary, metadata)
+  await withRetry(() =>
+    db
+      .prepare(
+        `INSERT INTO entities (id, namespace_id, name, type, summary, metadata)
        VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      id,
-      opts.namespace_id,
-      opts.name,
-      opts.type,
-      opts.summary ?? null,
-      toJson(opts.metadata ?? null),
-    )
-    .run();
+      )
+      .bind(
+        id,
+        opts.namespace_id,
+        opts.name,
+        opts.type,
+        opts.summary ?? null,
+        toJson(opts.metadata ?? null),
+      )
+      .run(),
+  );
   return id;
 }
 
 export async function getEntity(db: DbHandle, id: string): Promise<EntityRow | null> {
-  const [selectResult] = await db.batch([
-    db.prepare(`SELECT * FROM entities WHERE id = ?`).bind(id),
-    db
-      .prepare(
-        `UPDATE entities SET last_accessed_at = ?, access_count = access_count + 1 WHERE id = ?`,
-      )
-      .bind(now(), id),
-  ]);
+  const [selectResult] = await withRetry(() =>
+    db.batch([
+      db.prepare(`SELECT * FROM entities WHERE id = ?`).bind(id),
+      db
+        .prepare(
+          `UPDATE entities SET last_accessed_at = ?, access_count = access_count + 1 WHERE id = ?`,
+        )
+        .bind(now(), id),
+    ]),
+  );
   const rows = selectResult.results as unknown as EntityRow[];
   return rows[0] ?? null;
 }
@@ -127,12 +131,14 @@ export async function updateEntity(
   }
 
   params.push(id);
-  await db
-    .prepare(`UPDATE entities SET ${sets.join(", ")} WHERE id = ?`)
-    .bind(...params)
-    .run();
+  await withRetry(() =>
+    db
+      .prepare(`UPDATE entities SET ${sets.join(", ")} WHERE id = ?`)
+      .bind(...params)
+      .run(),
+  );
 }
 
 export async function deleteEntity(db: DbHandle, id: string): Promise<void> {
-  await db.prepare(`DELETE FROM entities WHERE id = ?`).bind(id).run();
+  await withRetry(() => db.prepare(`DELETE FROM entities WHERE id = ?`).bind(id).run());
 }

@@ -2,7 +2,7 @@
  * Conversation and message history operations.
  */
 import type { ConversationRow, MessageRow } from "./types.js";
-import type { DbHandle } from "./db.js";
+import { type DbHandle, withRetry } from "./db.js";
 import { generateId, now, toJson, ftsEscape } from "./utils.js";
 
 export async function createConversation(
@@ -10,10 +10,12 @@ export async function createConversation(
   opts: { namespace_id: string; title?: string; metadata?: Record<string, unknown> },
 ): Promise<string> {
   const id = generateId();
-  await db
-    .prepare(`INSERT INTO conversations (id, namespace_id, title, metadata) VALUES (?, ?, ?, ?)`)
-    .bind(id, opts.namespace_id, opts.title ?? null, toJson(opts.metadata ?? null))
-    .run();
+  await withRetry(() =>
+    db
+      .prepare(`INSERT INTO conversations (id, namespace_id, title, metadata) VALUES (?, ?, ?, ?)`)
+      .bind(id, opts.namespace_id, opts.title ?? null, toJson(opts.metadata ?? null))
+      .run(),
+  );
   return id;
 }
 
@@ -48,16 +50,18 @@ export async function addMessage(
 ): Promise<string> {
   const id = generateId();
   const ts = now();
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(id, opts.conversation_id, opts.role, opts.content, toJson(opts.metadata ?? null), ts),
-    db
-      .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
-      .bind(ts, opts.conversation_id),
-  ]);
+  await withRetry(() =>
+    db.batch([
+      db
+        .prepare(
+          `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(id, opts.conversation_id, opts.role, opts.content, toJson(opts.metadata ?? null), ts),
+      db
+        .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
+        .bind(ts, opts.conversation_id),
+    ]),
+  );
 
   return id;
 }
@@ -134,5 +138,5 @@ export async function searchMessages(
 }
 
 export async function deleteConversation(db: DbHandle, id: string): Promise<void> {
-  await db.prepare(`DELETE FROM conversations WHERE id = ?`).bind(id).run();
+  await withRetry(() => db.prepare(`DELETE FROM conversations WHERE id = ?`).bind(id).run());
 }

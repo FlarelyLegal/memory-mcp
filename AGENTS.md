@@ -52,6 +52,7 @@ See `package.json` scripts. Summary:
 - **OpenAPI spec is auto-generated:** Each route file registers both its handler and its OpenAPI `PathOperation`. The spec at `/api/openapi.json` is assembled dynamically — no separate spec file to maintain.
 - **CORS:** All `/api/*` responses include permissive CORS headers (`Access-Control-Allow-Origin: *`).
 - **D1 read replication:** All D1 queries go through `D1DatabaseSession` (via `src/db.ts`). Read-only operations use `"first-unconstrained"` (any replica), write operations use `"first-primary"` (primary first). API routes accept/return `X-D1-Bookmark` header for cross-request consistency. All data-layer functions accept `DbHandle` (union of `D1Database` and `D1DatabaseSession`) — never raw `D1Database`.
+- **D1 write retry:** All data-layer write operations are wrapped with `withRetry()` from `src/db.ts`. Retries up to 3 times with jitter backoff on transient D1 errors (`"Network connection lost"`, `"storage caused object to be reset"`, etc.). Workflow steps have their own retry mechanism and don't need `withRetry`.
 - **Elicitation (human-in-the-loop):** Destructive MCP tool operations (entity/relation/memory delete, consolidate, reindex-all, claim namespaces) prompt the user for confirmation via `server.server.elicitInput()`. The `confirm()` helper in `response-helpers.ts` checks `getClientCapabilities().elicitation.form` first ��� if the client doesn't support elicitation, operations proceed without confirmation (graceful degradation).
 
 ### File structure
@@ -61,7 +62,7 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/index.ts` — MCP server entry point (McpAgent class + OAuthProvider export + Workflow class re-exports)
 - `src/version.ts` — Single source of truth for version, name, description, repo URL
 - `src/types.ts` — `Env` interface (all bindings), `AuthProps`, `SessionState`, `StateHandle`, domain types + DB row types
-- `src/db.ts` — D1 Sessions API helpers: `DbHandle` type, `session()`, `getBookmark()`
+- `src/db.ts` — D1 Sessions API helpers: `DbHandle` type, `session()`, `getBookmark()`, `withRetry()` (jitter backoff for transient D1 write errors)
 - `src/access-handler.ts` — OAuth route handler (`/authorize`, `/callback`, `/health`, `/`, `/api/*`)
 - `src/auth.ts` — Per-user authorization: `assertNamespaceAccess`, `assertEntityAccess`, `assertMemoryAccess`, `assertConversationAccess`, `assertRelationAccess`
 - `src/jwt.ts` — JWT verification (RSA signature + expiry + audience validation)

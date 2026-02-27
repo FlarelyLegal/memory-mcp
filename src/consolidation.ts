@@ -8,7 +8,7 @@
  * - Entity summary refresh via Workers AI
  */
 import type { MemoryRow, EntityRow } from "./types.js";
-import type { DbHandle } from "./db.js";
+import { type DbHandle, withRetry } from "./db.js";
 import { now, decayScore } from "./utils.js";
 
 /** Memories below this relevance score are candidates for archival. */
@@ -56,7 +56,7 @@ export async function archiveMemories(db: DbHandle, ids: string[]): Promise<numb
          updated_at = ?
      WHERE id = ?`,
   );
-  const results = await db.batch(ids.map((id) => stmt.bind(ts, ts, id)));
+  const results = await withRetry(() => db.batch(ids.map((id) => stmt.bind(ts, ts, id))));
   return results.reduce((sum, r) => sum + (r.meta.changes ?? 0), 0);
 }
 
@@ -66,15 +66,17 @@ export async function purgeArchivedMemories(
   namespace_id: string,
   olderThanEpoch: number,
 ): Promise<number> {
-  const result = await db
-    .prepare(
-      `DELETE FROM memories
+  const result = await withRetry(() =>
+    db
+      .prepare(
+        `DELETE FROM memories
        WHERE namespace_id = ? AND importance = 0
          AND json_extract(metadata, '$.archived') = 1
          AND updated_at < ?`,
-    )
-    .bind(namespace_id, olderThanEpoch)
-    .run();
+      )
+      .bind(namespace_id, olderThanEpoch)
+      .run(),
+  );
   return result.meta.changes ?? 0;
 }
 
@@ -193,8 +195,10 @@ export async function updateEntitySummary(
   entity_id: string,
   summary: string,
 ): Promise<void> {
-  await db
-    .prepare("UPDATE entities SET summary = ?, updated_at = ? WHERE id = ?")
-    .bind(summary, now(), entity_id)
-    .run();
+  await withRetry(() =>
+    db
+      .prepare("UPDATE entities SET summary = ?, updated_at = ? WHERE id = ?")
+      .bind(summary, now(), entity_id)
+      .run(),
+  );
 }

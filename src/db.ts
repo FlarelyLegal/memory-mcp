@@ -45,3 +45,49 @@ export function getBookmark(db: DbHandle): string | null {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// D1 write retry with jitter backoff
+// ---------------------------------------------------------------------------
+// Adapted from @cloudflare/actors tryWhile pattern.
+// D1 does NOT auto-retry writes (only reads get up to 2 retries).
+// These transient errors are safe to retry:
+
+const MAX_ATTEMPTS = 4; // 1 initial + 3 retries
+const BASE_DELAY_MS = 100;
+const MAX_DELAY_MS = 2000;
+
+function isD1Retryable(err: unknown): boolean {
+  const msg = String(err);
+  return (
+    msg.includes("Network connection lost") ||
+    msg.includes("storage caused object to be reset") ||
+    msg.includes("reset because its code was updated") ||
+    msg.includes("Cannot resolve D1 DB due to transient issue")
+  );
+}
+
+function jitterBackoff(attempt: number): number {
+  const upper = Math.min(2 ** attempt * BASE_DELAY_MS, MAX_DELAY_MS);
+  return Math.floor(Math.random() * upper);
+}
+
+/**
+ * Retry a D1 write operation on transient errors.
+ * Wraps a single `.run()` or `.batch()` call with exponential jitter backoff.
+ * Non-retryable errors are thrown immediately.
+ */
+export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let attempt = 1;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err) {
+      attempt += 1;
+      if (attempt > MAX_ATTEMPTS || !isD1Retryable(err)) throw err;
+      // eslint-disable-next-line no-console
+      console.warn(`D1 retry ${attempt - 1}/${MAX_ATTEMPTS - 1}: ${String(err).slice(0, 120)}`);
+      await new Promise((resolve) => setTimeout(resolve, jitterBackoff(attempt)));
+    }
+  }
+}
