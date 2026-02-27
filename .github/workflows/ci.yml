@@ -19,3 +19,11 @@ jobs:
     name: Build
     needs: [lint, typecheck]
     uses: ./.github/workflows/build.yml
+
+  e2e:
+    name: E2E Tests
+    needs: [build]
+    uses: ./.github/workflows/e2e.yml
+    secrets:
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

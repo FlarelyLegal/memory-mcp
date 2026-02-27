@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "db:init": "wrangler d1 execute memory-graph-mcp-db --remote --file=schemas/schema.sql",
     "db:init:local": "wrangler d1 execute memory-graph-mcp-db --local --file=schemas/schema.sql",
-    "deploy:init": "npm run db:init && wrangler deploy"
+    "deploy:init": "npm run db:init && wrangler deploy",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.2.3",
@@ -58,6 +59,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250214.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.58.2",
     "eslint": "^10.0.2",
     "eslint-config-prettier": "^10.1.8",
     "git-cliff": "^2.12.0",
