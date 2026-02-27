@@ -4,14 +4,32 @@ const NAMESPACE_NAME = "Playwright Testing";
 let api: APIRequestContext;
 let namespaceId: string;
 
+const target = (process.env.API_TARGET ?? "a").toLowerCase();
+const isB = target === "b";
+
+const baseURL =
+  (isB ? process.env.API_BASE_URL_B : process.env.API_BASE_URL_A) ??
+  process.env.API_BASE_URL ??
+  "https://memory.schenanigans.com";
+
+const clientId =
+  (isB ? process.env.CF_ACCESS_CLIENT_ID_B : process.env.CF_ACCESS_CLIENT_ID_A) ??
+  process.env.CF_ACCESS_CLIENT_ID ??
+  "";
+
+const clientSecret =
+  (isB ? process.env.CF_ACCESS_CLIENT_SECRET_B : process.env.CF_ACCESS_CLIENT_SECRET_A) ??
+  process.env.CF_ACCESS_CLIENT_SECRET ??
+  "";
+
 const cleanup = { entities: [] as string[], relations: [] as string[], memories: [] as string[] };
 
 test.beforeAll(async ({ playwright }) => {
   api = await playwright.request.newContext({
-    baseURL: process.env.API_BASE_URL ?? "https://memory.schenanigans.com",
+    baseURL,
     extraHTTPHeaders: {
-      "CF-Access-Client-Id": process.env.CF_ACCESS_CLIENT_ID ?? "",
-      "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET ?? "",
+      "CF-Access-Client-Id": clientId,
+      "CF-Access-Client-Secret": clientSecret,
     },
   });
 
@@ -19,8 +37,14 @@ test.beforeAll(async ({ playwright }) => {
   const res = await api.get("/api/v1/namespaces");
   expect(res.ok()).toBe(true);
   const namespaces = await res.json();
-  const ns = namespaces.find((n: { name: string }) => n.name === NAMESPACE_NAME);
-  expect(ns, `Namespace "${NAMESPACE_NAME}" must exist`).toBeTruthy();
+  let ns = namespaces.find((n: { name: string }) => n.name === NAMESPACE_NAME);
+  if (!ns) {
+    const created = await api.post("/api/v1/namespaces", {
+      data: { name: NAMESPACE_NAME, description: "Shared namespace for API E2E tests" },
+    });
+    expect(created.ok()).toBe(true);
+    ns = await created.json();
+  }
   namespaceId = ns.id;
 });
 
@@ -158,7 +182,7 @@ test.describe("memory CRUD", () => {
 
   test("create memory", async () => {
     const res = await api.post(`/api/v1/namespaces/${namespaceId}/memories`, {
-      data: { content: "Playwright E2E test memory", type: "note" },
+      data: { content: "Playwright E2E test memory", type: "fact" },
     });
     expect(res.ok()).toBe(true);
     const body = await res.json();
