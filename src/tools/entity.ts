@@ -1,6 +1,14 @@
 /** Tool registration: manage_entity, find_entities */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  nameField,
+  typeField,
+  typeFilter,
+  summaryField,
+  metadataJsonStr,
+  queryField,
+} from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
@@ -44,10 +52,10 @@ export function registerEntityTools(
         .uuid()
         .optional()
         .describe("Required for create (defaults to last-used)"),
-      name: z.string().min(1).max(200).optional(),
-      type: z.string().min(1).max(200).optional().describe("person, concept, project, tool, etc."),
-      summary: z.string().max(10000).optional(),
-      metadata: z.string().max(5000).optional().describe("JSON string"),
+      name: nameField.optional(),
+      type: typeField.optional().describe("person, concept, project, tool, etc."),
+      summary: summaryField.optional(),
+      metadata: metadataJsonStr.optional().describe("JSON string"),
       compact: z.boolean().optional().describe("Default true: return minimal fields (get only)"),
     },
     {
@@ -174,8 +182,8 @@ export function registerEntityTools(
     "Search entities by name/type/keyword in a namespace.",
     {
       namespace_id: z.string().uuid().optional().describe("Defaults to last-used namespace"),
-      query: z.string().min(1).max(1000).optional(),
-      type: z.string().max(200).optional(),
+      query: queryField.optional(),
+      type: typeFilter.optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),

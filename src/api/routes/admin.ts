@@ -3,7 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, handleError } from "../middleware.js";
 import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
 import { claimUnownedNamespaces } from "../../graph/index.js";
-import { getNamespaceStats } from "../../consolidation.js";
+import { getNamespaceStats } from "../../stats.js";
 import { audit } from "../../audit.js";
 
 export function registerAdminRoutes(): void {

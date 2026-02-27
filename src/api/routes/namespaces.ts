@@ -1,9 +1,11 @@
 /** Namespace REST endpoints + OpenAPI definitions. */
+import { z } from "zod";
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
 import { createNamespace, listNamespaces, updateNamespaceVisibility } from "../../graph/index.js";
 import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
-import { namespaceSchema, okSchema } from "../schemas.js";
+import { nameField, descriptionField, visibility } from "../../tool-schemas.js";
+import { namespaceSchema, okSchema, zodSchema } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
@@ -108,14 +110,9 @@ export function registerNamespaceRoutes(): void {
         required: true,
         content: {
           "application/json": {
-            schema: {
-              type: "object",
-              required: ["name"],
-              properties: {
-                name: { type: "string", maxLength: 200 },
-                description: { type: "string", maxLength: 2000 },
-              },
-            },
+            schema: zodSchema(
+              z.object({ name: nameField, description: descriptionField.optional() }),
+            ),
           },
         },
       },
@@ -179,15 +176,7 @@ export function registerNamespaceRoutes(): void {
       requestBody: {
         required: true,
         content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["visibility"],
-              properties: {
-                visibility: { type: "string", enum: ["private", "public"] },
-              },
-            },
-          },
+          "application/json": { schema: zodSchema(z.object({ visibility })) },
         },
       },
       responses: {

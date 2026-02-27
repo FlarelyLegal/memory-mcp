@@ -1,11 +1,12 @@
 /** Tool registration: admin tools (reindex, consolidate, workflow status, claim) */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { consolidateFields, WORKFLOW_TYPES } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import { assertNamespaceWriteAccess, isAdmin } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
-import { getNamespaceStats } from "../consolidation.js";
+import { getNamespaceStats } from "../stats.js";
 import { track } from "../state.js";
 import { audit } from "../audit.js";
 import { txt, err, ok, toolHandler, confirm } from "../response-helpers.js";
@@ -55,26 +56,9 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
 
   server.tool(
     "consolidate_memory",
-    "Run memory consolidation: decay sweep, duplicate removal, entity summary refresh, and purge. Returns instance ID.",
+    "Run memory consolidation: decay sweep, duplicate removal, memory merge, entity summary refresh, and purge. Returns instance ID.",
     {
-      namespace_id: z.string().uuid().describe("Namespace to consolidate"),
-      decay_threshold: z
-        .number()
-        .min(0)
-        .max(1)
-        .optional()
-        .describe("Relevance threshold for archival (default 0.15)"),
-      skip_summaries: z
-        .boolean()
-        .optional()
-        .describe("Skip AI entity summary refresh (default false)"),
-      purge_after_days: z
-        .number()
-        .int()
-        .min(1)
-        .max(365)
-        .optional()
-        .describe("Days before archived memories are purged (default 30)"),
+      ...consolidateFields,
     },
     {
       title: "Consolidate Memory",
@@ -83,40 +67,63 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       idempotentHint: false,
       openWorldHint: false,
     },
-    toolHandler(async ({ namespace_id, decay_threshold, skip_summaries, purge_after_days }) => {
-      const db = session(env.DB, "first-primary");
-      if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
-      await assertNamespaceWriteAccess(db, namespace_id, email, true);
-      track(agent, { namespace: namespace_id });
-      if (
-        !(await confirm(
-          server,
-          `Run consolidation on namespace ${namespace_id}? This archives low-relevance memories and purges old archived data.`,
-        ))
-      )
-        return err("Cancelled");
-
-      const instance = await env.CONSOLIDATION_WORKFLOW.create({
-        params: { namespace_id, email, decay_threshold, skip_summaries, purge_after_days },
-      });
-
-      await audit(db, env.STORAGE, {
-        action: "workflow.consolidate",
-        email,
+    toolHandler(
+      async ({
         namespace_id,
-        resource_type: "workflow",
-        resource_id: instance.id,
-        detail: { decay_threshold, skip_summaries, purge_after_days },
-      });
-      return txt({ instance_id: instance.id, status: "queued" });
-    }),
+        decay_threshold,
+        skip_merge,
+        merge_threshold,
+        skip_summaries,
+        purge_after_days,
+      }) => {
+        const db = session(env.DB, "first-primary");
+        if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+        await assertNamespaceWriteAccess(db, namespace_id, email, true);
+        track(agent, { namespace: namespace_id });
+        if (
+          !(await confirm(
+            server,
+            `Run consolidation on namespace ${namespace_id}? This archives low-relevance memories and purges old archived data.`,
+          ))
+        )
+          return err("Cancelled");
+
+        const instance = await env.CONSOLIDATION_WORKFLOW.create({
+          params: {
+            namespace_id,
+            email,
+            decay_threshold,
+            skip_merge,
+            merge_threshold,
+            skip_summaries,
+            purge_after_days,
+          },
+        });
+
+        await audit(db, env.STORAGE, {
+          action: "workflow.consolidate",
+          email,
+          namespace_id,
+          resource_type: "workflow",
+          resource_id: instance.id,
+          detail: {
+            decay_threshold,
+            skip_merge,
+            merge_threshold,
+            skip_summaries,
+            purge_after_days,
+          },
+        });
+        return txt({ instance_id: instance.id, status: "queued" });
+      },
+    ),
   );
 
   server.tool(
     "get_workflow_status",
     "Check the status of a reindex or consolidation workflow instance.",
     {
-      workflow: z.enum(["reindex", "consolidation"]),
+      workflow: z.enum(WORKFLOW_TYPES),
       instance_id: z.string().max(200).describe("Workflow instance ID"),
     },
     {

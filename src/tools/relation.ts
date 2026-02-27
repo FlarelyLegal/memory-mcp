@@ -1,6 +1,12 @@
 /** Tool registration: manage_relation, get_relations */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  relationType,
+  relationWeight,
+  metadataJsonStr,
+  RELATION_DIRECTIONS,
+} from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
@@ -44,14 +50,9 @@ export function registerRelationTools(
         .describe("Required for create (defaults to last-used)"),
       source_id: z.string().uuid().optional().describe("From entity"),
       target_id: z.string().uuid().optional().describe("To entity"),
-      relation_type: z
-        .string()
-        .min(1)
-        .max(200)
-        .optional()
-        .describe("knows, uses, depends_on, part_of, etc."),
-      weight: z.number().min(0).max(1).optional(),
-      metadata: z.string().max(5000).optional(),
+      relation_type: relationType.optional().describe("knows, uses, depends_on, part_of, etc."),
+      weight: relationWeight.optional(),
+      metadata: metadataJsonStr.optional(),
     },
     {
       title: "Manage Relation",
@@ -123,8 +124,8 @@ export function registerRelationTools(
     "Get relations from/to an entity.",
     {
       entity_id: z.string().uuid(),
-      direction: z.enum(["from", "to", "both"]).optional(),
-      relation_type: z.string().max(200).optional(),
+      direction: z.enum(RELATION_DIRECTIONS).optional(),
+      relation_type: relationType.optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },

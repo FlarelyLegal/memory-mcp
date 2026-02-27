@@ -15,8 +15,7 @@ import {
   limitQueryParam,
   queryLimit,
   messageSchema,
-  metadataSchema,
-  roleEnum,
+  zodSchema,
 } from "../schemas.js";
 import { messageCreateSchema, searchMessagesQuerySchema } from "../validators.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
@@ -140,19 +139,7 @@ export function registerMessageRoutes(): void {
       parameters: [idPathParam("Conversation ID")],
       requestBody: {
         required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["role", "content"],
-              properties: {
-                role: roleEnum(),
-                content: { type: "string", maxLength: 50000 },
-                metadata: metadataSchema(),
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(messageCreateSchema) } },
       },
       responses: {
         "201": {

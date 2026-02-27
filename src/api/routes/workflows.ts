@@ -1,8 +1,26 @@
 /** Workflow REST endpoints: reindex, consolidation, status + OpenAPI defs. */
+import { z } from "zod";
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
 import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
+import { consolidateFields, WORKFLOW_TYPES } from "../../tool-schemas.js";
+import { zodSchema } from "../schemas.js";
 import { audit } from "../../audit.js";
+
+/** Shared 202 response schema for workflow creation endpoints. */
+const workflowCreatedResponse = {
+  "202": {
+    description: "Workflow instance created",
+    content: {
+      "application/json": {
+        schema: {
+          type: "object" as const,
+          properties: { instance_id: { type: "string" }, status: { type: "string" } },
+        },
+      },
+    },
+  },
+};
 
 export function registerWorkflowRoutes(): void {
   // --- Reindex (workflow) ---
@@ -61,22 +79,7 @@ export function registerWorkflowRoutes(): void {
           },
         },
       },
-      responses: {
-        "202": {
-          description: "Workflow instance created",
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  instance_id: { type: "string" },
-                  status: { type: "string" },
-                },
-              },
-            },
-          },
-        },
-      },
+      responses: workflowCreatedResponse,
     },
   );
 
@@ -91,6 +94,8 @@ export function registerWorkflowRoutes(): void {
         const body = await parseBody<{
           namespace_id?: string;
           decay_threshold?: number;
+          skip_merge?: boolean;
+          merge_threshold?: number;
           skip_summaries?: boolean;
           purge_after_days?: number;
         }>(request);
@@ -104,6 +109,8 @@ export function registerWorkflowRoutes(): void {
             namespace_id: body.namespace_id,
             email: ctx.email,
             decay_threshold: body.decay_threshold,
+            skip_merge: body.skip_merge,
+            merge_threshold: body.merge_threshold,
             skip_summaries: body.skip_summaries,
             purge_after_days: body.purge_after_days,
           },
@@ -117,6 +124,8 @@ export function registerWorkflowRoutes(): void {
           resource_id: instance.id,
           detail: {
             decay_threshold: body.decay_threshold,
+            skip_merge: body.skip_merge,
+            merge_threshold: body.merge_threshold,
             skip_summaries: body.skip_summaries,
             purge_after_days: body.purge_after_days,
           },
@@ -129,55 +138,14 @@ export function registerWorkflowRoutes(): void {
     {
       summary: "Consolidate memory",
       description:
-        "Start a durable Workflow for memory consolidation: decay sweep, duplicate removal, AI summary refresh, and purge.",
+        "Start a durable Workflow for memory consolidation: decay sweep, duplicate removal, memory merge, AI summary refresh, and purge.",
       tags: ["Admin"],
       operationId: "consolidateMemory",
       requestBody: {
         required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["namespace_id"],
-              properties: {
-                namespace_id: { type: "string", format: "uuid" },
-                decay_threshold: {
-                  type: "number",
-                  minimum: 0,
-                  maximum: 1,
-                  description: "Relevance threshold for archival (default 0.15)",
-                },
-                skip_summaries: {
-                  type: "boolean",
-                  description: "Skip AI entity summary refresh (default false)",
-                },
-                purge_after_days: {
-                  type: "integer",
-                  minimum: 1,
-                  maximum: 365,
-                  description: "Days before archived memories are purged (default 30)",
-                },
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(z.object(consolidateFields)) } },
       },
-      responses: {
-        "202": {
-          description: "Workflow instance created",
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  instance_id: { type: "string" },
-                  status: { type: "string" },
-                },
-              },
-            },
-          },
-        },
-      },
+      responses: workflowCreatedResponse,
     },
   );
 
@@ -216,7 +184,7 @@ export function registerWorkflowRoutes(): void {
           in: "path",
           required: true,
           description: "Workflow type",
-          schema: { type: "string", enum: ["reindex", "consolidation"] },
+          schema: { type: "string", enum: [...WORKFLOW_TYPES] },
         },
         {
           name: "instance_id",

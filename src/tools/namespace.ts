@@ -1,6 +1,7 @@
 /** Tool registration: manage_namespace */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { nameField, descriptionField, visibility } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
@@ -21,12 +22,9 @@ export function registerNamespaceTools(
     {
       action: z.enum(["create", "list", "set_visibility"]),
       id: z.string().uuid().optional().describe("Required for set_visibility"),
-      name: z.string().min(1).max(200).optional().describe("Required for create"),
-      description: z.string().max(2000).optional(),
-      visibility: z
-        .enum(["private", "public"])
-        .optional()
-        .describe("Required for set_visibility (admin only)"),
+      name: nameField.optional().describe("Required for create"),
+      description: descriptionField.optional(),
+      visibility: visibility.optional().describe("Required for set_visibility (admin only)"),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
     {

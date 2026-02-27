@@ -9,8 +9,9 @@ import {
   limitQueryParam,
   queryLimit,
   memorySchema,
-  memoryTypeEnum,
+  zodSchema,
 } from "../schemas.js";
+import { memoryType } from "../../tool-schemas.js";
 import { parseMemoryRow } from "../row-parsers.js";
 import type { MemoryType } from "../../types.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
@@ -92,7 +93,7 @@ export function registerMemoryQueryRoutes(): void {
         {
           name: "type",
           in: "query",
-          schema: memoryTypeEnum(),
+          schema: zodSchema(memoryType),
         },
         {
           name: "fields",

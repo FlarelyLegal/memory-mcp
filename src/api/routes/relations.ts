@@ -22,7 +22,7 @@ import {
   queryLimit,
   relationSchema,
   okSchema,
-  metadataSchema,
+  zodSchema,
 } from "../schemas.js";
 import { relationCreateSchema } from "../validators.js";
 import { parseRelationRow } from "../row-parsers.js";
@@ -102,25 +102,7 @@ export function registerRelationRoutes(): void {
       parameters: [nsPathParam()],
       requestBody: {
         required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["source_id", "target_id", "relation_type"],
-              properties: {
-                source_id: { type: "string", description: "Source entity ID" },
-                target_id: { type: "string", description: "Target entity ID" },
-                relation_type: {
-                  type: "string",
-                  maxLength: 200,
-                  description: "e.g. knows, uses, depends_on",
-                },
-                weight: { type: "number", minimum: 0, maximum: 1 },
-                metadata: metadataSchema(),
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(relationCreateSchema) } },
       },
       responses: {
         "201": {

@@ -1,4 +1,5 @@
 /** Conversation REST endpoints + OpenAPI definitions. */
+import { z } from "zod";
 import { defineRoute } from "../registry.js";
 import { json, parseBody, handleError } from "../middleware.js";
 import { createConversation, listConversations } from "../../conversations.js";
@@ -8,10 +9,11 @@ import {
   limitQueryParam,
   queryLimit,
   conversationSchema,
-  metadataSchema,
+  zodSchema,
 } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseConversationRow } from "../row-parsers.js";
+import { titleField, metadataObject } from "../../tool-schemas.js";
 import { audit } from "../../audit.js";
 
 export function registerConversationRoutes(): void {
@@ -118,13 +120,9 @@ export function registerConversationRoutes(): void {
       requestBody: {
         content: {
           "application/json": {
-            schema: {
-              type: "object",
-              properties: {
-                title: { type: "string", maxLength: 500 },
-                metadata: metadataSchema(),
-              },
-            },
+            schema: zodSchema(
+              z.object({ title: titleField.optional(), metadata: metadataObject.optional() }),
+            ),
           },
         },
       },

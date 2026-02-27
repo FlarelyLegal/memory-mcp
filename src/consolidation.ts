@@ -1,13 +1,12 @@
 /**
- * Memory consolidation operations.
+ * Memory consolidation data-layer operations.
  *
- * Provides the data-layer queries for the consolidation workflow:
+ * Queries used by the consolidation workflow:
  * - Decay sweep: find memories below a relevance threshold for soft-delete
- * - Duplicate detection: find near-duplicate memories via FTS + cosine sim
- * - Stats: aggregate counts, importance distribution, namespace sizes
- * - Entity summary refresh via Workers AI
+ * - Duplicate detection: find exact-duplicate memories
+ * - Archive / purge: soft-delete and hard-delete old memories
  */
-import type { MemoryRow, EntityRow } from "./types.js";
+import type { MemoryRow } from "./types.js";
 import { type DbHandle, withRetry } from "./db.js";
 import { now, decayScore } from "./utils.js";
 
@@ -126,101 +125,4 @@ export async function findDuplicateMemories(
     .bind(namespace_id, limit)
     .all<{ id_a: string; id_b: string; content_a: string; content_b: string }>();
   return result.results;
-}
-
-// ---------------------------------------------------------------------------
-// Stats
-// ---------------------------------------------------------------------------
-
-export interface NamespaceStats {
-  namespace_id: string;
-  entity_count: number;
-  memory_count: number;
-  relation_count: number;
-  conversation_count: number;
-  message_count: number;
-  avg_importance: number;
-  archived_count: number;
-}
-
-/** Aggregate stats for a single namespace. */
-export async function getNamespaceStats(
-  db: DbHandle,
-  namespace_id: string,
-): Promise<NamespaceStats> {
-  const [entities, memories, relations, convos, msgs, avgImp, archived] = await db.batch([
-    db.prepare("SELECT COUNT(*) AS c FROM entities WHERE namespace_id = ?").bind(namespace_id),
-    db.prepare("SELECT COUNT(*) AS c FROM memories WHERE namespace_id = ?").bind(namespace_id),
-    db.prepare("SELECT COUNT(*) AS c FROM relations WHERE namespace_id = ?").bind(namespace_id),
-    db.prepare("SELECT COUNT(*) AS c FROM conversations WHERE namespace_id = ?").bind(namespace_id),
-    db
-      .prepare(
-        `SELECT COUNT(*) AS c FROM messages m
-         JOIN conversations cv ON cv.id = m.conversation_id
-         WHERE cv.namespace_id = ?`,
-      )
-      .bind(namespace_id),
-    db
-      .prepare("SELECT AVG(importance) AS avg FROM memories WHERE namespace_id = ?")
-      .bind(namespace_id),
-    db
-      .prepare(
-        `SELECT COUNT(*) AS c FROM memories
-         WHERE namespace_id = ? AND json_extract(metadata, '$.archived') = 1`,
-      )
-      .bind(namespace_id),
-  ]);
-
-  const row = <T>(r: D1Result<T>) => (r.results as Record<string, number>[])[0] ?? {};
-  return {
-    namespace_id,
-    entity_count: row(entities).c ?? 0,
-    memory_count: row(memories).c ?? 0,
-    relation_count: row(relations).c ?? 0,
-    conversation_count: row(convos).c ?? 0,
-    message_count: row(msgs).c ?? 0,
-    avg_importance: Math.round((row(avgImp).avg ?? 0) * 100) / 100,
-    archived_count: row(archived).c ?? 0,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Entity summary refresh
-// ---------------------------------------------------------------------------
-
-/** Fetch entity + its linked memories for LLM-based summary generation. */
-export async function getEntityWithMemories(
-  db: DbHandle,
-  entity_id: string,
-): Promise<{ entity: EntityRow; memories: MemoryRow[] } | null> {
-  const entity = await db
-    .prepare("SELECT * FROM entities WHERE id = ?")
-    .bind(entity_id)
-    .first<EntityRow>();
-  if (!entity) return null;
-
-  const mems = await db
-    .prepare(
-      `SELECT m.* FROM memories m
-       JOIN memory_entity_links mel ON mel.memory_id = m.id
-       WHERE mel.entity_id = ?
-       ORDER BY m.importance DESC LIMIT 20`,
-    )
-    .bind(entity_id)
-    .all<MemoryRow>();
-  return { entity, memories: mems.results };
-}
-
-/** Update an entity's summary field. */
-export async function updateEntitySummary(
-  db: DbHandle,
-  entity_id: string,
-  summary: string,
-): Promise<void> {
-  await withRetry(() =>
-    db
-      .prepare("UPDATE entities SET summary = ?, updated_at = ? WHERE id = ?")
-      .bind(summary, now(), entity_id)
-      .run(),
-  );
 }

@@ -1,6 +1,7 @@
 /** Semantic search REST endpoint + OpenAPI definition. */
 import { defineRoute } from "../registry.js";
 import { json, parseBodyWithSchema, handleError } from "../middleware.js";
+import { zodSchema } from "../schemas.js";
 import { assertNamespaceReadAccess } from "../../auth.js";
 import { semanticSearch } from "../../vectorize.js";
 import { getEntity, getRelationsFrom, getRelationsTo } from "../../graph/index.js";
@@ -116,52 +117,7 @@ export function registerSearchRoutes(): void {
       ],
       requestBody: {
         required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["query"],
-              properties: {
-                query: { type: "string", maxLength: 1000 },
-                mode: { type: "string", enum: ["semantic", "context"], default: "semantic" },
-                kind: {
-                  type: "string",
-                  enum: ["entity", "memory", "message"],
-                  description: "Filter by kind",
-                },
-                type: {
-                  type: "string",
-                  maxLength: 200,
-                  description:
-                    "Filter by entity type (person, concept, ...) or memory type (fact, observation, ...)",
-                },
-                after: {
-                  type: "integer",
-                  description: "Only results created after this epoch (seconds)",
-                },
-                before: {
-                  type: "integer",
-                  description: "Only results created before this epoch (seconds)",
-                },
-                role: {
-                  type: "string",
-                  enum: ["user", "assistant", "system", "tool"],
-                  description: "Filter messages by role",
-                },
-                conversation_id: {
-                  type: "string",
-                  format: "uuid",
-                  description: "Filter messages by conversation",
-                },
-                limit: {
-                  type: "integer",
-                  maximum: 20,
-                  description: "Default 10 (semantic) or 5 (context)",
-                },
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(semanticSearchSchema) } },
       },
       responses: {
         "200": {

@@ -9,14 +9,7 @@ import {
   isAdmin,
 } from "../../auth.js";
 import { upsertMemoryVector, deleteVector } from "../../vectorize.js";
-import {
-  nsPathParam,
-  idPathParam,
-  memorySchema,
-  okSchema,
-  metadataSchema,
-  memoryTypeEnum,
-} from "../schemas.js";
+import { nsPathParam, idPathParam, memorySchema, okSchema, zodSchema } from "../schemas.js";
 import { parseMemoryRow } from "../row-parsers.js";
 import type { MemoryType } from "../../types.js";
 import { memoryCreateSchema, memoryUpdateSchema } from "../validators.js";
@@ -69,22 +62,7 @@ export function registerMemoryRoutes(): void {
       parameters: [nsPathParam()],
       requestBody: {
         required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["content"],
-              properties: {
-                content: { type: "string", maxLength: 10000 },
-                type: memoryTypeEnum(),
-                importance: { type: "number", minimum: 0, maximum: 1 },
-                source: { type: "string", maxLength: 500 },
-                entity_ids: { type: "array", items: { type: "string" } },
-                metadata: metadataSchema(),
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(memoryCreateSchema) } },
       },
       responses: {
         "201": {
@@ -170,19 +148,7 @@ export function registerMemoryRoutes(): void {
       operationId: "updateMemory",
       parameters: [idPathParam("Memory ID")],
       requestBody: {
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              properties: {
-                content: { type: "string", maxLength: 10000 },
-                type: memoryTypeEnum(),
-                importance: { type: "number", minimum: 0, maximum: 1 },
-                metadata: metadataSchema(),
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(memoryUpdateSchema) } },
       },
       responses: {
         "200": {

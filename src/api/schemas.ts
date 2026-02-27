@@ -1,5 +1,14 @@
 /** Reusable OpenAPI schema fragments, parameter helpers, and query utilities. */
+import { z } from "zod";
 import type { SchemaObject, ParameterObject } from "./types.js";
+
+/** Convert a Zod schema to an OpenAPI-compatible JSON Schema object. */
+export function zodSchema(schema: z.ZodType): SchemaObject {
+  const result = z.toJSONSchema(schema) as Record<string, unknown>;
+  delete result.$schema;
+  if (result.additionalProperties === false) delete result.additionalProperties;
+  return result as SchemaObject;
+}
 
 // --- Query helpers ---
 
@@ -142,25 +151,4 @@ export function tokenSchema(): SchemaObject {
       created_at: { type: "number" },
     },
   };
-}
-
-// --- Reusable input fragments ---
-
-/** Metadata input schema for request bodies. */
-export function metadataSchema(): SchemaObject {
-  return { type: "object", additionalProperties: true, description: "Arbitrary JSON metadata" };
-}
-
-/** Memory type enum values. */
-export const MEMORY_TYPES = ["fact", "observation", "preference", "instruction"] as const;
-
-export function memoryTypeEnum(): SchemaObject {
-  return { type: "string", enum: [...MEMORY_TYPES] };
-}
-
-/** Message role enum values. */
-export const MESSAGE_ROLES = ["user", "assistant", "system", "tool"] as const;
-
-export function roleEnum(): SchemaObject {
-  return { type: "string", enum: [...MESSAGE_ROLES] };
 }

@@ -4,7 +4,7 @@ import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware
 import { getEntity, updateEntity, deleteEntity } from "../../graph/index.js";
 import { assertEntityAccess, assertEntityReadAccess, isAdmin } from "../../auth.js";
 import { upsertEntityVector, deleteVector } from "../../vectorize.js";
-import { idPathParam, entitySchema, okSchema, metadataSchema } from "../schemas.js";
+import { idPathParam, entitySchema, okSchema, zodSchema } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
 import { entityUpdateSchema } from "../validators.js";
 import { audit } from "../../audit.js";
@@ -79,19 +79,7 @@ export function registerEntityCrudRoutes(): void {
       operationId: "updateEntity",
       parameters: [idPathParam("Entity ID")],
       requestBody: {
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              properties: {
-                name: { type: "string", maxLength: 200 },
-                type: { type: "string", maxLength: 200 },
-                summary: { type: "string", maxLength: 10000 },
-                metadata: metadataSchema(),
-              },
-            },
-          },
-        },
+        content: { "application/json": { schema: zodSchema(entityUpdateSchema) } },
       },
       responses: {
         "200": { description: "Updated", content: { "application/json": { schema: okSchema() } } },

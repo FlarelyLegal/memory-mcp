@@ -1,6 +1,15 @@
 /** Tool registration: manage_memory, query_memories */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  memoryContent,
+  memoryType,
+  importance,
+  sourceField,
+  entityIds,
+  metadataJsonStr,
+  queryField,
+} from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as memories from "../memories.js";
@@ -43,16 +52,12 @@ export function registerMemoryTools(
         .uuid()
         .optional()
         .describe("Required for create (defaults to last-used)"),
-      content: z.string().min(1).max(10000).optional().describe("Required for create"),
-      type: z.enum(["fact", "observation", "preference", "instruction"]).optional(),
-      importance: z.number().min(0).max(1).optional().describe("0.0-1.0, higher decays slower"),
-      source: z.string().max(500).optional().describe("Create only: where this came from"),
-      entity_ids: z
-        .array(z.string().uuid())
-        .max(100)
-        .optional()
-        .describe("Create only: link to entities"),
-      metadata: z.string().max(5000).optional(),
+      content: memoryContent.optional().describe("Required for create"),
+      type: memoryType.optional(),
+      importance: importance.optional().describe("0.0-1.0, higher decays slower"),
+      source: sourceField.optional().describe("Create only: where this came from"),
+      entity_ids: entityIds.optional().describe("Create only: link to entities"),
+      metadata: metadataJsonStr.optional(),
     },
     {
       title: "Manage Memory",
@@ -167,8 +172,8 @@ export function registerMemoryTools(
         .optional()
         .describe("For recall/search (defaults to last-used)"),
       entity_id: z.string().uuid().optional().describe("Required for entity mode"),
-      query: z.string().min(1).max(1000).optional().describe("Required for search mode"),
-      type: z.enum(["fact", "observation", "preference", "instruction"]).optional(),
+      query: queryField.optional().describe("Required for search mode"),
+      type: memoryType.optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),

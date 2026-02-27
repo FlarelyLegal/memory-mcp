@@ -1,6 +1,13 @@
 /** Tool registration: manage_conversation, add_message, get_messages */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  titleField,
+  metadataJsonStr,
+  messageRole,
+  messageContent,
+  queryField,
+} from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as conversations from "../conversations.js";
@@ -29,8 +36,8 @@ export function registerConversationTools(
     {
       action: z.enum(["create", "list"]),
       namespace_id: z.string().uuid().optional().describe("Defaults to last-used namespace"),
-      title: z.string().min(1).max(500).optional(),
-      metadata: z.string().max(5000).optional(),
+      title: titleField.optional(),
+      metadata: metadataJsonStr.optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
@@ -95,9 +102,9 @@ export function registerConversationTools(
     "Add a message to a conversation and embed it for search.",
     {
       conversation_id: z.string().uuid().optional().describe("Defaults to last-used conversation"),
-      role: z.enum(["user", "assistant", "system", "tool"]),
-      content: z.string().min(1).max(50000),
-      metadata: z.string().max(5000).optional(),
+      role: messageRole,
+      content: messageContent,
+      metadata: metadataJsonStr.optional(),
     },
     {
       title: "Add Message",
@@ -157,12 +164,7 @@ export function registerConversationTools(
         .uuid()
         .optional()
         .describe("Required when using query to search across conversations"),
-      query: z
-        .string()
-        .min(1)
-        .max(1000)
-        .optional()
-        .describe("Keyword search across all conversations in namespace"),
+      query: queryField.optional().describe("Keyword search across all conversations in namespace"),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
