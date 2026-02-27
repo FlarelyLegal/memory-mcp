@@ -2,7 +2,7 @@
  * Conversation and message history operations.
  */
 import type { ConversationRow, MessageRow } from "./types.js";
-import { generateId, now, toJson } from "./utils.js";
+import { generateId, now, toJson, ftsEscape } from "./utils.js";
 
 export async function createConversation(
   db: D1Database,
@@ -47,18 +47,16 @@ export async function addMessage(
 ): Promise<string> {
   const id = generateId();
   const ts = now();
-  await db
-    .prepare(
-      `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(id, opts.conversation_id, opts.role, opts.content, toJson(opts.metadata ?? null), ts)
-    .run();
-
-  // Update conversation timestamp
-  await db
-    .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
-    .bind(ts, opts.conversation_id)
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(id, opts.conversation_id, opts.role, opts.content, toJson(opts.metadata ?? null), ts),
+    db
+      .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
+      .bind(ts, opts.conversation_id),
+  ]);
 
   return id;
 }
@@ -98,6 +96,28 @@ export async function searchMessages(
 ): Promise<(MessageRow & { conversation_title: string | null })[]> {
   const limit = opts?.limit ?? 20;
   const offset = opts?.offset ?? 0;
+
+  // FTS5 path: BM25-ranked message search
+  try {
+    const ftsQuery = ftsEscape(query);
+    const result = await db
+      .prepare(
+        `SELECT m.*, c.title as conversation_title, bm25(messages_fts) AS rank
+         FROM messages m
+         JOIN conversations c ON c.id = m.conversation_id
+         JOIN messages_fts ON messages_fts.rowid = m.rowid
+         WHERE c.namespace_id = ? AND messages_fts MATCH ?
+         ORDER BY rank
+         LIMIT ? OFFSET ?`,
+      )
+      .bind(namespace_id, ftsQuery, limit, offset)
+      .all<MessageRow & { conversation_title: string | null }>();
+    if (result.results.length > 0 || result.success) return result.results;
+  } catch {
+    // FTS table doesn't exist yet — fall through to LIKE
+  }
+
+  // Fallback: LIKE-based search
   const result = await db
     .prepare(
       `SELECT m.*, c.title as conversation_title

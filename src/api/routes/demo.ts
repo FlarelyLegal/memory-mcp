@@ -8,6 +8,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, handleError } from "../middleware.js";
 import { searchEntities } from "../../graph/index.js";
 import { entitySchema, relationSchema, memorySchema, namespaceSchema } from "../schemas.js";
+import { parseEntityRow, parseRelationRow, parseMemoryRow } from "../row-parsers.js";
 import type { NamespaceRow, RelationRow, MemoryRow } from "../../types.js";
 
 const DEMO_NAMESPACE_NAME = "demo";
@@ -49,9 +50,9 @@ export function registerDemoRoutes(): void {
 
         return json({
           namespace: { id: ns.id, name: ns.name, description: ns.description },
-          entities,
-          relations: relations.results,
-          memories: memories.results,
+          entities: entities.map(parseEntityRow),
+          relations: relations.results.map(parseRelationRow),
+          memories: memories.results.map(parseMemoryRow),
           stats: {
             entities: entities.length,
             relations: relations.results.length,

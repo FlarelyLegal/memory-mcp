@@ -3,8 +3,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
 import * as conversations from "../conversations.js";
-import * as embeddings from "../embeddings.js";
+import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../auth.js";
+import { toISO } from "../utils.js";
 import { txt, ok, cap, trunc } from "../response-helpers.js";
 
 export function registerConversationTools(server: McpServer, env: Env, email: string) {
@@ -13,11 +14,18 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     "Create or list conversations in a namespace.",
     {
       action: z.enum(["create", "list"]),
-      namespace_id: z.string().max(100),
-      title: z.string().max(500).optional(),
+      namespace_id: z.string().uuid(),
+      title: z.string().min(1).max(500).optional(),
       metadata: z.string().max(5000).optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
+    },
+    {
+      title: "Manage Conversation",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async ({ action, namespace_id, title, metadata, limit, compact }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
@@ -36,8 +44,14 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       return txt(
         rows.map((r) =>
           isCompact
-            ? { id: r.id, title: r.title }
-            : { id: r.id, title: r.title, metadata: r.metadata },
+            ? { id: r.id, title: r.title, updated_at: toISO(r.updated_at) }
+            : {
+                id: r.id,
+                title: r.title,
+                metadata: r.metadata,
+                created_at: toISO(r.created_at),
+                updated_at: toISO(r.updated_at),
+              },
         ),
       );
     },
@@ -47,10 +61,17 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     "add_message",
     "Add a message to a conversation and embed it for search.",
     {
-      conversation_id: z.string().max(100),
+      conversation_id: z.string().uuid(),
       role: z.enum(["user", "assistant", "system", "tool"]),
-      content: z.string().max(50000),
+      content: z.string().min(1).max(50000),
       metadata: z.string().max(5000).optional(),
+    },
+    {
+      title: "Add Message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     },
     async ({ conversation_id, role, content, metadata }) => {
       await assertConversationAccess(env.DB, conversation_id, email);
@@ -63,7 +84,7 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       if (role === "user" || role === "assistant") {
         const convo = await conversations.getConversation(env.DB, conversation_id);
         if (convo)
-          await embeddings.upsertMessageVector(env, {
+          await vectorize.upsertMessageVector(env, {
             message_id: id,
             conversation_id,
             namespace_id: convo.namespace_id,
@@ -81,16 +102,17 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     {
       conversation_id: z
         .string()
-        .max(100)
+        .uuid()
         .optional()
         .describe("Get messages from a specific conversation"),
       namespace_id: z
         .string()
-        .max(100)
+        .uuid()
         .optional()
         .describe("Required when using query to search across conversations"),
       query: z
         .string()
+        .min(1)
         .max(1000)
         .optional()
         .describe("Keyword search across all conversations in namespace"),
@@ -98,18 +120,32 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
     },
+    {
+      title: "Get Messages",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     async ({ conversation_id, namespace_id, query, limit, compact, verbose }) => {
       const n = cap(limit, 100, 50);
       const isCompact = compact ?? true;
       const full = verbose ?? false;
-      const mapMsg = (m: { id: string; role: string; content: string; created_at: number }) =>
+      const mapMsg = (m: {
+        id: string;
+        role: string;
+        content: string;
+        created_at: number;
+        conversation_title?: string | null;
+      }) =>
         isCompact
           ? { id: m.id, role: m.role }
           : {
               id: m.id,
               role: m.role,
               content: full ? m.content : trunc(m.content),
-              created_at: m.created_at,
+              created_at: toISO(m.created_at),
+              ...(m.conversation_title !== undefined
+                ? { conversation_title: m.conversation_title }
+                : {}),
             };
       if (query && namespace_id) {
         await assertNamespaceAccess(env.DB, namespace_id, email);

@@ -2,11 +2,12 @@
 import { defineRoute } from "../registry.js";
 import { json, parseBodyWithSchema, handleError } from "../middleware.js";
 import { assertNamespaceAccess } from "../../auth.js";
-import { semanticSearch } from "../../embeddings.js";
+import { semanticSearch } from "../../vectorize.js";
 import { getEntity, getRelationsFrom, getRelationsTo } from "../../graph/index.js";
 import { recallMemories, getMemoriesForEntity } from "../../memories.js";
 import { semanticSearchSchema } from "../validators.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
+import { parseEntityRow, parseRelationRow, parseMemoryRow } from "../row-parsers.js";
 import { enforceSearchRateLimit } from "../rate-limit.js";
 
 export function registerSearchRoutes(): void {
@@ -30,9 +31,11 @@ export function registerSearchRoutes(): void {
         const limit = Math.min(body.limit ?? (mode === "context" ? 5 : 10), 20);
         const offset = parseCursor(ctx.query);
         const kind = body.kind;
+        const type = body.type;
 
         const matches = await semanticSearch(ctx.env, body.query, ctx.params.namespace_id, {
           kind,
+          type,
           limit: limit + offset + 1,
         });
         const page = matches.slice(offset, offset + limit + 1);
@@ -46,23 +49,30 @@ export function registerSearchRoutes(): void {
           return response;
         }
 
-        // Context mode: enrich entity matches with graph + memories
-        const entities: unknown[] = [];
+        // Context mode: enrich entity matches with graph + memories (parallel)
         const entityIds = pagedMatches
           .filter((m) => m.kind === "entity")
           .map((m) => m.metadata.entity_id)
           .filter(Boolean);
 
-        for (const eid of entityIds) {
-          const entity = await getEntity(ctx.env.DB, eid);
-          if (!entity) continue;
-          const [from, to, memories] = await Promise.all([
-            getRelationsFrom(ctx.env.DB, eid, { limit: 5 }),
-            getRelationsTo(ctx.env.DB, eid, { limit: 5 }),
-            getMemoriesForEntity(ctx.env.DB, eid, { limit: 5 }),
-          ]);
-          entities.push({ entity, relations: [...from, ...to], memories });
-        }
+        const entities = (
+          await Promise.all(
+            entityIds.map(async (eid) => {
+              const entity = await getEntity(ctx.env.DB, eid);
+              if (!entity) return null;
+              const [from, to, mems] = await Promise.all([
+                getRelationsFrom(ctx.env.DB, eid, { limit: 5 }),
+                getRelationsTo(ctx.env.DB, eid, { limit: 5 }),
+                getMemoriesForEntity(ctx.env.DB, eid, { limit: 5 }),
+              ]);
+              return {
+                entity: parseEntityRow(entity),
+                relations: [...from, ...to].map(parseRelationRow),
+                memories: mems.map(parseMemoryRow),
+              };
+            }),
+          )
+        ).filter(Boolean);
 
         const topMemories = await recallMemories(ctx.env.DB, ctx.params.namespace_id, {
           limit: Math.max(1, limit - entityIds.length),
@@ -71,7 +81,7 @@ export function registerSearchRoutes(): void {
         const response = json({
           matches: projectRows(pagedMatches, fields),
           entities,
-          top_memories: topMemories,
+          top_memories: topMemories.map(parseMemoryRow),
         });
         const cursor = nextCursor(offset, limit, hasMore);
         if (cursor) response.headers.set("X-Next-Cursor", cursor);
@@ -115,7 +125,13 @@ export function registerSearchRoutes(): void {
                 kind: {
                   type: "string",
                   enum: ["entity", "memory", "message"],
-                  description: "Filter by type",
+                  description: "Filter by kind",
+                },
+                type: {
+                  type: "string",
+                  maxLength: 200,
+                  description:
+                    "Filter by entity type (person, concept, ...) or memory type (fact, observation, ...)",
                 },
                 limit: {
                   type: "integer",

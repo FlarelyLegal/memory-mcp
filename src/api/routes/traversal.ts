@@ -3,6 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, handleError } from "../middleware.js";
 import { traverse } from "../../graph/index.js";
 import { assertEntityAccess } from "../../auth.js";
+import { parseEntityRow, parseRelationRow } from "../row-parsers.js";
 
 export function registerTraversalRoutes(): void {
   defineRoute(
@@ -19,7 +20,10 @@ export function registerTraversalRoutes(): void {
           maxDepth,
           relationTypes,
         });
-        return json(result);
+        return json({
+          entities: result.entities.map(parseEntityRow),
+          relations: result.relations.map(parseRelationRow),
+        });
       } catch (e) {
         return handleError(e);
       }

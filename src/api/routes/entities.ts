@@ -3,7 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { createEntity, searchEntities } from "../../graph/index.js";
 import { assertNamespaceAccess } from "../../auth.js";
-import { upsertEntityVector } from "../../embeddings.js";
+import { upsertEntityVector } from "../../vectorize.js";
 import {
   nsPathParam,
   limitQueryParam,

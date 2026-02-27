@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
 import * as memories from "../memories.js";
-import * as embeddings from "../embeddings.js";
+import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess, assertMemoryAccess } from "../auth.js";
 import { txt, ok, cap, trunc } from "../response-helpers.js";
 
@@ -13,14 +13,25 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
     "Create, update, or delete a memory (knowledge fragment).",
     {
       action: z.enum(["create", "update", "delete"]),
-      id: z.string().max(100).optional().describe("Required for update/delete"),
-      namespace_id: z.string().max(100).optional().describe("Required for create"),
-      content: z.string().max(10000).optional().describe("Required for create"),
+      id: z.string().uuid().optional().describe("Required for update/delete"),
+      namespace_id: z.string().uuid().optional().describe("Required for create"),
+      content: z.string().min(1).max(10000).optional().describe("Required for create"),
       type: z.enum(["fact", "observation", "preference", "instruction"]).optional(),
-      importance: z.number().optional().describe("0.0-1.0, higher decays slower"),
-      source: z.string().max(500).optional(),
-      entity_ids: z.array(z.string().max(100)).max(100).optional().describe("Link to entities"),
+      importance: z.number().min(0).max(1).optional().describe("0.0-1.0, higher decays slower"),
+      source: z.string().max(500).optional().describe("Create only: where this came from"),
+      entity_ids: z
+        .array(z.string().uuid())
+        .max(100)
+        .optional()
+        .describe("Create only: link to entities"),
       metadata: z.string().max(5000).optional(),
+    },
+    {
+      title: "Manage Memory",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
     },
     async ({
       action,
@@ -47,7 +58,7 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
             entity_ids,
             metadata: meta,
           });
-          await embeddings.upsertMemoryVector(env, {
+          await vectorize.upsertMemoryVector(env, {
             memory_id: mid,
             namespace_id,
             content,
@@ -57,12 +68,14 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
         }
         case "update": {
           if (!id) return ok("Error: id required");
+          if (!content && !type && importance === undefined && !metadata)
+            return ok("Error: at least one field (content, type, importance, metadata) required");
           await assertMemoryAccess(env.DB, id, email);
           await memories.updateMemory(env.DB, id, { content, type, importance, metadata: meta });
           if (content) {
             const m = await memories.getMemory(env.DB, id);
             if (m)
-              await embeddings.upsertMemoryVector(env, {
+              await vectorize.upsertMemoryVector(env, {
                 memory_id: id,
                 namespace_id: m.namespace_id,
                 content: m.content,
@@ -75,7 +88,7 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
           if (!id) return ok("Error: id required");
           await assertMemoryAccess(env.DB, id, email);
           await memories.deleteMemory(env.DB, id);
-          await embeddings.deleteVector(env, "memory", id);
+          await vectorize.deleteVector(env, "memory", id);
           return ok(`Deleted ${id}`);
         }
       }
@@ -87,13 +100,18 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
     "Retrieve memories. Modes: recall (ranked by importance+recency), search (keyword), entity (linked to an entity).",
     {
       mode: z.enum(["recall", "search", "entity"]),
-      namespace_id: z.string().max(100).optional().describe("Required for recall/search"),
-      entity_id: z.string().max(100).optional().describe("Required for entity mode"),
-      query: z.string().max(1000).optional().describe("Required for search mode"),
+      namespace_id: z.string().uuid().optional().describe("Required for recall/search"),
+      entity_id: z.string().uuid().optional().describe("Required for entity mode"),
+      query: z.string().min(1).max(1000).optional().describe("Required for search mode"),
       type: z.enum(["fact", "observation", "preference", "instruction"]).optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
+    },
+    {
+      title: "Query Memories",
+      readOnlyHint: true,
+      openWorldHint: false,
     },
     async ({ mode, namespace_id, entity_id, query, type, limit, compact, verbose }) => {
       const n = cap(limit, 50, 20);

@@ -2,7 +2,7 @@
  * Memory operations: standalone knowledge fragments with temporal decay.
  */
 import type { MemoryRow } from "./types.js";
-import { generateId, now, toJson, decayScore } from "./utils.js";
+import { generateId, now, toJson, decayScore, ftsEscape } from "./utils.js";
 
 export async function createMemory(
   db: D1Database,
@@ -45,16 +45,16 @@ export async function createMemory(
 }
 
 export async function getMemory(db: D1Database, id: string): Promise<MemoryRow | null> {
-  const row = await db.prepare(`SELECT * FROM memories WHERE id = ?`).bind(id).first<MemoryRow>();
-  if (row) {
-    await db
+  const [selectResult] = await db.batch([
+    db.prepare(`SELECT * FROM memories WHERE id = ?`).bind(id),
+    db
       .prepare(
         `UPDATE memories SET last_accessed_at = ?, access_count = access_count + 1 WHERE id = ?`,
       )
-      .bind(now(), id)
-      .run();
-  }
-  return row;
+      .bind(now(), id),
+  ]);
+  const rows = selectResult.results as unknown as MemoryRow[];
+  return rows[0] ?? null;
 }
 
 export async function searchMemories(
@@ -62,9 +62,38 @@ export async function searchMemories(
   namespace_id: string,
   opts: { query?: string; type?: string; limit?: number; offset?: number },
 ): Promise<MemoryRow[]> {
+  const limit = opts.limit ?? 20;
+  const offset = opts.offset ?? 0;
+
+  // FTS5 path: BM25-ranked full-text search
+  if (opts.query) {
+    try {
+      const clauses: string[] = ["m.namespace_id = ?"];
+      const params: unknown[] = [namespace_id];
+      if (opts.type) {
+        clauses.push("m.type = ?");
+        params.push(opts.type);
+      }
+      const ftsQuery = ftsEscape(opts.query);
+      params.push(ftsQuery, limit, offset);
+      const sql =
+        `SELECT m.*, bm25(memories_fts) AS rank FROM memories m` +
+        ` JOIN memories_fts ON memories_fts.rowid = m.rowid` +
+        ` WHERE ${clauses.join(" AND ")} AND memories_fts MATCH ?` +
+        ` ORDER BY rank LIMIT ? OFFSET ?`;
+      const result = await db
+        .prepare(sql)
+        .bind(...params)
+        .all<MemoryRow>();
+      if (result.results.length > 0 || result.success) return result.results;
+    } catch {
+      // FTS table doesn't exist yet — fall through to LIKE
+    }
+  }
+
+  // Fallback: LIKE-based search
   const clauses: string[] = ["namespace_id = ?"];
   const params: unknown[] = [namespace_id];
-
   if (opts.type) {
     clauses.push("type = ?");
     params.push(opts.type);
@@ -73,10 +102,7 @@ export async function searchMemories(
     clauses.push("content LIKE ?");
     params.push(`%${opts.query}%`);
   }
-
-  const limit = opts.limit ?? 20;
-  params.push(limit, opts.offset ?? 0);
-
+  params.push(limit, offset);
   const sql =
     `SELECT * FROM memories WHERE ${clauses.join(" AND ")}` +
     ` ORDER BY importance DESC, last_accessed_at DESC LIMIT ? OFFSET ?`;

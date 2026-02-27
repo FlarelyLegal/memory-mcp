@@ -8,6 +8,20 @@
 
 import type { NamespaceRow } from "./types.js";
 
+const ADMIN_KEY = "admin:emails";
+
+/**
+ * Check if an email is in the admin allowlist stored in KV.
+ * Key: `admin:emails`, value: comma-separated emails.
+ * Returns false when the key is missing (fail-closed).
+ */
+export async function isAdmin(kv: KVNamespace, email: string): Promise<boolean> {
+  const raw = await kv.get(ADMIN_KEY);
+  if (!raw) return false;
+  const admins = raw.split(",").map((e) => e.trim().toLowerCase());
+  return admins.includes(email.toLowerCase());
+}
+
 export class AccessDeniedError extends Error {
   constructor(message = "Access denied") {
     super(message);
@@ -41,85 +55,49 @@ export async function assertNamespaceAccess(
 }
 
 /**
- * Look up which namespace an entity belongs to, then verify access.
+ * Generic: look up a resource's namespace and verify ownership in a single JOIN.
+ * Returns the namespace_id on success.
  */
-export async function assertEntityAccess(
+async function assertResourceAccess(
   db: D1Database,
-  entityId: string,
+  table: string,
+  resourceId: string,
+  resourceLabel: string,
   email: string,
 ): Promise<string> {
   const row = await db
-    .prepare(`SELECT namespace_id FROM entities WHERE id = ?`)
-    .bind(entityId)
-    .first<{ namespace_id: string }>();
+    .prepare(
+      `SELECT r.namespace_id, n.owner FROM ${table} r ` +
+        `JOIN namespaces n ON n.id = r.namespace_id WHERE r.id = ?`,
+    )
+    .bind(resourceId)
+    .first<{ namespace_id: string; owner: string | null }>();
 
-  if (!row) {
-    throw new AccessDeniedError("Entity not found");
-  }
-
-  await assertNamespaceAccess(db, row.namespace_id, email);
+  if (!row) throw new AccessDeniedError(`${resourceLabel} not found`);
+  if (row.owner !== email) throw new AccessDeniedError("You do not have access to this namespace");
   return row.namespace_id;
 }
 
-/**
- * Look up which namespace a memory belongs to, then verify access.
- */
-export async function assertMemoryAccess(
-  db: D1Database,
-  memoryId: string,
-  email: string,
-): Promise<string> {
-  const row = await db
-    .prepare(`SELECT namespace_id FROM memories WHERE id = ?`)
-    .bind(memoryId)
-    .first<{ namespace_id: string }>();
-
-  if (!row) {
-    throw new AccessDeniedError("Memory not found");
-  }
-
-  await assertNamespaceAccess(db, row.namespace_id, email);
-  return row.namespace_id;
+/** Look up which namespace an entity belongs to, then verify access. */
+export function assertEntityAccess(db: D1Database, id: string, email: string): Promise<string> {
+  return assertResourceAccess(db, "entities", id, "Entity", email);
 }
 
-/**
- * Look up which namespace a conversation belongs to, then verify access.
- */
-export async function assertConversationAccess(
-  db: D1Database,
-  conversationId: string,
-  email: string,
-): Promise<string> {
-  const row = await db
-    .prepare(`SELECT namespace_id FROM conversations WHERE id = ?`)
-    .bind(conversationId)
-    .first<{ namespace_id: string }>();
-
-  if (!row) {
-    throw new AccessDeniedError("Conversation not found");
-  }
-
-  await assertNamespaceAccess(db, row.namespace_id, email);
-  return row.namespace_id;
+/** Look up which namespace a memory belongs to, then verify access. */
+export function assertMemoryAccess(db: D1Database, id: string, email: string): Promise<string> {
+  return assertResourceAccess(db, "memories", id, "Memory", email);
 }
 
-/**
- * Look up which namespace a relation belongs to, then verify access.
- */
-export async function assertRelationAccess(
+/** Look up which namespace a conversation belongs to, then verify access. */
+export function assertConversationAccess(
   db: D1Database,
-  relationId: string,
+  id: string,
   email: string,
 ): Promise<string> {
-  const row = await db
-    .prepare(`SELECT namespace_id FROM relations WHERE id = ?`)
-    .bind(relationId)
-    .first<{ namespace_id: string }>();
+  return assertResourceAccess(db, "conversations", id, "Conversation", email);
+}
 
-  if (!row) {
-    throw new AccessDeniedError("Relation not found");
-  }
-
-  await assertNamespaceAccess(db, row.namespace_id, email);
-  return row.namespace_id;
+/** Look up which namespace a relation belongs to, then verify access. */
+export function assertRelationAccess(db: D1Database, id: string, email: string): Promise<string> {
+  return assertResourceAccess(db, "relations", id, "Relation", email);
 }

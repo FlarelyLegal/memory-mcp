@@ -3,7 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { addMessage, getMessages, getConversation, searchMessages } from "../../conversations.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../../auth.js";
-import { upsertMessageVector } from "../../embeddings.js";
+import { upsertMessageVector } from "../../vectorize.js";
 import {
   nsPathParam,
   idPathParam,
@@ -15,6 +15,7 @@ import {
 } from "../schemas.js";
 import { messageCreateSchema, searchMessagesQuerySchema } from "../validators.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
+import { parseMessageRow } from "../row-parsers.js";
 import { enforceSearchRateLimit } from "../rate-limit.js";
 
 export function registerMessageRoutes(): void {
@@ -43,7 +44,7 @@ export function registerMessageRoutes(): void {
           offset,
         });
         const hasMore = rows.length > limit;
-        const data = projectRows(rows.slice(0, limit), fields);
+        const data = projectRows(rows.slice(0, limit).map(parseMessageRow), fields);
         const response = json(data);
         const cursor = nextCursor(offset, limit, hasMore);
         if (cursor) response.headers.set("X-Next-Cursor", cursor);
@@ -189,7 +190,7 @@ export function registerMessageRoutes(): void {
           offset,
         });
         const hasMore = rows.length > limit;
-        const data = projectRows(rows.slice(0, limit), fields);
+        const data = projectRows(rows.slice(0, limit).map(parseMessageRow), fields);
         const response = json(data);
         const cursor = nextCursor(offset, limit, hasMore);
         if (cursor) response.headers.set("X-Next-Cursor", cursor);

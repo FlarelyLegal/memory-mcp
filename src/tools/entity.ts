@@ -3,9 +3,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
 import * as graph from "../graph/index.js";
-import * as embeddings from "../embeddings.js";
+import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess } from "../auth.js";
-import { parseJson } from "../utils.js";
+import { parseJson, toISO } from "../utils.js";
 import { txt, ok, cap, trunc } from "../response-helpers.js";
 
 export function registerEntityTools(server: McpServer, env: Env, email: string) {
@@ -14,14 +14,22 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
     "CRUD for graph entities. Actions: create, get, update, delete.",
     {
       action: z.enum(["create", "get", "update", "delete"]),
-      id: z.string().max(100).optional().describe("Required for get/update/delete"),
-      namespace_id: z.string().max(100).optional().describe("Required for create"),
-      name: z.string().max(200).optional(),
-      type: z.string().max(200).optional().describe("person, concept, project, tool, etc."),
+      id: z.string().uuid().optional().describe("Required for get/update/delete"),
+      namespace_id: z.string().uuid().optional().describe("Required for create"),
+      name: z.string().min(1).max(200).optional(),
+      type: z.string().min(1).max(200).optional().describe("person, concept, project, tool, etc."),
       summary: z.string().max(10000).optional(),
       metadata: z.string().max(5000).optional().describe("JSON string"),
+      compact: z.boolean().optional().describe("Default true: return minimal fields (get only)"),
     },
-    async ({ action, id, namespace_id, name, type, summary, metadata }) => {
+    {
+      title: "Manage Entity",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ action, id, namespace_id, name, type, summary, metadata, compact }) => {
       const meta = metadata ? JSON.parse(metadata) : undefined;
       switch (action) {
         case "create": {
@@ -35,7 +43,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
             summary,
             metadata: meta,
           });
-          await embeddings.upsertEntityVector(env, {
+          await vectorize.upsertEntityVector(env, {
             entity_id: eid,
             namespace_id,
             name,
@@ -49,22 +57,34 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
           await assertEntityAccess(env.DB, id, email);
           const e = await graph.getEntity(env.DB, id);
           if (!e) return ok("Not found");
-          return txt({
-            id: e.id,
-            name: e.name,
-            type: e.type,
-            summary: e.summary,
-            metadata: parseJson(e.metadata),
-          });
+          const isCompact = compact ?? true;
+          return txt(
+            isCompact
+              ? { id: e.id, name: e.name, type: e.type, summary: e.summary }
+              : {
+                  id: e.id,
+                  namespace_id: e.namespace_id,
+                  name: e.name,
+                  type: e.type,
+                  summary: e.summary,
+                  metadata: parseJson(e.metadata),
+                  created_at: toISO(e.created_at),
+                  updated_at: toISO(e.updated_at),
+                  last_accessed_at: toISO(e.last_accessed_at),
+                  access_count: e.access_count,
+                },
+          );
         }
         case "update": {
           if (!id) return ok("Error: id required");
+          if (!name && !type && !summary && !metadata)
+            return ok("Error: at least one field (name, type, summary, metadata) required");
           await assertEntityAccess(env.DB, id, email);
           await graph.updateEntity(env.DB, id, { name, type, summary, metadata: meta });
           if (name || type || summary) {
             const e = await graph.getEntity(env.DB, id);
             if (e)
-              await embeddings.upsertEntityVector(env, {
+              await vectorize.upsertEntityVector(env, {
                 entity_id: id,
                 namespace_id: e.namespace_id,
                 name: e.name,
@@ -78,7 +98,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
           if (!id) return ok("Error: id required");
           await assertEntityAccess(env.DB, id, email);
           await graph.deleteEntity(env.DB, id);
-          await embeddings.deleteVector(env, "entity", id);
+          await vectorize.deleteVector(env, "entity", id);
           return ok(`Deleted ${id}`);
         }
       }
@@ -89,12 +109,17 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
     "find_entities",
     "Search entities by name/type/keyword in a namespace.",
     {
-      namespace_id: z.string().max(100),
-      query: z.string().max(1000).optional(),
+      namespace_id: z.string().uuid(),
+      query: z.string().min(1).max(1000).optional(),
       type: z.string().max(200).optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
+    },
+    {
+      title: "Find Entities",
+      readOnlyHint: true,
+      openWorldHint: false,
     },
     async ({ namespace_id, query, type, limit, compact, verbose }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
@@ -114,6 +139,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
                 name: r.name,
                 type: r.type,
                 summary: full ? r.summary : trunc(r.summary),
+                metadata: parseJson(r.metadata),
               },
         ),
       );

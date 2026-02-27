@@ -3,7 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { createMemory, getMemory, updateMemory, deleteMemory } from "../../memories.js";
 import { assertNamespaceAccess, assertMemoryAccess } from "../../auth.js";
-import { upsertMemoryVector, deleteVector } from "../../embeddings.js";
+import { upsertMemoryVector, deleteVector } from "../../vectorize.js";
 import {
   nsPathParam,
   idPathParam,
