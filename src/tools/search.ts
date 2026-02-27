@@ -54,37 +54,49 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
         return txt({ matches: semanticResults.map(mapMatch) });
       }
 
-      // Context mode: enrich entity matches with graph + memories
-      const entityContext: unknown[] = [];
-      for (const result of semanticResults.filter((r) => r.kind === "entity")) {
-        const eid = result.metadata.entity_id;
-        if (!eid) continue;
-        const [entity, outRels, inRels, entityMems] = await Promise.all([
-          graph.getEntity(env.DB, eid),
-          graph.getRelationsFrom(env.DB, eid, { limit: 5 }),
-          graph.getRelationsTo(env.DB, eid, { limit: 5 }),
-          memories.getMemoriesForEntity(env.DB, eid, { limit: 5 }),
-        ]);
-        entityContext.push({
-          entity: entity
-            ? {
-                id: entity.id,
-                name: entity.name,
-                type: entity.type,
-                ...(isCompact ? {} : { summary: full ? entity.summary : trunc(entity.summary) }),
-              }
-            : null,
-          relations: [
-            ...outRels.map((r) => ({ id: r.id, target_id: r.target_id, type: r.relation_type })),
-            ...inRels.map((r) => ({ id: r.id, source_id: r.source_id, type: r.relation_type })),
-          ],
-          memories: entityMems.map((m) =>
-            isCompact
-              ? { id: m.id, type: m.type }
-              : { id: m.id, content: trunc(m.content), type: m.type },
-          ),
-        });
-      }
+      // Context mode: enrich entity matches with graph + memories (parallel)
+      const entityContext = await Promise.all(
+        semanticResults
+          .filter((r) => r.kind === "entity" && r.metadata.entity_id)
+          .map(async (result) => {
+            const eid = result.metadata.entity_id;
+            const [entity, outRels, inRels, entityMems] = await Promise.all([
+              graph.getEntity(env.DB, eid),
+              graph.getRelationsFrom(env.DB, eid, { limit: 5 }),
+              graph.getRelationsTo(env.DB, eid, { limit: 5 }),
+              memories.getMemoriesForEntity(env.DB, eid, { limit: 5 }),
+            ]);
+            return {
+              entity: entity
+                ? {
+                    id: entity.id,
+                    name: entity.name,
+                    type: entity.type,
+                    ...(isCompact
+                      ? {}
+                      : { summary: full ? entity.summary : trunc(entity.summary) }),
+                  }
+                : null,
+              relations: [
+                ...outRels.map((r) => ({
+                  id: r.id,
+                  target_id: r.target_id,
+                  type: r.relation_type,
+                })),
+                ...inRels.map((r) => ({
+                  id: r.id,
+                  source_id: r.source_id,
+                  type: r.relation_type,
+                })),
+              ],
+              memories: entityMems.map((m) =>
+                isCompact
+                  ? { id: m.id, type: m.type }
+                  : { id: m.id, content: trunc(m.content), type: m.type },
+              ),
+            };
+          }),
+      );
       const entityIds = semanticResults.filter((r) => r.kind === "entity").length;
       const ranked = await memories.recallMemories(env.DB, namespace_id, {
         limit: Math.max(1, n - entityIds),

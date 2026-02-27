@@ -31,16 +31,16 @@ export async function createEntity(
 }
 
 export async function getEntity(db: D1Database, id: string): Promise<EntityRow | null> {
-  const row = await db.prepare(`SELECT * FROM entities WHERE id = ?`).bind(id).first<EntityRow>();
-  if (row) {
-    await db
+  const [selectResult] = await db.batch([
+    db.prepare(`SELECT * FROM entities WHERE id = ?`).bind(id),
+    db
       .prepare(
         `UPDATE entities SET last_accessed_at = ?, access_count = access_count + 1 WHERE id = ?`,
       )
-      .bind(now(), id)
-      .run();
-  }
-  return row;
+      .bind(now(), id),
+  ]);
+  const rows = selectResult.results as unknown as EntityRow[];
+  return rows[0] ?? null;
 }
 
 export async function searchEntities(

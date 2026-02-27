@@ -45,16 +45,16 @@ export async function createMemory(
 }
 
 export async function getMemory(db: D1Database, id: string): Promise<MemoryRow | null> {
-  const row = await db.prepare(`SELECT * FROM memories WHERE id = ?`).bind(id).first<MemoryRow>();
-  if (row) {
-    await db
+  const [selectResult] = await db.batch([
+    db.prepare(`SELECT * FROM memories WHERE id = ?`).bind(id),
+    db
       .prepare(
         `UPDATE memories SET last_accessed_at = ?, access_count = access_count + 1 WHERE id = ?`,
       )
-      .bind(now(), id)
-      .run();
-  }
-  return row;
+      .bind(now(), id),
+  ]);
+  const rows = selectResult.results as unknown as MemoryRow[];
+  return rows[0] ?? null;
 }
 
 export async function searchMemories(

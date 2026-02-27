@@ -42,10 +42,13 @@ export async function rerank(
   }
 }
 
+/** D1 max bound parameters per query. */
+const MAX_PARAMS = 100;
+
 /**
  * Build display text for a Vectorize match so the reranker can score it.
  * For entities, we reconstruct from metadata. For memories and messages,
- * we batch-fetch content from D1.
+ * we batch-fetch content from D1 (chunked at 100 for D1 param limit).
  */
 export async function hydrateTexts(
   db: D1Database,
@@ -74,31 +77,32 @@ export async function hydrateTexts(
     }
   }
 
-  // Batch-fetch memory content
-  if (memoryIds.length > 0) {
-    const placeholders = memoryIds.map(() => "?").join(",");
-    const result = await db
-      .prepare(`SELECT id, content FROM memories WHERE id IN (${placeholders})`)
-      .bind(...memoryIds.map((m) => m.id))
-      .all<{ id: string; content: string }>();
-    const contentMap = new Map(result.results.map((r) => [r.id, r.content]));
-    for (const { idx, id } of memoryIds) {
-      texts[idx] = contentMap.get(id) ?? texts[idx];
-    }
-  }
-
-  // Batch-fetch message content
-  if (messageIds.length > 0) {
-    const placeholders = messageIds.map(() => "?").join(",");
-    const result = await db
-      .prepare(`SELECT id, content FROM messages WHERE id IN (${placeholders})`)
-      .bind(...messageIds.map((m) => m.id))
-      .all<{ id: string; content: string }>();
-    const contentMap = new Map(result.results.map((r) => [r.id, r.content]));
-    for (const { idx, id } of messageIds) {
-      texts[idx] = contentMap.get(id) ?? texts[idx];
-    }
-  }
+  // Batch-fetch memory content (chunked for D1 param limit)
+  await batchHydrate(db, "memories", memoryIds, texts);
+  // Batch-fetch message content (chunked for D1 param limit)
+  await batchHydrate(db, "messages", messageIds, texts);
 
   return texts;
+}
+
+/** Fetch content from a table in chunks of MAX_PARAMS and fill `texts`. */
+async function batchHydrate(
+  db: D1Database,
+  table: string,
+  entries: { idx: number; id: string }[],
+  texts: string[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  for (let i = 0; i < entries.length; i += MAX_PARAMS) {
+    const chunk = entries.slice(i, i + MAX_PARAMS);
+    const ph = chunk.map(() => "?").join(",");
+    const result = await db
+      .prepare(`SELECT id, content FROM ${table} WHERE id IN (${ph})`)
+      .bind(...chunk.map((c) => c.id))
+      .all<{ id: string; content: string }>();
+    const contentMap = new Map(result.results.map((r) => [r.id, r.content]));
+    for (const { idx, id } of chunk) {
+      texts[idx] = contentMap.get(id) ?? texts[idx];
+    }
+  }
 }

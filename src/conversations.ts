@@ -47,18 +47,16 @@ export async function addMessage(
 ): Promise<string> {
   const id = generateId();
   const ts = now();
-  await db
-    .prepare(
-      `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(id, opts.conversation_id, opts.role, opts.content, toJson(opts.metadata ?? null), ts)
-    .run();
-
-  // Update conversation timestamp
-  await db
-    .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
-    .bind(ts, opts.conversation_id)
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(id, opts.conversation_id, opts.role, opts.content, toJson(opts.metadata ?? null), ts),
+    db
+      .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
+      .bind(ts, opts.conversation_id),
+  ]);
 
   return id;
 }

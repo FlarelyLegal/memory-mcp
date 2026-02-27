@@ -32,7 +32,10 @@ CREATE TRIGGER IF NOT EXISTS entities_fts_delete AFTER DELETE ON entities BEGIN
     VALUES ('delete', old.rowid, old.name, old.type, old.summary);
 END;
 
-CREATE TRIGGER IF NOT EXISTS entities_fts_update AFTER UPDATE ON entities BEGIN
+CREATE TRIGGER IF NOT EXISTS entities_fts_update AFTER UPDATE ON entities
+  WHEN old.name != new.name OR old.type != new.type
+       OR COALESCE(old.summary, '') != COALESCE(new.summary, '')
+BEGIN
   INSERT INTO entities_fts(entities_fts, rowid, name, type, summary)
     VALUES ('delete', old.rowid, old.name, old.type, old.summary);
   INSERT INTO entities_fts(rowid, name, type, summary)
@@ -49,7 +52,9 @@ CREATE TRIGGER IF NOT EXISTS memories_fts_delete AFTER DELETE ON memories BEGIN
     VALUES ('delete', old.rowid, old.content);
 END;
 
-CREATE TRIGGER IF NOT EXISTS memories_fts_update AFTER UPDATE ON memories BEGIN
+CREATE TRIGGER IF NOT EXISTS memories_fts_update AFTER UPDATE ON memories
+  WHEN old.content != new.content
+BEGIN
   INSERT INTO memories_fts(memories_fts, rowid, content)
     VALUES ('delete', old.rowid, old.content);
   INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
@@ -65,7 +70,9 @@ CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages BEGIN
     VALUES ('delete', old.rowid, old.content);
 END;
 
-CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE ON messages BEGIN
+CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE ON messages
+  WHEN old.content != new.content
+BEGIN
   INSERT INTO messages_fts(messages_fts, rowid, content)
     VALUES ('delete', old.rowid, old.content);
   INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
