@@ -21,6 +21,8 @@ config:
   - changed-files:
       - any-glob-to-any-file:
           - "wrangler.jsonc"
+          - "wrangler-a.jsonc"
+          - "wrangler-b.jsonc"
           - "package.json"
           - "tsconfig.json"
 
@@ -39,3 +41,5 @@ cloudflare:
   - changed-files:
       - any-glob-to-any-file:
           - "wrangler.jsonc"
+          - "wrangler-a.jsonc"
+          - "wrangler-b.jsonc"

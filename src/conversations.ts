@@ -23,12 +23,15 @@ export async function getConversation(db: D1Database, id: string): Promise<Conve
 export async function listConversations(
   db: D1Database,
   namespace_id: string,
-  opts?: { limit?: number },
+  opts?: { limit?: number; offset?: number },
 ): Promise<ConversationRow[]> {
   const limit = opts?.limit ?? 20;
+  const offset = opts?.offset ?? 0;
   const result = await db
-    .prepare(`SELECT * FROM conversations WHERE namespace_id = ? ORDER BY updated_at DESC LIMIT ?`)
-    .bind(namespace_id, limit)
+    .prepare(
+      `SELECT * FROM conversations WHERE namespace_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+    )
+    .bind(namespace_id, limit, offset)
     .all<ConversationRow>();
   return result.results;
 }
@@ -63,7 +66,7 @@ export async function addMessage(
 export async function getMessages(
   db: D1Database,
   conversation_id: string,
-  opts?: { limit?: number; before?: number },
+  opts?: { limit?: number; before?: number; offset?: number },
 ): Promise<MessageRow[]> {
   const clauses: string[] = ["conversation_id = ?"];
   const params: unknown[] = [conversation_id];
@@ -74,9 +77,11 @@ export async function getMessages(
   }
 
   const limit = opts?.limit ?? 50;
-  params.push(limit);
+  params.push(limit, opts?.offset ?? 0);
 
-  const sql = `SELECT * FROM messages WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC LIMIT ?`;
+  const sql =
+    `SELECT * FROM messages WHERE ${clauses.join(" AND ")}` +
+    ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
   const result = await db
     .prepare(sql)
     .bind(...params)
@@ -89,9 +94,10 @@ export async function searchMessages(
   db: D1Database,
   namespace_id: string,
   query: string,
-  opts?: { limit?: number },
+  opts?: { limit?: number; offset?: number },
 ): Promise<(MessageRow & { conversation_title: string | null })[]> {
   const limit = opts?.limit ?? 20;
+  const offset = opts?.offset ?? 0;
   const result = await db
     .prepare(
       `SELECT m.*, c.title as conversation_title
@@ -99,9 +105,9 @@ export async function searchMessages(
        JOIN conversations c ON c.id = m.conversation_id
        WHERE c.namespace_id = ? AND m.content LIKE ?
        ORDER BY m.created_at DESC
-       LIMIT ?`,
+       LIMIT ? OFFSET ?`,
     )
-    .bind(namespace_id, `%${query}%`, limit)
+    .bind(namespace_id, `%${query}%`, limit, offset)
     .all<MessageRow & { conversation_title: string | null }>();
   return result.results;
 }

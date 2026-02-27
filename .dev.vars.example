@@ -4,12 +4,16 @@ ACCESS_CLIENT_SECRET=your-saas-app-client-secret
 ACCESS_TOKEN_URL=https://your-team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/your-app-id/token
 ACCESS_AUTHORIZATION_URL=https://your-team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/your-app-id/authorize
 
-# Cloudflare Access application protecting your Worker's domain
-# Find under: Zero Trust > Access > Applications > your app > Overview
-ACCESS_AUD_TAG=your-access-application-audience-tag
+# Cloudflare Access audience tag(s) accepted for JWT verification.
+# Comma-separate when using both self-hosted and SaaS Access apps.
+ACCESS_AUD_TAG=your-self-hosted-aud-tag,your-saas-aud-tag
 
-# JWKS endpoint for your team — used to verify JWT signatures
-ACCESS_JWKS_URL=https://your-team.cloudflareaccess.com/cdn-cgi/access/certs
+# JWKS endpoint(s) used to verify JWT signatures.
+# Comma-separate team-level and SaaS-app-specific JWKS URLs when needed.
+ACCESS_JWKS_URL=https://your-team.cloudflareaccess.com/cdn-cgi/access/certs,https://your-team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/your-saas-app-id/jwks
+
+# Optional issuer allowlist. If omitted, issuer defaults to JWKS URL origins.
+# ACCESS_ISSUER=https://your-team.cloudflareaccess.com
 
 # Random key for encrypting OAuth cookies — generate with: openssl rand -hex 32
 COOKIE_ENCRYPTION_KEY=generate-with-openssl-rand-hex-32

@@ -47,7 +47,14 @@ export function defineRoute(
   pattern: string,
   handler: (ctx: ApiContext, request: Request) => Promise<Response>,
   spec: PathOperation,
-  options?: { public?: boolean },
+  options?: { public?: boolean; allowUnboundServiceToken?: boolean },
 ): void {
-  register({ method, pattern, handler, spec, public: options?.public });
+  register({
+    method,
+    pattern,
+    handler,
+    spec,
+    public: options?.public,
+    allowUnboundServiceToken: options?.allowUnboundServiceToken,
+  });
 }

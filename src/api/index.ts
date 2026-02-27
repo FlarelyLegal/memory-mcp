@@ -8,7 +8,7 @@
 import type { Env } from "../types.js";
 import type { HttpMethod } from "./types.js";
 import { matchRoute } from "./registry.js";
-import { authenticate, json, jsonError } from "./middleware.js";
+import { authenticateIdentity, json, jsonError } from "./middleware.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { renderScalarDocs } from "./docs.js";
 
@@ -86,30 +86,65 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   // --- Auth (skip for explicitly public routes) ---
 
   if (!route.public) {
-    const result = await authenticate(request, env);
-    if (result instanceof Response) return withCors(result);
+    const result = await authenticateIdentity(request, env, {
+      allowUnboundServiceToken: route.allowUnboundServiceToken,
+    });
+    if (result instanceof Response) return withCors(request, result);
 
-    const ctx = { env, email: result, params, query: url.searchParams };
-    return withCors(await route.handler(ctx, request));
+    const ctx = { env, email: result.email ?? "", auth: result, params, query: url.searchParams };
+    return withCors(request, await route.handler(ctx, request));
   }
 
-  const ctx = { env, email: "", params, query: url.searchParams };
-  return withCors(await route.handler(ctx, request));
+  const ctx = {
+    env,
+    email: "",
+    auth: { type: "human", email: "" } as const,
+    params,
+    query: url.searchParams,
+  };
+  return withCors(request, await route.handler(ctx, request));
 }
 
 function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cf-Access-Jwt-Assertion",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, Cf-Access-Jwt-Assertion, cf-access-token, CF-Access-Client-Id",
     "Access-Control-Max-Age": "86400",
   };
 }
 
-function withCors(response: Response): Response {
+function supportsGzip(request: Request): boolean {
+  return request.headers.get("Accept-Encoding")?.includes("gzip") ?? false;
+}
+
+async function maybeGzip(request: Request, response: Response): Promise<Response> {
+  if (!supportsGzip(request)) return response;
+  if (response.headers.has("Content-Encoding")) return response;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!/^(application\/json|text\/plain|text\/html)/.test(contentType)) return response;
+
+  const text = await response.clone().text();
+  // Keep CPU overhead low; Cloudflare edge compression also applies.
+  if (text.length < 8192) return response;
+
+  const stream = new CompressionStream("gzip");
+  const writer = stream.writable.getWriter();
+  await writer.write(new TextEncoder().encode(text));
+  await writer.close();
+
+  const headers = new Headers(response.headers);
+  headers.set("Content-Encoding", "gzip");
+  headers.set("Vary", "Accept-Encoding");
+  headers.delete("Content-Length");
+  return new Response(stream.readable, { status: response.status, headers });
+}
+
+async function withCors(request: Request, response: Response): Promise<Response> {
   const patched = new Response(response.body, response);
   for (const [k, v] of Object.entries(corsHeaders())) {
     patched.headers.set(k, v);
   }
-  return patched;
+  return maybeGzip(request, patched);
 }

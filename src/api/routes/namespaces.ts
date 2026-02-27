@@ -3,6 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
 import { createNamespace, listNamespaces } from "../../graph/index.js";
 import { namespaceSchema } from "../schemas.js";
+import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
@@ -10,8 +11,28 @@ export function registerNamespaceRoutes(): void {
     "/api/v1/namespaces",
     async (ctx) => {
       try {
-        const rows = await listNamespaces(ctx.env.DB, ctx.email);
-        return json(rows);
+        const allowed = [
+          "id",
+          "name",
+          "description",
+          "owner",
+          "metadata",
+          "created_at",
+          "updated_at",
+        ] as const;
+        const fields = parseFields(ctx.query, allowed, {
+          compact: ["id", "name"],
+          full: allowed,
+        });
+        const limit = 50;
+        const offset = parseCursor(ctx.query);
+        const rows = await listNamespaces(ctx.env.DB, ctx.email, { limit: limit + 1, offset });
+        const hasMore = rows.length > limit;
+        const data = projectRows(rows.slice(0, limit), fields);
+        const response = json(data);
+        const cursor = nextCursor(offset, limit, hasMore);
+        if (cursor) response.headers.set("X-Next-Cursor", cursor);
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -21,6 +42,20 @@ export function registerNamespaceRoutes(): void {
       description: "List all namespaces owned by the authenticated user.",
       tags: ["Namespaces"],
       operationId: "listNamespaces",
+      parameters: [
+        {
+          name: "cursor",
+          in: "query",
+          description: "Opaque pagination cursor from X-Next-Cursor",
+          schema: { type: "string" },
+        },
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+      ],
       responses: {
         "200": {
           description: "Array of namespaces",

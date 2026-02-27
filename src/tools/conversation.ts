@@ -5,7 +5,7 @@ import type { Env } from "../types.js";
 import * as conversations from "../conversations.js";
 import * as embeddings from "../embeddings.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../auth.js";
-import { txt, ok, cap } from "../response-helpers.js";
+import { txt, ok, cap, trunc } from "../response-helpers.js";
 
 export function registerConversationTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -17,8 +17,9 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       title: z.string().max(500).optional(),
       metadata: z.string().max(5000).optional(),
       limit: z.number().optional(),
+      compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
-    async ({ action, namespace_id, title, metadata, limit }) => {
+    async ({ action, namespace_id, title, metadata, limit, compact }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
       if (action === "create") {
         const id = await conversations.createConversation(env.DB, {
@@ -28,10 +29,16 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
         });
         return txt({ id, title });
       }
+      const isCompact = compact ?? true;
+      const rows = await conversations.listConversations(env.DB, namespace_id, {
+        limit: cap(limit, 50, 20),
+      });
       return txt(
-        await conversations.listConversations(env.DB, namespace_id, {
-          limit: cap(limit, 50, 20),
-        }),
+        rows.map((r) =>
+          isCompact
+            ? { id: r.id, title: r.title }
+            : { id: r.id, title: r.title, metadata: r.metadata },
+        ),
       );
     },
   );
@@ -88,16 +95,31 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
         .optional()
         .describe("Keyword search across all conversations in namespace"),
       limit: z.number().optional(),
+      compact: z.boolean().optional().describe("Default true: return minimal fields"),
+      verbose: z.boolean().optional().describe("Default false: disable text truncation"),
     },
-    async ({ conversation_id, namespace_id, query, limit }) => {
+    async ({ conversation_id, namespace_id, query, limit, compact, verbose }) => {
       const n = cap(limit, 100, 50);
+      const isCompact = compact ?? true;
+      const full = verbose ?? false;
+      const mapMsg = (m: { id: string; role: string; content: string; created_at: number }) =>
+        isCompact
+          ? { id: m.id, role: m.role }
+          : {
+              id: m.id,
+              role: m.role,
+              content: full ? m.content : trunc(m.content),
+              created_at: m.created_at,
+            };
       if (query && namespace_id) {
         await assertNamespaceAccess(env.DB, namespace_id, email);
-        return txt(await conversations.searchMessages(env.DB, namespace_id, query, { limit: n }));
+        const rows = await conversations.searchMessages(env.DB, namespace_id, query, { limit: n });
+        return txt(rows.map(mapMsg));
       }
       if (!conversation_id) return ok("Error: conversation_id or namespace_id+query required");
       await assertConversationAccess(env.DB, conversation_id, email);
-      return txt(await conversations.getMessages(env.DB, conversation_id, { limit: n }));
+      const rows = await conversations.getMessages(env.DB, conversation_id, { limit: n });
+      return txt(rows.map(mapMsg));
     },
   );
 }

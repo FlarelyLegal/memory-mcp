@@ -1,6 +1,6 @@
 /** Message REST endpoints (get, add, search). */
 import { defineRoute } from "../registry.js";
-import { json, jsonError, parseBody, handleError } from "../middleware.js";
+import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { addMessage, getMessages, getConversation, searchMessages } from "../../conversations.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../../auth.js";
 import { upsertMessageVector } from "../../embeddings.js";
@@ -13,6 +13,9 @@ import {
   metadataSchema,
   roleEnum,
 } from "../schemas.js";
+import { messageCreateSchema, searchMessagesQuerySchema } from "../validators.js";
+import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
+import { enforceSearchRateLimit } from "../rate-limit.js";
 
 export function registerMessageRoutes(): void {
   defineRoute(
@@ -22,8 +25,29 @@ export function registerMessageRoutes(): void {
       try {
         await assertConversationAccess(ctx.env.DB, ctx.params.id, ctx.email);
         const limit = queryLimit(ctx.query, 100, 50);
-        const rows = await getMessages(ctx.env.DB, ctx.params.id, { limit });
-        return json(rows);
+        const offset = parseCursor(ctx.query);
+        const allowed = [
+          "id",
+          "conversation_id",
+          "role",
+          "content",
+          "metadata",
+          "created_at",
+        ] as const;
+        const fields = parseFields(ctx.query, allowed, {
+          compact: ["id", "role", "created_at"],
+          full: allowed,
+        });
+        const rows = await getMessages(ctx.env.DB, ctx.params.id, {
+          limit: limit + 1,
+          offset,
+        });
+        const hasMore = rows.length > limit;
+        const data = projectRows(rows.slice(0, limit), fields);
+        const response = json(data);
+        const cursor = nextCursor(offset, limit, hasMore);
+        if (cursor) response.headers.set("X-Next-Cursor", cursor);
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -33,7 +57,22 @@ export function registerMessageRoutes(): void {
       description: "Get messages from a conversation in chronological order.",
       tags: ["Conversations"],
       operationId: "getMessages",
-      parameters: [idPathParam("Conversation ID"), limitQueryParam(100)],
+      parameters: [
+        idPathParam("Conversation ID"),
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+        {
+          name: "cursor",
+          in: "query",
+          description: "Opaque pagination cursor from X-Next-Cursor",
+          schema: { type: "string" },
+        },
+        limitQueryParam(100),
+      ],
       responses: {
         "200": {
           description: "Array of messages",
@@ -51,13 +90,8 @@ export function registerMessageRoutes(): void {
     async (ctx, request) => {
       try {
         await assertConversationAccess(ctx.env.DB, ctx.params.id, ctx.email);
-        const body = await parseBody<{
-          role?: string;
-          content?: string;
-          metadata?: Record<string, unknown>;
-        }>(request);
+        const body = await parseBodyWithSchema(request, messageCreateSchema);
         if (body instanceof Response) return body;
-        if (!body.role || !body.content) return jsonError("role and content are required", 400);
 
         const msgId = await addMessage(ctx.env.DB, {
           conversation_id: ctx.params.id,
@@ -127,11 +161,39 @@ export function registerMessageRoutes(): void {
     async (ctx) => {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
-        const query = ctx.query.get("q");
-        if (!query) return jsonError("q parameter is required", 400);
+        const rl = await enforceSearchRateLimit(ctx, "message-search");
+        if (rl) return rl;
+        const queryInput = searchMessagesQuerySchema.safeParse({
+          q: ctx.query.get("q") ?? undefined,
+        });
+        if (!queryInput.success) {
+          return jsonError(queryInput.error.issues[0]?.message ?? "Invalid query", 400);
+        }
+        const query = queryInput.data.q;
         const limit = queryLimit(ctx.query, 100, 50);
-        const rows = await searchMessages(ctx.env.DB, ctx.params.namespace_id, query, { limit });
-        return json(rows);
+        const offset = parseCursor(ctx.query);
+        const allowed = [
+          "id",
+          "conversation_id",
+          "role",
+          "content",
+          "metadata",
+          "created_at",
+        ] as const;
+        const fields = parseFields(ctx.query, allowed, {
+          compact: ["id", "role", "created_at"],
+          full: allowed,
+        });
+        const rows = await searchMessages(ctx.env.DB, ctx.params.namespace_id, query, {
+          limit: limit + 1,
+          offset,
+        });
+        const hasMore = rows.length > limit;
+        const data = projectRows(rows.slice(0, limit), fields);
+        const response = json(data);
+        const cursor = nextCursor(offset, limit, hasMore);
+        if (cursor) response.headers.set("X-Next-Cursor", cursor);
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -148,6 +210,18 @@ export function registerMessageRoutes(): void {
           in: "query",
           required: true,
           description: "Search query",
+          schema: { type: "string" },
+        },
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+        {
+          name: "cursor",
+          in: "query",
+          description: "Opaque pagination cursor from X-Next-Cursor",
           schema: { type: "string" },
         },
         limitQueryParam(100),

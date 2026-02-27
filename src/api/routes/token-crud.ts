@@ -4,10 +4,11 @@
  * Collection-level endpoints (bind, list) live in tokens.ts.
  */
 import { defineRoute } from "../registry.js";
-import { json, jsonError, parseBody, handleError } from "../middleware.js";
+import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { ST_PREFIX } from "../service-tokens.js";
 import type { ServiceTokenMapping } from "../service-tokens.js";
 import { tokenSchema } from "../schemas.js";
+import { serviceTokenLabelSchema } from "../validators.js";
 
 const cnParam = {
   name: "common_name",
@@ -60,9 +61,8 @@ export function registerTokenCrudRoutes(): void {
         if (!mapping) return jsonError("Service token not found", 404);
         if (mapping.email !== ctx.email) return jsonError("Access denied", 403);
 
-        const body = await parseBody<{ label?: string }>(request);
+        const body = await parseBodyWithSchema(request, serviceTokenLabelSchema);
         if (body instanceof Response) return body;
-        if (!body.label) return jsonError("label is required", 400);
 
         mapping.label = body.label;
         await ctx.env.CACHE.put(key, JSON.stringify(mapping));

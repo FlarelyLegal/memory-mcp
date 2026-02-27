@@ -46,7 +46,7 @@ export async function getEntity(db: D1Database, id: string): Promise<EntityRow |
 export async function searchEntities(
   db: D1Database,
   namespace_id: string,
-  opts: { query?: string; type?: string; limit?: number },
+  opts: { query?: string; type?: string; limit?: number; offset?: number },
 ): Promise<EntityRow[]> {
   const clauses: string[] = ["namespace_id = ?"];
   const params: unknown[] = [namespace_id];
@@ -61,9 +61,11 @@ export async function searchEntities(
   }
 
   const limit = opts.limit ?? 20;
-  params.push(limit);
+  params.push(limit, opts.offset ?? 0);
 
-  const sql = `SELECT * FROM entities WHERE ${clauses.join(" AND ")} ORDER BY last_accessed_at DESC LIMIT ?`;
+  const sql =
+    `SELECT * FROM entities WHERE ${clauses.join(" AND ")}` +
+    ` ORDER BY last_accessed_at DESC LIMIT ? OFFSET ?`;
   const result = await db
     .prepare(sql)
     .bind(...params)

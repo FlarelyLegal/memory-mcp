@@ -60,7 +60,7 @@ export async function getMemory(db: D1Database, id: string): Promise<MemoryRow |
 export async function searchMemories(
   db: D1Database,
   namespace_id: string,
-  opts: { query?: string; type?: string; limit?: number },
+  opts: { query?: string; type?: string; limit?: number; offset?: number },
 ): Promise<MemoryRow[]> {
   const clauses: string[] = ["namespace_id = ?"];
   const params: unknown[] = [namespace_id];
@@ -75,9 +75,11 @@ export async function searchMemories(
   }
 
   const limit = opts.limit ?? 20;
-  params.push(limit);
+  params.push(limit, opts.offset ?? 0);
 
-  const sql = `SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY importance DESC, last_accessed_at DESC LIMIT ?`;
+  const sql =
+    `SELECT * FROM memories WHERE ${clauses.join(" AND ")}` +
+    ` ORDER BY importance DESC, last_accessed_at DESC LIMIT ? OFFSET ?`;
   const result = await db
     .prepare(sql)
     .bind(...params)
@@ -91,7 +93,7 @@ export async function searchMemories(
 export async function recallMemories(
   db: D1Database,
   namespace_id: string,
-  opts?: { type?: string; limit?: number; halfLifeHours?: number },
+  opts?: { type?: string; limit?: number; halfLifeHours?: number; offset?: number },
 ): Promise<(MemoryRow & { relevance_score: number })[]> {
   const clauses: string[] = ["namespace_id = ?"];
   const params: unknown[] = [namespace_id];
@@ -117,24 +119,26 @@ export async function recallMemories(
   }));
 
   scored.sort((a, b) => b.relevance_score - a.relevance_score);
-  return scored.slice(0, opts?.limit ?? 20);
+  const offset = opts?.offset ?? 0;
+  return scored.slice(offset, offset + (opts?.limit ?? 20));
 }
 
 export async function getMemoriesForEntity(
   db: D1Database,
   entity_id: string,
-  opts?: { limit?: number },
+  opts?: { limit?: number; offset?: number },
 ): Promise<MemoryRow[]> {
   const limit = opts?.limit ?? 20;
+  const offset = opts?.offset ?? 0;
   const result = await db
     .prepare(
       `SELECT m.* FROM memories m
        JOIN memory_entity_links mel ON mel.memory_id = m.id
        WHERE mel.entity_id = ?
        ORDER BY m.importance DESC, m.last_accessed_at DESC
-       LIMIT ?`,
+       LIMIT ? OFFSET ?`,
     )
-    .bind(entity_id, limit)
+    .bind(entity_id, limit, offset)
     .all<MemoryRow>();
   return result.results;
 }

@@ -31,26 +31,53 @@ function parseJWT(token: string) {
   };
 }
 
+function parseCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+type JwkWithKid = JsonWebKey & { kid: string };
+type JwksCacheEntry = { fetchedAt: number; keys: JwkWithKid[] };
+
+const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const jwksCache = new Map<string, JwksCacheEntry>();
+
+async function fetchJwks(url: string, forceRefresh = false): Promise<JwkWithKid[]> {
+  const cached = jwksCache.get(url);
+  const now = Date.now();
+  if (!forceRefresh && cached && now - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
+    return cached.keys;
+  }
+  const resp = await fetch(url, {
+    headers: { "Cache-Control": "no-cache" },
+  });
+  const body = (await resp.json()) as { keys?: JwkWithKid[] };
+  const keys = body.keys ?? [];
+  jwksCache.set(url, { fetchedAt: now, keys });
+  return keys;
+}
+
 async function fetchAccessPublicKey(env: Env, kid: string): Promise<CryptoKey> {
   if (!env.ACCESS_JWKS_URL) {
     throw new Error("ACCESS_JWKS_URL not configured");
   }
   // ACCESS_JWKS_URL may be comma-separated (e.g. team-level + SaaS app JWKS).
-  const urls = env.ACCESS_JWKS_URL.split(",").map((s) => s.trim());
-  for (const url of urls) {
-    const resp = await fetch(url);
-    const keys = (await resp.json()) as {
-      keys: (JsonWebKey & { kid: string })[];
-    };
-    const jwk = keys.keys.find((key) => key.kid === kid);
-    if (jwk) {
-      return crypto.subtle.importKey(
-        "jwk",
-        jwk,
-        { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
-        false,
-        ["verify"],
-      );
+  const urls = parseCsv(env.ACCESS_JWKS_URL);
+  for (const forceRefresh of [false, true]) {
+    for (const url of urls) {
+      const keys = await fetchJwks(url, forceRefresh);
+      const jwk = keys.find((key) => key.kid === kid);
+      if (jwk) {
+        return crypto.subtle.importKey(
+          "jwk",
+          jwk,
+          { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
+          false,
+          ["verify"],
+        );
+      }
     }
   }
   throw new Error(`No matching JWK found for kid: ${kid}`);
@@ -59,6 +86,9 @@ async function fetchAccessPublicKey(env: Env, kid: string): Promise<CryptoKey> {
 /** Verify a Cloudflare Access ID token and return its claims. */
 export async function verifyToken(env: Env, token: string): Promise<Record<string, unknown>> {
   const jwt = parseJWT(token);
+  if (!jwt.header || typeof jwt.header.kid !== "string" || !jwt.header.kid) {
+    throw new Error("token missing kid header");
+  }
   const key = await fetchAccessPublicKey(env, jwt.header.kid);
 
   const verified = await crypto.subtle.verify(
@@ -73,15 +103,33 @@ export async function verifyToken(env: Env, token: string): Promise<Record<strin
   }
 
   const claims = jwt.payload;
+  if (typeof claims.exp !== "number") {
+    throw new Error("token missing exp claim");
+  }
   const nowSec = Math.floor(Date.now() / 1000);
   if (claims.exp < nowSec) {
     throw new Error("expired token");
   }
 
+  if (typeof claims.nbf === "number" && claims.nbf > nowSec) {
+    throw new Error("token not active yet");
+  }
+
+  const allowedIssuers = env.ACCESS_ISSUER
+    ? parseCsv(env.ACCESS_ISSUER)
+    : parseCsv(env.ACCESS_JWKS_URL)
+        .map((url) => new URL(url).origin)
+        .filter(Boolean);
+  if (allowedIssuers.length > 0) {
+    if (typeof claims.iss !== "string" || !allowedIssuers.includes(claims.iss)) {
+      throw new Error("invalid issuer");
+    }
+  }
+
   // Validate audience claim against allowed Access application AUD tags.
   // ACCESS_AUD_TAG may be a single tag or comma-separated list (e.g. self-hosted + SaaS app).
   if (env.ACCESS_AUD_TAG) {
-    const allowedAuds = env.ACCESS_AUD_TAG.split(",").map((s) => s.trim());
+    const allowedAuds = parseCsv(env.ACCESS_AUD_TAG);
     const tokenAuds = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     if (!tokenAuds.some((a: string) => allowedAuds.includes(a))) {
       throw new Error("invalid audience");

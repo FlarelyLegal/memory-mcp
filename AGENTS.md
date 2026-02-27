@@ -12,17 +12,20 @@ Built on: **D1** (graph + memories), **Vectorize** (semantic search), **Workers 
 
 See `package.json` scripts. Summary:
 
-| Task                 | Command                                |
-| -------------------- | -------------------------------------- |
-| Install deps         | `npm install`                          |
-| Typecheck            | `npm run typecheck`                    |
-| Build (dry-run)      | `npm run build`                        |
-| Lint                 | `npm run lint`                         |
-| Format               | `npm run format`                       |
-| Dev server (local)   | `npx wrangler dev --local --port 8787` |
-| Init local D1 schema | `npm run db:init:local`                |
-| Deploy (first time)  | `npm run deploy:init`                  |
-| Deploy (subsequent)  | `npm run deploy`                       |
+| Task                   | Command                                |
+| ---------------------- | -------------------------------------- |
+| Install deps           | `npm install`                          |
+| Typecheck              | `npm run typecheck`                    |
+| Build (dry-run, A)     | `npm run build`                        |
+| Build (dry-run, B)     | `npm run build:b`                      |
+| Lint                   | `npm run lint`                         |
+| Format                 | `npm run format`                       |
+| Dev server (local, A)  | `npm run dev -- --local --port 8787`   |
+| Dev server (local, B)  | `npm run dev:b -- --local --port 8787` |
+| Init local D1 schema   | `npm run db:init:local`                |
+| Deploy (first time)    | `npm run deploy:init`                  |
+| Deploy (subsequent, A) | `npm run deploy`                       |
+| Deploy (subsequent, B) | `npm run deploy:b`                     |
 
 ### Versioning and releases
 
@@ -44,7 +47,7 @@ See `package.json` scripts. Summary:
 - **Input validation:** All MCP tool inputs have Zod `.max()` bounds on strings and arrays to prevent oversized payloads to D1/Workers AI.
 - **Relation ownership:** `manage_relation` create verifies both `source_id` and `target_id` belong to the specified namespace — cross-namespace relations are rejected.
 - **REST API auth:** API endpoints at `/api/v1/*` authenticate via JWT from Cloudflare Access. The middleware checks the `Cf-Access-Jwt-Assertion` header first, then falls back to the `CF_Authorization` cookie (Access sets the cookie for service token and browser flows). `/api/docs` and `/api/openapi.json` are unauthenticated.
-- **Service token identity resolution:** Cloudflare Access service token JWTs have no `email` claim and an empty `sub`. Identity is resolved via `common_name` (= `CF-Access-Client-Id`, survives token rotation). The middleware looks up `st:<common_name>` in KV (`env.CACHE`) to get the bound email. Unregistered service tokens get 403. Bind tokens via `POST /api/v1/admin/service-tokens`. No MCP tool for token management — REST API only.
+- **Service token identity resolution:** Cloudflare Access service token JWTs have no `email` claim and an empty `sub`. Identity is resolved via `common_name` (= `CF-Access-Client-Id`, survives token rotation). The middleware looks up `st:<common_name>` in KV (`env.CACHE`) to get the bound email. Unregistered service tokens get 403 except for initial claim flow. Bind tokens with `POST /api/v1/admin/service-tokens/bind-request` then `POST /api/v1/admin/service-tokens/bind-self`. No MCP tool for token management — REST API only.
 - **`ACCESS_AUD_TAG` must match an Access application:** This secret must be the audience tag from the Cloudflare Access application protecting your Worker's domain. Mismatched audience tags cause `Invalid or expired token` errors on otherwise valid JWTs.
 - **OpenAPI spec is auto-generated:** Each route file registers both its handler and its OpenAPI `PathOperation`. The spec at `/api/openapi.json` is assembled dynamically — no separate spec file to maintain.
 - **CORS:** All `/api/*` responses include permissive CORS headers (`Access-Control-Allow-Origin: *`).

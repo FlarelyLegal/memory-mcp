@@ -10,6 +10,7 @@ import {
   conversationSchema,
   metadataSchema,
 } from "../schemas.js";
+import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 
 export function registerConversationRoutes(): void {
   defineRoute(
@@ -19,8 +20,29 @@ export function registerConversationRoutes(): void {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
         const limit = queryLimit(ctx.query, 50);
-        const rows = await listConversations(ctx.env.DB, ctx.params.namespace_id, { limit });
-        return json(rows);
+        const offset = parseCursor(ctx.query);
+        const allowed = [
+          "id",
+          "namespace_id",
+          "title",
+          "metadata",
+          "created_at",
+          "updated_at",
+        ] as const;
+        const fields = parseFields(ctx.query, allowed, {
+          compact: ["id", "title", "updated_at"],
+          full: allowed,
+        });
+        const rows = await listConversations(ctx.env.DB, ctx.params.namespace_id, {
+          limit: limit + 1,
+          offset,
+        });
+        const hasMore = rows.length > limit;
+        const data = projectRows(rows.slice(0, limit), fields);
+        const response = json(data);
+        const cursor = nextCursor(offset, limit, hasMore);
+        if (cursor) response.headers.set("X-Next-Cursor", cursor);
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -29,7 +51,22 @@ export function registerConversationRoutes(): void {
       summary: "List conversations",
       tags: ["Conversations"],
       operationId: "listConversations",
-      parameters: [nsPathParam(), limitQueryParam(50)],
+      parameters: [
+        nsPathParam(),
+        {
+          name: "fields",
+          in: "query",
+          description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+        {
+          name: "cursor",
+          in: "query",
+          description: "Opaque pagination cursor from X-Next-Cursor",
+          schema: { type: "string" },
+        },
+        limitQueryParam(50),
+      ],
       responses: {
         "200": {
           description: "Array of conversations",

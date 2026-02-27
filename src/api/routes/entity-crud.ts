@@ -1,11 +1,12 @@
 /** Entity get/update/delete REST endpoints. */
 import { defineRoute } from "../registry.js";
-import { json, jsonError, parseBody, handleError } from "../middleware.js";
+import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { getEntity, updateEntity, deleteEntity } from "../../graph/index.js";
 import { assertEntityAccess } from "../../auth.js";
 import { upsertEntityVector, deleteVector } from "../../embeddings.js";
 import { idPathParam, entitySchema, okSchema, metadataSchema } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
+import { entityUpdateSchema } from "../validators.js";
 
 export function registerEntityCrudRoutes(): void {
   defineRoute(
@@ -43,12 +44,7 @@ export function registerEntityCrudRoutes(): void {
     async (ctx, request) => {
       try {
         await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
-        const body = await parseBody<{
-          name?: string;
-          type?: string;
-          summary?: string;
-          metadata?: Record<string, unknown>;
-        }>(request);
+        const body = await parseBodyWithSchema(request, entityUpdateSchema);
         if (body instanceof Response) return body;
         await updateEntity(ctx.env.DB, ctx.params.id, body);
         if (body.name || body.type || body.summary !== undefined) {
