@@ -72,7 +72,8 @@ export function buildOpenApiSpec(serverUrl?: string): Record<string, unknown> {
           in: "header",
           name: "Cf-Access-Jwt-Assertion",
           description:
-            "Cloudflare Access JWT. For service-to-service auth, create a " +
+            "Cloudflare Access JWT (`Cf-Access-Jwt-Assertion` preferred, `cf-access-token` supported). " +
+            "For service-to-service auth, create a " +
             "Cloudflare Access Service Token. Access validates the credentials " +
             "and injects a signed JWT via this header automatically.",
         },

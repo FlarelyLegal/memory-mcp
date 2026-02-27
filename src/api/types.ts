@@ -1,10 +1,15 @@
 /** Shared types for the REST API layer. */
 import type { Env } from "../types.js";
 
+export type AuthIdentity =
+  | { type: "human"; email: string }
+  | { type: "service_token"; common_name: string; email: string | null; bound: boolean };
+
 /** Authenticated request context passed to every route handler. */
 export interface ApiContext {
   env: Env;
   email: string;
+  auth: AuthIdentity;
   params: Record<string, string>;
   query: URLSearchParams;
 }
@@ -20,6 +25,8 @@ export interface RouteDefinition {
   spec: PathOperation;
   /** If true, skip auth (e.g. docs, openapi.json). */
   public?: boolean;
+  /** If true, unbound service tokens may authenticate for this route. */
+  allowUnboundServiceToken?: boolean;
 }
 
 // --- OpenAPI 3.1 subset types (just enough to build accurate specs) ---
