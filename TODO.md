@@ -21,18 +21,20 @@ Tracked improvements for memory-graph-mcp. Cross off as completed.
 
 ---
 
-## 2. Maximize Vectorize Metadata Indexes
+## 2. ~~Maximize Vectorize Metadata Indexes~~ DONE
 
-**Impact:** Medium — enable filtered semantic search without post-filtering. 7 of 10 indexes unused.
+**Impact:** Medium — enable filtered semantic search without post-filtering. Now using 7 of 10 indexes.
 
-- [ ] Audit current metadata stored per vector (namespace_id, kind, type)
-- [ ] Add `entity_type` metadata on entity vectors (person, concept, project, etc.)
-- [ ] Add `memory_type` metadata on memory vectors (fact, observation, preference, instruction)
-- [ ] Add `created_at` (epoch) metadata for time-bounded search
-- [ ] Register new metadata indexes via `vectorize:indexes` scripts
-- [ ] Update `search` tool + API route to accept `entity_type`, `memory_type`, `after`/`before` filters
-- [ ] Update `reindex_vectors` to include new metadata fields
-- [ ] Document new filter params in tool descriptions
+- [x] Audit current metadata: `namespace_id`, `kind`, `type` (3/10 used)
+- [x] Add `created_at` (epoch) to all vector upserts (entity, memory, message)
+- [x] Add `role`, `conversation_id`, `entity_id` indexes
+- [x] Update `vectorize:indexes` scripts (both accounts) — 7 indexes total
+- [x] Update `search` MCP tool with `after`, `before`, `role`, `conversation_id` params
+- [x] Update `semanticSearch()` to build range filters for `created_at`
+- [x] Update API search route + validator + OpenAPI spec
+- [x] Update `reindex_vectors` to include `created_at` in metadata
+- [ ] Run `vectorize:indexes` + `vectorize:indexes:b` to create new indexes (infra)
+- [ ] Run `reindex_vectors` on all namespaces to populate new metadata (infra)
 
 ---
 

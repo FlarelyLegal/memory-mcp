@@ -30,12 +30,14 @@ export function registerSearchRoutes(): void {
         const mode = body.mode ?? "semantic";
         const limit = Math.min(body.limit ?? (mode === "context" ? 5 : 10), 20);
         const offset = parseCursor(ctx.query);
-        const kind = body.kind;
-        const type = body.type;
 
         const matches = await semanticSearch(ctx.env, ctx.db, body.query, ctx.params.namespace_id, {
-          kind,
-          type,
+          kind: body.kind,
+          type: body.type,
+          after: body.after,
+          before: body.before,
+          role: body.role,
+          conversation_id: body.conversation_id,
           limit: limit + offset + 1,
         });
         const page = matches.slice(offset, offset + limit + 1);
@@ -132,6 +134,24 @@ export function registerSearchRoutes(): void {
                   maxLength: 200,
                   description:
                     "Filter by entity type (person, concept, ...) or memory type (fact, observation, ...)",
+                },
+                after: {
+                  type: "integer",
+                  description: "Only results created after this epoch (seconds)",
+                },
+                before: {
+                  type: "integer",
+                  description: "Only results created before this epoch (seconds)",
+                },
+                role: {
+                  type: "string",
+                  enum: ["user", "assistant", "system", "tool"],
+                  description: "Filter messages by role",
+                },
+                conversation_id: {
+                  type: "string",
+                  format: "uuid",
+                  description: "Filter messages by conversation",
                 },
                 limit: {
                   type: "integer",

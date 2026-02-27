@@ -37,8 +37,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       // --- Entities ---
       const entityQuery =
         namespace_id === "all"
-          ? "SELECT e.id, e.namespace_id, e.name, e.type, e.summary FROM entities e JOIN namespaces n ON n.id = e.namespace_id WHERE n.owner = ?"
-          : "SELECT id, namespace_id, name, type, summary FROM entities WHERE namespace_id = ?";
+          ? "SELECT e.id, e.namespace_id, e.name, e.type, e.summary, e.created_at FROM entities e JOIN namespaces n ON n.id = e.namespace_id WHERE n.owner = ?"
+          : "SELECT id, namespace_id, name, type, summary, created_at FROM entities WHERE namespace_id = ?";
       const entityResult = await db
         .prepare(entityQuery)
         .bind(namespace_id === "all" ? email : namespace_id)
@@ -55,8 +55,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       // --- Memories ---
       const memoryQuery =
         namespace_id === "all"
-          ? "SELECT m.id, m.namespace_id, m.content, m.type FROM memories m JOIN namespaces n ON n.id = m.namespace_id WHERE n.owner = ?"
-          : "SELECT id, namespace_id, content, type FROM memories WHERE namespace_id = ?";
+          ? "SELECT m.id, m.namespace_id, m.content, m.type, m.created_at FROM memories m JOIN namespaces n ON n.id = m.namespace_id WHERE n.owner = ?"
+          : "SELECT id, namespace_id, content, type, created_at FROM memories WHERE namespace_id = ?";
       const memoryResult = await db
         .prepare(memoryQuery)
         .bind(namespace_id === "all" ? email : namespace_id)
