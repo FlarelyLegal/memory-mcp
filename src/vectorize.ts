@@ -158,8 +158,8 @@ export async function semanticSearch(
   },
 ): Promise<SemanticSearchResult[]> {
   const desiredLimit = opts?.limit ?? 10;
-  // Over-fetch for reranking (capped at Vectorize max topK of 20 with metadata)
-  const fetchLimit = Math.min(desiredLimit * RERANK_POOL_MULTIPLIER, 20);
+  // Over-fetch for reranking (capped at Vectorize topK limit of 50)
+  const fetchLimit = Math.min(desiredLimit * RERANK_POOL_MULTIPLIER, 50);
 
   const queryVector = await embed(env.AI, query);
 
