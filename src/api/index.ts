@@ -25,6 +25,7 @@ import { registerConversationRoutes } from "./routes/conversations.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerSearchRoutes } from "./routes/search.js";
 import { registerAdminRoutes } from "./routes/admin.js";
+import { registerWorkflowRoutes } from "./routes/workflows.js";
 import { registerTokenRoutes } from "./routes/tokens.js";
 import { registerTokenCrudRoutes } from "./routes/token-crud.js";
 import { registerDemoRoutes } from "./routes/demo.js";
@@ -45,6 +46,7 @@ function ensureRegistered(): void {
   registerMessageRoutes();
   registerSearchRoutes();
   registerAdminRoutes();
+  registerWorkflowRoutes();
   registerTokenRoutes();
   registerTokenCrudRoutes();
   registerDemoRoutes();
