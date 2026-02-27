@@ -10,16 +10,18 @@ This folder contains Playwright API tests for the live REST API.
 
 ## Target Environment
 
-By default, tests run against the deployed API:
+By default, tests run against target `a`.
 
-- `https://memory.schenanigans.com`
-
-To run against a different environment, set `API_BASE_URL`.
+You can run target `a` or `b` with `API_TARGET` and per-target env vars.
 
 ## Required Secrets
 
-- `CF_ACCESS_CLIENT_ID`
-- `CF_ACCESS_CLIENT_SECRET`
+- Shared mode:
+  - `CF_ACCESS_CLIENT_ID`
+  - `CF_ACCESS_CLIENT_SECRET`
+- Targeted mode:
+  - `CF_ACCESS_CLIENT_ID_A`, `CF_ACCESS_CLIENT_SECRET_A`, `API_BASE_URL_A`
+  - `CF_ACCESS_CLIENT_ID_B`, `CF_ACCESS_CLIENT_SECRET_B`, `API_BASE_URL_B`
 
 These are sent as Access service-token headers for authenticated requests.
 
@@ -44,4 +46,10 @@ Optional:
 
 ```bash
 API_BASE_URL="https://<your-worker-domain>" CF_ACCESS_CLIENT_ID="..." CF_ACCESS_CLIENT_SECRET="..." npm run test:e2e
+
+# Target A
+API_TARGET=a API_BASE_URL_A="https://<account-a-worker-domain>" CF_ACCESS_CLIENT_ID_A="..." CF_ACCESS_CLIENT_SECRET_A="..." npm run test:e2e:a
+
+# Target B
+API_TARGET=b API_BASE_URL_B="https://<account-b-worker-domain>" CF_ACCESS_CLIENT_ID_B="..." CF_ACCESS_CLIENT_SECRET_B="..." npm run test:e2e:b
 ```

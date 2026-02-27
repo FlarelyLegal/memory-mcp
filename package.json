@@ -7,18 +7,24 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "build": "wrangler deploy --dry-run --outdir=dist",
+    "dev": "wrangler dev --config wrangler-a.jsonc",
+    "dev:b": "wrangler dev --config wrangler-b.jsonc",
+    "deploy": "wrangler deploy --config wrangler-a.jsonc",
+    "deploy:b": "wrangler deploy --config wrangler-b.jsonc",
+    "build": "wrangler deploy --config wrangler-a.jsonc --dry-run --outdir=dist",
+    "build:b": "wrangler deploy --config wrangler-b.jsonc --dry-run --outdir=dist",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "typecheck": "tsc --noEmit",
     "db:init": "wrangler d1 execute memory-graph-mcp-db --remote --file=schemas/schema.sql",
+    "db:init:b": "wrangler d1 execute memory-graph-mcp-db --config wrangler-b.jsonc --remote --file=schemas/schema.sql",
     "db:init:local": "wrangler d1 execute memory-graph-mcp-db --local --file=schemas/schema.sql",
-    "deploy:init": "npm run db:init && wrangler deploy",
-    "test:e2e": "playwright test"
+    "deploy:init": "npm run db:init && wrangler deploy --config wrangler-a.jsonc",
+    "test:e2e": "playwright test",
+    "test:e2e:a": "API_TARGET=a playwright test",
+    "test:e2e:b": "API_TARGET=b playwright test"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.2.3",

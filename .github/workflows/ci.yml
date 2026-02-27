@@ -25,5 +25,6 @@ jobs:
     needs: [build]
     uses: ./.github/workflows/e2e.yml
     secrets:
-      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      CF_ACCESS_CLIENT_ID_B: ${{ secrets.CF_ACCESS_CLIENT_ID_B }}
+      CF_ACCESS_CLIENT_SECRET_B: ${{ secrets.CF_ACCESS_CLIENT_SECRET_B }}
+      API_BASE_URL_B: ${{ secrets.API_BASE_URL_B }}
