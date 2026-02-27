@@ -119,7 +119,12 @@ export function registerTokenCrudRoutes(): void {
         const mapping = await ctx.env.CACHE.get<ServiceTokenMapping>(key, "json");
         if (!mapping) return jsonError("Service token not found", 404);
         if (mapping.email !== ctx.email) return jsonError("Access denied", 403);
-        await ctx.env.CACHE.delete(key);
+        if (mapping.revoked_at) return jsonError("Service token already revoked", 409);
+        // Soft-delete: mark as revoked rather than deleting. KV is eventually
+        // consistent — a hard delete could leave a stale readable mapping.
+        // TTL ensures the entry is garbage-collected after 7 days.
+        mapping.revoked_at = Math.floor(Date.now() / 1000);
+        await ctx.env.CACHE.put(key, JSON.stringify(mapping), { expirationTtl: 7 * 86400 });
         audit(ctx.db, ctx.env.STORAGE, {
           action: "service_token.revoke",
           email: ctx.email,

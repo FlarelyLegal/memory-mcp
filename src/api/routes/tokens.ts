@@ -219,7 +219,7 @@ export function registerTokenRoutes(): void {
           const batch = await ctx.env.CACHE.list({ prefix: ST_PREFIX, cursor });
           for (const key of batch.keys) {
             const mapping = await ctx.env.CACHE.get<ServiceTokenMapping>(key.name, "json");
-            if (mapping && mapping.email === ctx.email) {
+            if (mapping && mapping.email === ctx.email && !mapping.revoked_at) {
               tokens.push({ common_name: key.name.slice(ST_PREFIX.length), ...mapping });
             }
           }

@@ -141,6 +141,11 @@ export async function authenticateIdentity(
     return jsonError("Service token not registered. Bind it to an email first.", 403);
   }
 
+  // Soft-deleted token — reject even if KV hasn't fully propagated the delete.
+  if (mapping.revoked_at) {
+    return jsonError("Service token has been revoked.", 403);
+  }
+
   return { type: "service_token", common_name: commonName, email: mapping.email, bound: true };
 }
 
