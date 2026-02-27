@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 
-const NAMESPACE_NAME = "Playwright Testing";
+const NAMESPACE_NAME = process.env.TEST_NAMESPACE_NAME ?? "demo";
 let api: APIRequestContext;
 let namespaceId: string;
 
@@ -33,7 +33,7 @@ test.beforeAll(async ({ playwright }) => {
     },
   });
 
-  // Resolve the Playwright Testing namespace ID
+  // Resolve the test namespace by name (default: demo)
   const res = await api.get("/api/v1/namespaces");
   expect(res.ok()).toBe(true);
   const namespaces = await res.json();

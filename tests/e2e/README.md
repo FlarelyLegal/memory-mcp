@@ -27,9 +27,9 @@ These are sent as Access service-token headers for authenticated requests.
 
 ## Namespace Requirement
 
-Tests expect a namespace named `Playwright Testing` to exist.
+Tests default to namespace `demo` (override with `TEST_NAMESPACE_NAME`).
 
-The suite resolves this namespace by name at startup and runs all test data inside it.
+The suite resolves this namespace by name at startup and creates it if missing.
 
 ## Data Safety / Cleanup
 
