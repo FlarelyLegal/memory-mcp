@@ -9,9 +9,10 @@ import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { getNamespaceStats } from "../stats.js";
 import { track } from "../state.js";
 import { audit } from "../audit.js";
-import { txt, err, ok, toolHandler, confirm } from "../response-helpers.js";
+import { txt, err, ok, trackTools, confirm } from "../response-helpers.js";
 
 export function registerAdminTools(server: McpServer, env: Env, email: string, agent: StateHandle) {
+  const tracked = trackTools(env, email);
   server.tool(
     "reindex_vectors",
     "Re-embed all entities and memories into Vectorize via a durable Workflow. Returns instance ID for status tracking.",
@@ -25,7 +26,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       idempotentHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ namespace_id }) => {
+    tracked("reindex_vectors", async ({ namespace_id }) => {
       const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       if (namespace_id !== "all") {
@@ -67,7 +68,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       idempotentHint: false,
       openWorldHint: false,
     },
-    toolHandler(
+    tracked(
+      "consolidate_memory",
       async ({
         namespace_id,
         decay_threshold,
@@ -131,7 +133,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ workflow, instance_id }) => {
+    tracked("get_workflow_status", async ({ workflow, instance_id }) => {
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       const binding = workflow === "reindex" ? env.REINDEX_WORKFLOW : env.CONSOLIDATION_WORKFLOW;
       try {
@@ -159,7 +161,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ namespace_id }) => {
+    tracked("namespace_stats", async ({ namespace_id }) => {
       const db = session(env.DB, "first-unconstrained");
       await assertNamespaceWriteAccess(db, namespace_id, email, true);
       track(agent, { namespace: namespace_id });
@@ -179,7 +181,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       idempotentHint: true,
       openWorldHint: false,
     },
-    toolHandler(async () => {
+    tracked("claim_namespaces", async () => {
       const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       if (!(await confirm(server, "Claim all unowned namespaces for your account?")))

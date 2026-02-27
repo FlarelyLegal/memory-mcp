@@ -15,7 +15,7 @@ import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceReadAccess } from "../auth.js";
 import { track, resolveNamespace } from "../state.js";
-import { txt, err, cap, trunc, toolHandler } from "../response-helpers.js";
+import { txt, err, cap, trunc, trackTools } from "../response-helpers.js";
 
 export function registerSearchTools(
   server: McpServer,
@@ -23,6 +23,7 @@ export function registerSearchTools(
   email: string,
   agent: StateHandle,
 ) {
+  const tracked = trackTools(env, email);
   server.tool(
     "search",
     "Semantic vector search across all memory types. Use mode=context to also pull graph relations and ranked memories for matched entities. Supports time-bounded search with after/before (epoch seconds).",
@@ -47,7 +48,8 @@ export function registerSearchTools(
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(
+    tracked(
+      "search",
       async ({
         namespace_id: nsParam,
         query,

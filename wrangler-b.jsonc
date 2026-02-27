@@ -70,6 +70,13 @@
     },
   ],
 
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS",
+      "dataset": "memory-graph-mcp",
+    },
+  ],
+
   "r2_buckets": [
     {
       "binding": "STORAGE",

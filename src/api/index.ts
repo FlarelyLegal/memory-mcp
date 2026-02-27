@@ -13,6 +13,7 @@ import { authenticateIdentity, json, jsonError } from "./middleware.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { renderScalarDocs } from "./docs.js";
 import { preflightResponse, applyCors } from "./cors.js";
+import { trackEvent } from "../analytics.js";
 
 // Import route modules — side effect: registers routes in the registry.
 import { registerNamespaceRoutes } from "./routes/namespaces.js";
@@ -99,21 +100,19 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   // --- Auth (skip for explicitly public routes) ---
 
+  const start = Date.now();
+  let email = "";
+
   if (!route.public) {
     const result = await authenticateIdentity(request, env, {
       allowUnboundServiceToken: route.allowUnboundServiceToken,
     });
     if (result instanceof Response) return applyCors(request, result);
+    email = result.email ?? "";
 
-    const ctx = {
-      env,
-      db,
-      email: result.email ?? "",
-      auth: result,
-      params,
-      query: url.searchParams,
-    };
+    const ctx = { env, db, email, auth: result, params, query: url.searchParams };
     const response = await route.handler(ctx, request);
+    trackApi(env, request.method, route.pattern, email, start, response);
     return withBookmark(db, applyCors(request, response));
   }
 
@@ -126,7 +125,30 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     query: url.searchParams,
   };
   const response = await route.handler(ctx, request);
+  trackApi(env, request.method, route.pattern, email, start, response);
   return withBookmark(db, applyCors(request, response));
+}
+
+/** Fire-and-forget analytics for an API request. */
+function trackApi(
+  env: Env,
+  method: string,
+  pattern: string,
+  email: string,
+  start: number,
+  response: Response,
+): void {
+  const status = response.status < 400 ? "ok" : "error";
+  const size = parseInt(response.headers.get("content-length") ?? "0", 10);
+  trackEvent(env, {
+    channel: "api",
+    method,
+    path: pattern,
+    status,
+    email,
+    latencyMs: Date.now() - start,
+    responseBytes: size,
+  });
 }
 
 /** Attach the D1 session bookmark to the response for cross-request consistency. */

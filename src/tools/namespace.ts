@@ -9,7 +9,7 @@ import { deleteVectorBatch } from "../vectorize.js";
 import { assertNamespaceWriteAccess, isAdmin } from "../auth.js";
 import { track } from "../state.js";
 import { audit } from "../audit.js";
-import { txt, err, ok, confirm, toolHandler } from "../response-helpers.js";
+import { txt, err, ok, confirm, trackTools } from "../response-helpers.js";
 
 export function registerNamespaceTools(
   server: McpServer,
@@ -17,6 +17,7 @@ export function registerNamespaceTools(
   email: string,
   agent: StateHandle,
 ) {
+  const tracked = trackTools(env, email);
   server.tool(
     "manage_namespace",
     "Create, list, delete, or set visibility on memory namespaces.",
@@ -35,7 +36,7 @@ export function registerNamespaceTools(
       idempotentHint: false,
       openWorldHint: false,
     },
-    toolHandler(async ({ action, id, name, description, visibility, compact }) => {
+    tracked("manage_namespace", async ({ action, id, name, description, visibility, compact }) => {
       if (action === "create") {
         const db = session(env.DB, "first-primary");
         if (!name) return err("name required");

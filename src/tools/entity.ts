@@ -31,7 +31,7 @@ import {
   trunc,
   safeMeta,
   isMetaError,
-  toolHandler,
+  trackTools,
   confirm,
 } from "../response-helpers.js";
 
@@ -41,6 +41,7 @@ export function registerEntityTools(
   email: string,
   agent: StateHandle,
 ) {
+  const tracked = trackTools(env, email);
   server.tool(
     "manage_entity",
     "CRUD for graph entities. Actions: create, get, update, delete.",
@@ -65,7 +66,8 @@ export function registerEntityTools(
       idempotentHint: false,
       openWorldHint: false,
     },
-    toolHandler(
+    tracked(
+      "manage_entity",
       async ({ action, id, namespace_id: nsParam, name, type, summary, metadata, compact }) => {
         const db = session(env.DB, "first-primary");
         const meta = safeMeta(metadata);
@@ -193,32 +195,35 @@ export function registerEntityTools(
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ namespace_id: nsParam, query, type, limit, compact, verbose }) => {
-      const namespace_id = resolveNamespace(nsParam, agent);
-      if (!namespace_id) return err("namespace_id required");
-      const db = session(env.DB, "first-unconstrained");
-      await assertNamespaceReadAccess(db, namespace_id, email);
-      track(agent, { namespace: namespace_id });
-      const results = await graph.searchEntities(db, namespace_id, {
-        query,
-        type,
-        limit: cap(limit, 50, 20),
-      });
-      const isCompact = compact ?? true;
-      const full = verbose ?? false;
-      return txt(
-        results.map((r) =>
-          isCompact
-            ? { id: r.id, name: r.name, type: r.type }
-            : {
-                id: r.id,
-                name: r.name,
-                type: r.type,
-                summary: full ? r.summary : trunc(r.summary),
-                metadata: parseJson(r.metadata),
-              },
-        ),
-      );
-    }),
+    tracked(
+      "find_entities",
+      async ({ namespace_id: nsParam, query, type, limit, compact, verbose }) => {
+        const namespace_id = resolveNamespace(nsParam, agent);
+        if (!namespace_id) return err("namespace_id required");
+        const db = session(env.DB, "first-unconstrained");
+        await assertNamespaceReadAccess(db, namespace_id, email);
+        track(agent, { namespace: namespace_id });
+        const results = await graph.searchEntities(db, namespace_id, {
+          query,
+          type,
+          limit: cap(limit, 50, 20),
+        });
+        const isCompact = compact ?? true;
+        const full = verbose ?? false;
+        return txt(
+          results.map((r) =>
+            isCompact
+              ? { id: r.id, name: r.name, type: r.type }
+              : {
+                  id: r.id,
+                  name: r.name,
+                  type: r.type,
+                  summary: full ? r.summary : trunc(r.summary),
+                  metadata: parseJson(r.metadata),
+                },
+          ),
+        );
+      },
+    ),
   );
 }

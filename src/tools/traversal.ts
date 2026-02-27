@@ -7,7 +7,7 @@ import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import { assertEntityReadAccess } from "../auth.js";
 import { track } from "../state.js";
-import { txt, toolHandler } from "../response-helpers.js";
+import { txt, trackTools } from "../response-helpers.js";
 
 export function registerTraversalTools(
   server: McpServer,
@@ -15,6 +15,7 @@ export function registerTraversalTools(
   email: string,
   agent: StateHandle,
 ) {
+  const tracked = trackTools(env, email);
   server.tool(
     "traverse_graph",
     "BFS from an entity. Returns reachable entities and relations up to max_depth hops.",
@@ -28,7 +29,7 @@ export function registerTraversalTools(
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ entity_id, max_depth, relation_types }) => {
+    tracked("traverse_graph", async ({ entity_id, max_depth, relation_types }) => {
       const db = session(env.DB, "first-unconstrained");
       await assertEntityReadAccess(db, entity_id, email);
       track(agent, { entity: entity_id });
