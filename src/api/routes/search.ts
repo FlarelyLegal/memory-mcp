@@ -4,8 +4,8 @@ import { json, parseBodyWithSchema, handleError } from "../middleware.js";
 import { zodSchema } from "../schemas.js";
 import { assertNamespaceReadAccess } from "../../auth.js";
 import { semanticSearch } from "../../vectorize.js";
-import { getEntity, getRelationsFrom, getRelationsTo } from "../../graph/index.js";
-import { recallMemories, getMemoriesForEntity } from "../../memories.js";
+import { recallMemories } from "../../memories.js";
+import { hydrateEntityContext } from "../../context.js";
 import { semanticSearchSchema } from "../validators.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseEntityRow, parseRelationRow, parseMemoryRow } from "../row-parsers.js";
@@ -52,30 +52,24 @@ export function registerSearchRoutes(): void {
           return response;
         }
 
-        // Context mode: enrich entity matches with graph + memories (parallel)
+        // Context mode: batch-hydrate entity matches (3 queries instead of 4×N)
         const entityIds = pagedMatches
           .filter((m) => m.kind === "entity")
           .map((m) => m.metadata.entity_id)
           .filter(Boolean);
 
-        const entities = (
-          await Promise.all(
-            entityIds.map(async (eid) => {
-              const entity = await getEntity(ctx.db, eid);
-              if (!entity) return null;
-              const [from, to, mems] = await Promise.all([
-                getRelationsFrom(ctx.db, eid, { limit: 5 }),
-                getRelationsTo(ctx.db, eid, { limit: 5 }),
-                getMemoriesForEntity(ctx.db, eid, { limit: 5 }),
-              ]);
-              return {
-                entity: parseEntityRow(entity),
-                relations: [...from, ...to].map(parseRelationRow),
-                memories: mems.map(parseMemoryRow),
-              };
-            }),
-          )
-        ).filter(Boolean);
+        const contextMap = await hydrateEntityContext(ctx.db, entityIds);
+        const entities = entityIds
+          .map((eid) => {
+            const ec = contextMap.get(eid);
+            if (!ec) return null;
+            return {
+              entity: parseEntityRow(ec.entity),
+              relations: [...ec.relationsFrom, ...ec.relationsTo].map(parseRelationRow),
+              memories: ec.memories.map(parseMemoryRow),
+            };
+          })
+          .filter(Boolean);
 
         const topMemories = await recallMemories(ctx.db, ctx.params.namespace_id, {
           limit: Math.max(1, limit - entityIds.length),
