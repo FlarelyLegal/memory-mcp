@@ -2,7 +2,7 @@
 import { defineRoute } from "../registry.js";
 import { json, parseBodyWithSchema, handleError } from "../middleware.js";
 import { assertNamespaceAccess } from "../../auth.js";
-import { semanticSearch } from "../../embeddings.js";
+import { semanticSearch } from "../../vectorize.js";
 import { getEntity, getRelationsFrom, getRelationsTo } from "../../graph/index.js";
 import { recallMemories, getMemoriesForEntity } from "../../memories.js";
 import { semanticSearchSchema } from "../validators.js";

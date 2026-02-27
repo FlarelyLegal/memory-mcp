@@ -3,7 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { addMessage, getMessages, getConversation, searchMessages } from "../../conversations.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../../auth.js";
-import { upsertMessageVector } from "../../embeddings.js";
+import { upsertMessageVector } from "../../vectorize.js";
 import {
   nsPathParam,
   idPathParam,

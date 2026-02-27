@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
 import * as conversations from "../conversations.js";
-import * as embeddings from "../embeddings.js";
+import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../auth.js";
 import { txt, ok, cap, trunc } from "../response-helpers.js";
 
@@ -77,7 +77,7 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       if (role === "user" || role === "assistant") {
         const convo = await conversations.getConversation(env.DB, conversation_id);
         if (convo)
-          await embeddings.upsertMessageVector(env, {
+          await vectorize.upsertMessageVector(env, {
             message_id: id,
             conversation_id,
             namespace_id: convo.namespace_id,

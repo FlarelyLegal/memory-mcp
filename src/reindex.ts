@@ -1,6 +1,7 @@
 /** Shared batch-reindex logic for entities and memories into Vectorize. */
 import type { Env } from "./types.js";
 import { embedBatch } from "./embeddings.js";
+import { chunks } from "./utils.js";
 
 /** Items per Workers AI + Vectorize batch. Keeps each call well within limits. */
 export const REINDEX_BATCH_SIZE = 25;
@@ -26,14 +27,7 @@ export interface ReindexResult {
   errors: number;
 }
 
-/** Split an array into chunks of the given size. */
-export function chunks<T>(arr: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    result.push(arr.slice(i, i + size));
-  }
-  return result;
-}
+export { chunks };
 
 /** Batch-embed and upsert a chunk of entities into Vectorize. Returns count embedded. */
 export async function reindexEntityChunk(env: Env, chunk: ReindexEntityItem[]): Promise<number> {

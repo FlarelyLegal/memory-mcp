@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
 import * as memories from "../memories.js";
-import * as embeddings from "../embeddings.js";
+import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess, assertMemoryAccess } from "../auth.js";
 import { txt, ok, cap, trunc } from "../response-helpers.js";
 
@@ -54,7 +54,7 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
             entity_ids,
             metadata: meta,
           });
-          await embeddings.upsertMemoryVector(env, {
+          await vectorize.upsertMemoryVector(env, {
             memory_id: mid,
             namespace_id,
             content,
@@ -69,7 +69,7 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
           if (content) {
             const m = await memories.getMemory(env.DB, id);
             if (m)
-              await embeddings.upsertMemoryVector(env, {
+              await vectorize.upsertMemoryVector(env, {
                 memory_id: id,
                 namespace_id: m.namespace_id,
                 content: m.content,
@@ -82,7 +82,7 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
           if (!id) return ok("Error: id required");
           await assertMemoryAccess(env.DB, id, email);
           await memories.deleteMemory(env.DB, id);
-          await embeddings.deleteVector(env, "memory", id);
+          await vectorize.deleteVector(env, "memory", id);
           return ok(`Deleted ${id}`);
         }
       }

@@ -3,7 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { getEntity, updateEntity, deleteEntity } from "../../graph/index.js";
 import { assertEntityAccess } from "../../auth.js";
-import { upsertEntityVector, deleteVector } from "../../embeddings.js";
+import { upsertEntityVector, deleteVector } from "../../vectorize.js";
 import { idPathParam, entitySchema, okSchema, metadataSchema } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
 import { entityUpdateSchema } from "../validators.js";

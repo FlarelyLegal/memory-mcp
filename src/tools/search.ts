@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Env } from "../types.js";
 import * as graph from "../graph/index.js";
 import * as memories from "../memories.js";
-import * as embeddings from "../embeddings.js";
+import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess } from "../auth.js";
 import { txt, cap, trunc } from "../response-helpers.js";
 
@@ -31,7 +31,7 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
       const n = cap(limit, 20, mode === "context" ? 5 : 10);
       const isCompact = compact ?? true;
       const full = verbose ?? false;
-      const semanticResults = await embeddings.semanticSearch(env, query, namespace_id, {
+      const semanticResults = await vectorize.semanticSearch(env, query, namespace_id, {
         kind,
         limit: n,
       });

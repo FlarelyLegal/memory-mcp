@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Env } from "../types.js";
 import * as graph from "../graph/index.js";
-import * as embeddings from "../embeddings.js";
+import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess } from "../auth.js";
 import { parseJson } from "../utils.js";
 import { txt, ok, cap, trunc } from "../response-helpers.js";
@@ -42,7 +42,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
             summary,
             metadata: meta,
           });
-          await embeddings.upsertEntityVector(env, {
+          await vectorize.upsertEntityVector(env, {
             entity_id: eid,
             namespace_id,
             name,
@@ -71,7 +71,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
           if (name || type || summary) {
             const e = await graph.getEntity(env.DB, id);
             if (e)
-              await embeddings.upsertEntityVector(env, {
+              await vectorize.upsertEntityVector(env, {
                 entity_id: id,
                 namespace_id: e.namespace_id,
                 name: e.name,
@@ -85,7 +85,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
           if (!id) return ok("Error: id required");
           await assertEntityAccess(env.DB, id, email);
           await graph.deleteEntity(env.DB, id);
-          await embeddings.deleteVector(env, "entity", id);
+          await vectorize.deleteVector(env, "entity", id);
           return ok(`Deleted ${id}`);
         }
       }
