@@ -1,11 +1,15 @@
 /**
- * Audit logging — D1 hot window + R2 NDJSON cold archive.
+ * Audit logging — D1 hot window + R2 cold archive.
  *
  * All write operations are audit-logged via `audit()`. Each call:
  * 1. Inserts a row into the D1 `audit_logs` table (queryable hot window).
- * 2. Appends an NDJSON line to R2 at `audit/{YYYY-MM-DD}.ndjson` (Loki-compatible cold archive).
+ * 2. Writes an individual JSON object to R2 at `audit/events/{day}/{id}.json`.
  *
- * Both writes are best-effort — failures never break the request flow.
+ * Both writes are fire-and-forget — failures never block the request flow.
+ *
+ * The consolidation workflow merges individual R2 event objects into daily
+ * NDJSON files (`audit/{YYYY-MM-DD}.ndjson`) via `consolidateAuditR2()`.
+ * This eliminates the read-modify-write race condition of direct append.
  */
 import type { DbHandle } from "./db.js";
 import type { AuditLogRow } from "./types.js";
@@ -16,36 +20,16 @@ import { generateId, now } from "./utils.js";
 // ---------------------------------------------------------------------------
 
 export type AuditAction =
-  // Namespace
-  | "namespace.create"
-  | "namespace.claim"
-  // Entity
-  | "entity.create"
-  | "entity.update"
-  | "entity.delete"
-  // Relation
-  | "relation.create"
-  | "relation.delete"
-  // Memory
-  | "memory.create"
-  | "memory.update"
-  | "memory.delete"
-  // Conversation
-  | "conversation.create"
-  | "conversation.delete"
-  // Message
+  | "namespace.create" | "namespace.claim"
+  | "entity.create" | "entity.update" | "entity.delete"
+  | "relation.create" | "relation.delete"
+  | "memory.create" | "memory.update" | "memory.delete"
+  | "conversation.create" | "conversation.delete"
   | "message.create"
-  // Admin / workflow
-  | "workflow.reindex"
-  | "workflow.consolidate"
-  | "audit.purge"
-  // Service token (kept for backward compat with existing R2 audit)
-  | "service_token.bind_request"
-  | "service_token.bind_self"
-  | "service_token.bind_denied"
-  | "service_token.bind_conflict"
-  | "service_token.update"
-  | "service_token.revoke";
+  | "workflow.reindex" | "workflow.consolidate" | "audit.purge"
+  | "service_token.bind_request" | "service_token.bind_self"
+  | "service_token.bind_denied" | "service_token.bind_conflict"
+  | "service_token.update" | "service_token.revoke"; // prettier-ignore
 
 export type ResourceType =
   | "namespace"
@@ -113,7 +97,7 @@ export function audit(db: DbHandle, r2: R2Bucket, entry: AuditEntry): void {
 
   // Fire-and-forget — never block the caller's response.
   // Both writes settle independently; failures are silently swallowed.
-  void Promise.allSettled([writeD1(db, row), appendR2(r2, row)]);
+  void Promise.allSettled([writeD1(db, row), writeR2(r2, row)]);
 }
 
 // ---------------------------------------------------------------------------
@@ -140,36 +124,74 @@ async function writeD1(db: DbHandle, row: AuditLogRow): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// R2 NDJSON cold archive (Loki-compatible)
+// R2 cold archive — individual event objects (race-free)
 // ---------------------------------------------------------------------------
 
-async function appendR2(r2: R2Bucket, row: AuditLogRow): Promise<void> {
+/** Write a single audit event as its own R2 object. No read-modify-write. */
+async function writeR2(r2: R2Bucket, row: AuditLogRow): Promise<void> {
   const isoDate = new Date(row.created_at * 1000).toISOString();
-  const day = isoDate.slice(0, 10);
-  const key = `audit/${day}.ndjson`;
-
-  const line =
-    JSON.stringify({
-      timestamp: isoDate,
-      id: row.id,
-      namespace_id: row.namespace_id,
-      email: row.email,
-      action: row.action,
-      resource_type: row.resource_type,
-      resource_id: row.resource_id,
-      detail: row.detail ? JSON.parse(row.detail) : null,
-    }) + "\n";
-
-  // R2 has no native append. Read existing + concat.
-  const existing = await r2.get(key);
-  const prev = existing ? await existing.text() : "";
-  await r2.put(key, prev + line, {
-    httpMetadata: { contentType: "application/x-ndjson" },
+  const key = `audit/events/${isoDate.slice(0, 10)}/${row.id}.json`;
+  await r2.put(key, rowToJson(row, isoDate), {
+    httpMetadata: { contentType: "application/json" },
   });
 }
 
+function rowToJson(row: AuditLogRow, isoDate: string): string {
+  return JSON.stringify({
+    timestamp: isoDate,
+    id: row.id,
+    namespace_id: row.namespace_id,
+    email: row.email,
+    action: row.action,
+    resource_type: row.resource_type,
+    resource_id: row.resource_id,
+    detail: row.detail ? JSON.parse(row.detail) : null,
+  });
+}
+
+/**
+ * Merge individual R2 audit event objects into a daily NDJSON file.
+ * Called by the consolidation workflow (single-writer, no race).
+ */
+export async function consolidateAuditR2(r2: R2Bucket, day: string): Promise<number> {
+  const prefix = `audit/events/${day}/`;
+  const ndjsonKey = `audit/${day}.ndjson`;
+  let cursor: string | undefined;
+  const keys: string[] = [];
+  const lines: string[] = [];
+
+  do {
+    const list = await r2.list({ prefix, cursor });
+    for (const obj of list.objects) {
+      keys.push(obj.key);
+      const data = await r2.get(obj.key);
+      if (data) lines.push((await data.text()).trim());
+    }
+    cursor = list.truncated ? list.cursor : undefined;
+  } while (cursor);
+
+  if (lines.length === 0) return 0;
+
+  // Append to existing daily NDJSON (or create new)
+  const existing = await r2.get(ndjsonKey);
+  const prev = existing ? await existing.text() : "";
+  await r2.put(ndjsonKey, prev + lines.join("\n") + "\n", {
+    httpMetadata: { contentType: "application/x-ndjson" },
+  });
+
+  // Delete individual objects after successful merge
+  for (const key of keys) {
+    try {
+      await r2.delete(key);
+    } catch {
+      /* best-effort */
+    }
+  }
+  return lines.length;
+}
+
 // ---------------------------------------------------------------------------
-// Query helpers (for MCP tool + REST API)
+// Query + purge helpers
 // ---------------------------------------------------------------------------
 
 export interface AuditQuery {
@@ -187,27 +209,15 @@ export interface AuditQuery {
 export async function queryAuditLogs(db: DbHandle, q: AuditQuery): Promise<AuditLogRow[]> {
   const clauses: string[] = [];
   const binds: unknown[] = [];
-
-  if (q.namespace_id) {
-    clauses.push("namespace_id = ?");
-    binds.push(q.namespace_id);
-  }
-  if (q.email) {
-    clauses.push("email = ?");
-    binds.push(q.email);
-  }
-  if (q.action) {
-    clauses.push("action = ?");
-    binds.push(q.action);
-  }
-  if (q.resource_type) {
-    clauses.push("resource_type = ?");
-    binds.push(q.resource_type);
-  }
-  if (q.resource_id) {
-    clauses.push("resource_id = ?");
-    binds.push(q.resource_id);
-  }
+  const push = (col: string, val: unknown) => {
+    clauses.push(`${col} = ?`);
+    binds.push(val);
+  };
+  if (q.namespace_id) push("namespace_id", q.namespace_id);
+  if (q.email) push("email", q.email);
+  if (q.action) push("action", q.action);
+  if (q.resource_type) push("resource_type", q.resource_type);
+  if (q.resource_id) push("resource_id", q.resource_id);
   if (q.since) {
     clauses.push("created_at >= ?");
     binds.push(q.since);
@@ -216,26 +226,20 @@ export async function queryAuditLogs(db: DbHandle, q: AuditQuery): Promise<Audit
     clauses.push("created_at <= ?");
     binds.push(q.until);
   }
-
   const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-  const limit = Math.min(q.limit ?? 100, 500);
-  binds.push(limit);
-
-  const sql = `SELECT * FROM audit_logs ${where} ORDER BY created_at DESC LIMIT ?`;
-  const stmt = db.prepare(sql);
-  const result = await stmt.bind(...binds).all<AuditLogRow>();
+  binds.push(Math.min(q.limit ?? 100, 500));
+  const result = await db
+    .prepare(`SELECT * FROM audit_logs ${where} ORDER BY created_at DESC LIMIT ?`)
+    .bind(...binds)
+    .all<AuditLogRow>();
   return result.results;
 }
 
-// ---------------------------------------------------------------------------
-// Purge (used by consolidation workflow)
-// ---------------------------------------------------------------------------
-
 /** Delete audit logs older than a given epoch from D1. R2 archive is retained. */
 export async function purgeAuditLogs(db: DbHandle, olderThanEpoch: number): Promise<number> {
-  const result = await db
+  const r = await db
     .prepare("DELETE FROM audit_logs WHERE created_at < ?")
     .bind(olderThanEpoch)
     .run();
-  return result.meta.changes ?? 0;
+  return r.meta.changes ?? 0;
 }

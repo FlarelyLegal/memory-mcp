@@ -6,6 +6,8 @@
  * 2. Duplicate detection: find exact-duplicate memories and delete extras
  * 3. Entity summary refresh: re-summarize entities using linked memories + AI
  * 4. Purge: hard-delete archived memories older than 30 days
+ * 5. Consolidate R2 audit: merge individual event objects into daily NDJSON
+ * 6. Purge D1 audit logs older than 90 days
  *
  * Triggered by the `consolidate_memory` MCP tool or POST /api/v1/admin/consolidate.
  */
@@ -31,7 +33,7 @@ import {
   updateEntitySummary,
   DEFAULT_DECAY_THRESHOLD,
 } from "../consolidation.js";
-import { purgeAuditLogs } from "../audit.js";
+import { purgeAuditLogs, consolidateAuditR2 } from "../audit.js";
 import { deleteVector } from "../vectorize.js";
 import { upsertEntityVector } from "../vectorize.js";
 
@@ -51,6 +53,7 @@ export interface ConsolidationResult {
   duplicates_removed: number;
   summaries_refreshed: number;
   purged: number;
+  audit_consolidated: number;
   audit_purged: number;
 }
 
@@ -183,7 +186,17 @@ Write a concise, factual summary:`;
       return result.deleted;
     });
 
-    // Step 5: Purge old audit logs from D1 (R2 archive is retained)
+    // Step 5: Consolidate R2 audit events into daily NDJSON files
+    const auditConsolidated = await step.do("consolidate-audit-r2", STEP_RETRY, async () => {
+      // Consolidate today and yesterday (covers events near midnight)
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+      const a = await consolidateAuditR2(this.env.STORAGE, today);
+      const b = await consolidateAuditR2(this.env.STORAGE, yesterday);
+      return a + b;
+    });
+
+    // Step 6: Purge old audit logs from D1 (R2 archive is retained)
     const auditPurged = await step.do("purge-audit-logs", STEP_RETRY, async () => {
       const db = this.env.DB;
       const cutoff = now() - 90 * 86400; // 90 days
@@ -195,6 +208,7 @@ Write a concise, factual summary:`;
       duplicates_removed: duplicatesRemoved,
       summaries_refreshed: summariesRefreshed,
       purged,
+      audit_consolidated: auditConsolidated,
       audit_purged: auditPurged,
     };
   }
