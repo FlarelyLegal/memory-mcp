@@ -169,7 +169,16 @@ Write a concise, factual summary:`;
     const purged = await step.do("purge-archived", STEP_RETRY, async () => {
       const db = this.env.DB;
       const cutoff = now() - purgeDays * 86400;
-      return purgeArchivedMemories(db, namespace_id, cutoff);
+      const result = await purgeArchivedMemories(db, namespace_id, cutoff);
+      // Keep Vectorize in sync with hard-deleted memories.
+      for (const id of result.deleted_ids) {
+        try {
+          await deleteVector(this.env, "memory", id);
+        } catch {
+          // best-effort vector cleanup
+        }
+      }
+      return result.deleted;
     });
 
     return {

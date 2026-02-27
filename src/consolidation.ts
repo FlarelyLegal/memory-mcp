@@ -65,19 +65,41 @@ export async function purgeArchivedMemories(
   db: DbHandle,
   namespace_id: string,
   olderThanEpoch: number,
-): Promise<number> {
-  const result = await withRetry(() =>
-    db
-      .prepare(
-        `DELETE FROM memories
+): Promise<{ deleted: number; deleted_ids: string[] }> {
+  const candidates = await db
+    .prepare(
+      `SELECT id FROM memories
        WHERE namespace_id = ? AND importance = 0
          AND json_extract(metadata, '$.archived') = 1
          AND updated_at < ?`,
-      )
-      .bind(namespace_id, olderThanEpoch)
-      .run(),
+    )
+    .bind(namespace_id, olderThanEpoch)
+    .all<{ id: string }>();
+
+  const ids = candidates.results.map((r) => r.id);
+  if (ids.length === 0) return { deleted: 0, deleted_ids: [] };
+
+  // Re-check archival constraints at delete-time so concurrent updates are safe.
+  const stmt = db.prepare(
+    `DELETE FROM memories
+     WHERE id = ? AND namespace_id = ? AND importance = 0
+       AND json_extract(metadata, '$.archived') = 1
+       AND updated_at < ?`,
   );
-  return result.meta.changes ?? 0;
+  const results = await withRetry(() =>
+    db.batch(ids.map((id) => stmt.bind(id, namespace_id, olderThanEpoch))),
+  );
+
+  const deleted_ids: string[] = [];
+  let deleted = 0;
+  for (let i = 0; i < results.length; i++) {
+    const changes = results[i]?.meta.changes ?? 0;
+    if (changes > 0) {
+      deleted += changes;
+      deleted_ids.push(ids[i]!);
+    }
+  }
+  return { deleted, deleted_ids };
 }
 
 // ---------------------------------------------------------------------------
