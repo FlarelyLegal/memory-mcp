@@ -1,6 +1,6 @@
 # MCP Tools
 
-[< Docs](README.md) | [Architecture](architecture.md) | [REST API >](rest-api.md)
+[< Back to docs](README.md)
 
 17 tools organized by domain. All tools require authentication via the MCP OAuth flow.
 

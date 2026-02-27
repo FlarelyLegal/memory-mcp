@@ -1,6 +1,6 @@
 # Deployment
 
-[< Docs](README.md) | [Configuration >](configuration.md)
+[< Back to docs](README.md)
 
 ## Prerequisites
 

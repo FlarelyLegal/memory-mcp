@@ -1,6 +1,6 @@
 # Observability
 
-[< Docs](README.md) | [REST API](rest-api.md) | [Testing](../tests/e2e/README.md)
+[< Back to docs](README.md)
 
 ## Audit logging
 

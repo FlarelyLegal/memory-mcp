@@ -63,61 +63,20 @@ Access is gated by Cloudflare Access — to request a test account, open an issu
 
 ## MCP Tools (17)
 
-| Tool                  | Description                                               |
-| --------------------- | --------------------------------------------------------- |
-| `manage_namespace`    | Create, list, or set visibility on namespaces             |
-| `manage_entity`       | CRUD for graph entities with embedding upsert             |
-| `find_entities`       | Search entities by name/type/keyword                      |
-| `manage_relation`     | Create or delete directed relations                       |
-| `get_relations`       | Query relations from/to an entity                         |
-| `traverse_graph`      | BFS graph traversal up to max_depth hops                  |
-| `manage_memory`       | Create/update/delete memories with embedding              |
-| `query_memories`      | Recall (decay-ranked), search (keyword), or entity-linked |
-| `manage_conversation` | Create or list conversations                              |
-| `add_message`         | Add a message and embed for search                        |
-| `get_messages`        | Get or search messages                                    |
-| `search`              | Semantic vector search; context mode enriches with graph  |
-| `reindex_vectors`     | Trigger durable reindex workflow                          |
-| `consolidate_memory`  | Trigger consolidation workflow (decay, dedup, summarize)  |
-| `get_workflow_status` | Check status of a running workflow instance               |
-| `namespace_stats`     | Aggregate counts for a namespace                          |
-| `claim_namespaces`    | Claim all unowned namespaces for current user             |
-
-See [MCP Tools](docs/mcp-tools.md) for parameters and usage details.
+17 tools covering namespaces, entities, relations, traversal, memories, conversations, semantic search, and admin workflows. See [MCP Tools](docs/mcp-tools.md) for the full list with parameters and usage.
 
 ## REST API
 
 Full REST API mirrors the MCP tools with OpenAPI 3.1 spec.
 
-- **Interactive docs:** [https://memory.flarelylegal.com/api/docs](https://memory.flarelylegal.com/api/docs)
+- **Interactive docs:** [memory.flarelylegal.com/api/docs](https://memory.flarelylegal.com/api/docs)
 - **OpenAPI spec:** `GET /api/openapi.json`
 
 See [REST API](docs/rest-api.md) for authentication, endpoints, and response shaping.
 
 ## Documentation
 
-| Document                                       | Description                                  |
-| ---------------------------------------------- | -------------------------------------------- |
-| [docs/](docs/README.md)                        | Documentation index                          |
-| [docs/deployment.md](docs/deployment.md)       | Setup, resource creation, deploy, migrations |
-| [docs/configuration.md](docs/configuration.md) | Secrets, Cloudflare Access, admin role       |
-| [docs/architecture.md](docs/architecture.md)   | Components, file structure, data flow        |
-| [docs/mcp-tools.md](docs/mcp-tools.md)         | All 17 tools with parameters and usage       |
-| [docs/rest-api.md](docs/rest-api.md)           | Authentication, endpoints, service tokens    |
-| [docs/observability.md](docs/observability.md) | Audit logging, wrangler tail, monitoring     |
-| [tests/e2e/](tests/e2e/README.md)              | E2E test suite                               |
-
-## Testing
-
-```bash
-npm run typecheck
-npm run lint
-npm run build
-npm run test:e2e:a    # site A
-npm run test:e2e:b    # site B
-```
-
-See [Testing](tests/e2e/README.md) for details on targets, secrets, and running locally.
+Full docs at [docs/](docs/README.md) — deployment, configuration, architecture, MCP tools, REST API, observability, [FAQ](docs/faq.md), and [contributing](docs/contributing.md).
 
 ## Roadmap
 
