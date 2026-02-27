@@ -57,7 +57,7 @@ npm run vectorize:indexes    # account A
 npm run vectorize:indexes:b  # account B
 ```
 
-This creates indexes on `namespace_id`, `kind`, and `type`. Without these, Vectorize metadata filters silently return empty results.
+This creates indexes on `namespace_id`, `kind`, `type`, `created_at`, `role`, `conversation_id`, and `entity_id`. Without these, Vectorize metadata filters silently return empty results.
 
 ### 2. Configure Cloudflare Access
 
@@ -231,7 +231,7 @@ The Worker resolves the service token to your email via KV. All operations run w
 | `GET /api/openapi.json` | OpenAPI 3.1 spec                                                   |
 | `GET /api/demo`         | Full demo namespace graph snapshot (entities, relations, memories) |
 
-## MCP Tools (14)
+## MCP Tools (17)
 
 | Tool                  | Description                                                |
 | --------------------- | ---------------------------------------------------------- |
@@ -247,7 +247,10 @@ The Worker resolves the service token to your email via KV. All operations run w
 | `add_message`         | Add a message and embed for search                         |
 | `get_messages`        | Get or search messages                                     |
 | `search`              | Semantic vector search; context mode enriches with graph   |
-| `reindex_vectors`     | Batch re-embed entities/memories (25 per batch)            |
+| `reindex_vectors`     | Trigger durable reindex workflow (returns instance ID)     |
+| `consolidate_memory`  | Trigger consolidation workflow (decay, dedup, summarize)   |
+| `get_workflow_status` | Check status of a running workflow instance                |
+| `namespace_stats`     | Entity/memory/relation/conversation counts for a namespace |
 | `claim_namespaces`    | Claim all unowned namespaces for current user              |
 
 ### Temporal decay
