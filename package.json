@@ -34,6 +34,8 @@
     "vectorize:indexes:b": "wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=namespace_id --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=kind --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=type --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=created_at --type=number && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=role --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=conversation_id --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=entity_id --type=string",
     "deploy:init": "npm run db:init && wrangler deploy --config wrangler-a.jsonc",
     "seed:demo": "node scripts/seed-demo.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:a": "API_TARGET=a playwright test",
     "test:e2e:b": "API_TARGET=b playwright test"
@@ -86,6 +88,7 @@
     "react": "^19.2.4",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18",
     "wrangler": "^4.0.0"
   }
 }
