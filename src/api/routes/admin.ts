@@ -1,7 +1,7 @@
 /** Admin REST endpoints: claim-namespaces, stats + OpenAPI definitions. */
 import { defineRoute } from "../registry.js";
 import { json, jsonError, handleError } from "../middleware.js";
-import { assertNamespaceAccess, isAdmin } from "../../auth.js";
+import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
 import { claimUnownedNamespaces } from "../../graph/index.js";
 import { getNamespaceStats } from "../../consolidation.js";
 import { audit } from "../../audit.js";
@@ -13,7 +13,7 @@ export function registerAdminRoutes(): void {
     "/api/v1/admin/stats/:namespace_id",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, true);
         const stats = await getNamespaceStats(ctx.db, ctx.params.namespace_id);
         return json(stats);
       } catch (e) {

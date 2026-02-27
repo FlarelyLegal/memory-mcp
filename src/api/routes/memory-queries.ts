@@ -2,7 +2,7 @@
 import { defineRoute } from "../registry.js";
 import { json, jsonError, handleError } from "../middleware.js";
 import { recallMemories, searchMemories, getMemoriesForEntity } from "../../memories.js";
-import { assertNamespaceAccess, assertEntityAccess } from "../../auth.js";
+import { assertNamespaceReadAccess, assertEntityReadAccess } from "../../auth.js";
 import {
   nsPathParam,
   idPathParam,
@@ -21,7 +21,7 @@ export function registerMemoryQueryRoutes(): void {
     "/api/v1/namespaces/:namespace_id/memories",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const mode = ctx.query.get("mode") ?? "recall";
         const type = ctx.query.get("type") as MemoryType | undefined;
         const limit = queryLimit(ctx.query, 50);
@@ -124,7 +124,7 @@ export function registerMemoryQueryRoutes(): void {
     "/api/v1/entities/:id/memories",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.email);
         const limit = queryLimit(ctx.query, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [

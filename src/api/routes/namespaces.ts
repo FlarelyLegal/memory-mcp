@@ -1,11 +1,13 @@
 /** Namespace REST endpoints + OpenAPI definitions. */
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
-import { createNamespace, listNamespaces } from "../../graph/index.js";
-import { namespaceSchema } from "../schemas.js";
+import { createNamespace, listNamespaces, updateNamespaceVisibility } from "../../graph/index.js";
+import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
+import { namespaceSchema, okSchema } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
+import type { NamespaceVisibility } from "../../types.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
@@ -18,6 +20,7 @@ export function registerNamespaceRoutes(): void {
           "name",
           "description",
           "owner",
+          "visibility",
           "metadata",
           "created_at",
           "updated_at",
@@ -41,7 +44,7 @@ export function registerNamespaceRoutes(): void {
     },
     {
       summary: "List namespaces",
-      description: "List all namespaces owned by the authenticated user.",
+      description: "List namespaces owned by the user plus public namespaces.",
       tags: ["Namespaces"],
       operationId: "listNamespaces",
       parameters: [
@@ -127,6 +130,70 @@ export function registerNamespaceRoutes(): void {
               },
             },
           },
+        },
+      },
+    },
+  );
+
+  defineRoute(
+    "PATCH",
+    "/api/v1/namespaces/:id",
+    async (ctx, request) => {
+      try {
+        if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
+          return jsonError("Admin access required", 403);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.email, true);
+        const body = await parseBody<{ visibility?: string }>(request);
+        if (body instanceof Response) return body;
+        const v = body.visibility;
+        if (!v || (v !== "private" && v !== "public"))
+          return jsonError("visibility must be 'private' or 'public'", 400);
+        await updateNamespaceVisibility(ctx.db, ctx.params.id, v as NamespaceVisibility);
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "namespace.set_visibility",
+          email: ctx.email,
+          namespace_id: ctx.params.id,
+          resource_type: "namespace",
+          resource_id: ctx.params.id,
+          detail: { visibility: v },
+        });
+        return json({ ok: true, visibility: v });
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Update namespace visibility",
+      description: "Set namespace visibility to public or private. Admin only.",
+      tags: ["Namespaces"],
+      operationId: "updateNamespaceVisibility",
+      parameters: [
+        {
+          name: "id",
+          in: "path",
+          required: true,
+          description: "Namespace ID",
+          schema: { type: "string", format: "uuid" },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["visibility"],
+              properties: {
+                visibility: { type: "string", enum: ["private", "public"] },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Updated",
+          content: { "application/json": { schema: okSchema() } },
         },
       },
     },

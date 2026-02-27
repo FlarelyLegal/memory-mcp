@@ -2,7 +2,7 @@
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { createEntity, searchEntities } from "../../graph/index.js";
-import { assertNamespaceAccess } from "../../auth.js";
+import { assertNamespaceWriteAccess, assertNamespaceReadAccess, isAdmin } from "../../auth.js";
 import { upsertEntityVector } from "../../vectorize.js";
 import {
   nsPathParam,
@@ -22,7 +22,7 @@ export function registerEntityRoutes(): void {
     "/api/v1/namespaces/:namespace_id/entities",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const queryInput = entityListQuerySchema.safeParse({
           q: ctx.query.get("q") ?? undefined,
           type: ctx.query.get("type") ?? undefined,
@@ -109,7 +109,8 @@ export function registerEntityRoutes(): void {
     "/api/v1/namespaces/:namespace_id/entities",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
         const body = await parseBodyWithSchema(request, entityCreateSchema);
         if (body instanceof Response) return body;
 

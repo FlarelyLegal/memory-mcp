@@ -2,7 +2,7 @@
 import { defineRoute } from "../registry.js";
 import { json, parseBody, handleError } from "../middleware.js";
 import { createConversation, listConversations } from "../../conversations.js";
-import { assertNamespaceAccess } from "../../auth.js";
+import { assertNamespaceWriteAccess, assertNamespaceReadAccess, isAdmin } from "../../auth.js";
 import {
   nsPathParam,
   limitQueryParam,
@@ -20,7 +20,7 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const limit = queryLimit(ctx.query, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
@@ -85,7 +85,8 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
         const body = await parseBody<{ title?: string; metadata?: Record<string, unknown> }>(
           request,
         );

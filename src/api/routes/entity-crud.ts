@@ -2,7 +2,7 @@
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { getEntity, updateEntity, deleteEntity } from "../../graph/index.js";
-import { assertEntityAccess } from "../../auth.js";
+import { assertEntityAccess, assertEntityReadAccess, isAdmin } from "../../auth.js";
 import { upsertEntityVector, deleteVector } from "../../vectorize.js";
 import { idPathParam, entitySchema, okSchema, metadataSchema } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
@@ -15,7 +15,7 @@ export function registerEntityCrudRoutes(): void {
     "/api/v1/entities/:id",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.email);
         const entity = await getEntity(ctx.db, ctx.params.id);
         if (!entity) return jsonError("Entity not found", 404);
         return json(parseEntityRow(entity));
@@ -44,7 +44,8 @@ export function registerEntityCrudRoutes(): void {
     "/api/v1/entities/:id",
     async (ctx, request) => {
       try {
-        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email, admin);
         const body = await parseBodyWithSchema(request, entityUpdateSchema);
         if (body instanceof Response) return body;
         await updateEntity(ctx.db, ctx.params.id, body);
@@ -103,7 +104,8 @@ export function registerEntityCrudRoutes(): void {
     "/api/v1/entities/:id",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email, admin);
         await deleteEntity(ctx.db, ctx.params.id);
         await deleteVector(ctx.env, "entity", ctx.params.id);
         await audit(ctx.db, ctx.env.STORAGE, {

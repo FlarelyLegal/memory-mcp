@@ -1,7 +1,7 @@
 /** Semantic search REST endpoint + OpenAPI definition. */
 import { defineRoute } from "../registry.js";
 import { json, parseBodyWithSchema, handleError } from "../middleware.js";
-import { assertNamespaceAccess } from "../../auth.js";
+import { assertNamespaceReadAccess } from "../../auth.js";
 import { semanticSearch } from "../../vectorize.js";
 import { getEntity, getRelationsFrom, getRelationsTo } from "../../graph/index.js";
 import { recallMemories, getMemoriesForEntity } from "../../memories.js";
@@ -16,7 +16,7 @@ export function registerSearchRoutes(): void {
     "/api/v1/namespaces/:namespace_id/search",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const rl = await enforceSearchRateLimit(ctx, "semantic-search");
         if (rl) return rl;
         const body = await parseBodyWithSchema(request, semanticSearchSchema);

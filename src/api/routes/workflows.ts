@@ -1,7 +1,7 @@
 /** Workflow REST endpoints: reindex, consolidation, status + OpenAPI defs. */
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
-import { assertNamespaceAccess, isAdmin } from "../../auth.js";
+import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
 import { audit } from "../../audit.js";
 
 export function registerWorkflowRoutes(): void {
@@ -18,7 +18,7 @@ export function registerWorkflowRoutes(): void {
         if (!body.namespace_id) return jsonError("namespace_id is required", 400);
 
         if (body.namespace_id !== "all") {
-          await assertNamespaceAccess(ctx.db, body.namespace_id, ctx.email);
+          await assertNamespaceWriteAccess(ctx.db, body.namespace_id, ctx.email, true);
         }
 
         const instance = await ctx.env.REINDEX_WORKFLOW.create({
@@ -97,7 +97,7 @@ export function registerWorkflowRoutes(): void {
         if (body instanceof Response) return body;
         if (!body.namespace_id) return jsonError("namespace_id is required", 400);
 
-        await assertNamespaceAccess(ctx.db, body.namespace_id, ctx.email);
+        await assertNamespaceWriteAccess(ctx.db, body.namespace_id, ctx.email, true);
 
         const instance = await ctx.env.CONSOLIDATION_WORKFLOW.create({
           params: {

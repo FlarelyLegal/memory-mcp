@@ -2,7 +2,12 @@
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { addMessage, getMessages, getConversation, searchMessages } from "../../conversations.js";
-import { assertNamespaceAccess, assertConversationAccess } from "../../auth.js";
+import {
+  assertNamespaceReadAccess,
+  assertConversationAccess,
+  assertConversationReadAccess,
+  isAdmin,
+} from "../../auth.js";
 import { upsertMessageVector } from "../../vectorize.js";
 import {
   nsPathParam,
@@ -25,7 +30,7 @@ export function registerMessageRoutes(): void {
     "/api/v1/conversations/:id/messages",
     async (ctx) => {
       try {
-        await assertConversationAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertConversationReadAccess(ctx.db, ctx.params.id, ctx.email);
         const limit = queryLimit(ctx.query, 100, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
@@ -91,7 +96,8 @@ export function registerMessageRoutes(): void {
     "/api/v1/conversations/:id/messages",
     async (ctx, request) => {
       try {
-        await assertConversationAccess(ctx.db, ctx.params.id, ctx.email);
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertConversationAccess(ctx.db, ctx.params.id, ctx.email, admin);
         const body = await parseBodyWithSchema(request, messageCreateSchema);
         if (body instanceof Response) return body;
 
@@ -169,7 +175,7 @@ export function registerMessageRoutes(): void {
     "/api/v1/namespaces/:namespace_id/messages",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const rl = await enforceSearchRateLimit(ctx, "message-search");
         if (rl) return rl;
         const queryInput = searchMessagesQuerySchema.safeParse({

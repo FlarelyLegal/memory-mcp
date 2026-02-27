@@ -2,7 +2,7 @@
 import { defineRoute } from "../registry.js";
 import { json, handleError } from "../middleware.js";
 import { traverse } from "../../graph/index.js";
-import { assertEntityAccess } from "../../auth.js";
+import { assertEntityReadAccess } from "../../auth.js";
 import { parseEntityRow, parseRelationRow } from "../row-parsers.js";
 
 export function registerTraversalRoutes(): void {
@@ -11,7 +11,7 @@ export function registerTraversalRoutes(): void {
     "/api/v1/entities/:id/traverse",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.email);
         const maxDepth = Math.min(Number(ctx.query.get("max_depth") ?? 2), 5);
         const typesParam = ctx.query.get("relation_types");
         const relationTypes = typesParam ? typesParam.split(",") : undefined;
