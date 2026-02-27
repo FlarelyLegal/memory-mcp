@@ -71,13 +71,17 @@ export interface AuditEntry {
 // ---------------------------------------------------------------------------
 
 /**
- * Log an audit event to D1 + R2. Best-effort — never throws.
+ * Log an audit event to D1 + R2. Fire-and-forget — never blocks, never throws.
+ *
+ * D1 and R2 writes are dispatched concurrently but NOT awaited, so callers
+ * can safely `await audit(...)` or call without await — either way the
+ * response is not delayed by audit I/O.
  *
  * @param db   D1 session handle (write session for the current request)
  * @param r2   R2 bucket for cold archive
  * @param entry Audit event details
  */
-export async function audit(db: DbHandle, r2: R2Bucket, entry: AuditEntry): Promise<void> {
+export function audit(db: DbHandle, r2: R2Bucket, entry: AuditEntry): void {
   const id = generateId();
   const ts = now();
   const detail = entry.detail ? JSON.stringify(entry.detail) : null;
@@ -107,8 +111,9 @@ export async function audit(db: DbHandle, r2: R2Bucket, entry: AuditEntry): Prom
     }),
   );
 
-  // Fire both writes concurrently; settle independently.
-  await Promise.allSettled([writeD1(db, row), appendR2(r2, row)]);
+  // Fire-and-forget — never block the caller's response.
+  // Both writes settle independently; failures are silently swallowed.
+  void Promise.allSettled([writeD1(db, row), appendR2(r2, row)]);
 }
 
 // ---------------------------------------------------------------------------

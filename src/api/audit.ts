@@ -28,7 +28,13 @@ function mapAction(action: string): AuditAction {
     service_token_updated: "service_token.update",
     service_token_revoked: "service_token.revoke",
   };
-  return map[action] ?? ("service_token.bind_request" as AuditAction);
+  const mapped = map[action];
+  if (!mapped) {
+    // eslint-disable-next-line no-console
+    console.warn(`audit: unknown legacy action "${action}", logging as-is`);
+    return action as AuditAction;
+  }
+  return mapped;
 }
 
 export async function writeAuditEvent(env: Env, event: AuditEvent): Promise<void> {
