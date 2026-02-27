@@ -106,3 +106,14 @@ npm run test:e2e:b    # site B
 ```
 
 See [Testing](tests/e2e/README.md) for details on targets, secrets, and running locally.
+
+## Roadmap
+
+Security and feature items not yet implemented:
+
+- [ ] **Rate limiting** — `RATE_LIMIT_AUTH` and `RATE_LIMIT_SEARCH` bindings exist in types but are not wired up
+- [ ] **Field-level encryption** — entity content, memory text, and conversation messages are plaintext in D1 (Cloudflare encrypts at rest at the storage layer, but dashboard/D1 console access exposes data)
+- [ ] **Namespace groups** — shared access across multiple users within a namespace (currently single-owner only)
+- [ ] **CORS origin KV setup** — `cors:origins` KV key must be populated per deployment for cross-origin browser clients (same-origin works by default)
+- [ ] **Health check config validation** — `/health` could verify KV keys (`admin:emails`, `cors:origins`) and report misconfiguration
+- [ ] **Audit query MCP tool + REST API routes** — `queryAuditLogs` exists in code but has no MCP tool or REST endpoint yet
