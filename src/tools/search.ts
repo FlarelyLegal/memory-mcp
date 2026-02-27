@@ -10,9 +10,9 @@ import {
 } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
-import * as graph from "../graph/index.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
+import { hydrateEntityContext } from "../context.js";
 import { assertNamespaceReadAccess } from "../auth.js";
 import { track, resolveNamespace } from "../state.js";
 import { txt, err, cap, trunc, trackTools } from "../response-helpers.js";
@@ -94,52 +94,46 @@ export function registerSearchTools(
           return txt({ matches: semanticResults.map(mapMatch) });
         }
 
-        // Context mode: enrich entity matches with graph + memories (parallel)
-        const entityContext = await Promise.all(
-          semanticResults
-            .filter((r) => r.kind === "entity" && r.metadata.entity_id)
-            .map(async (result) => {
-              const eid = result.metadata.entity_id;
-              const [entity, outRels, inRels, entityMems] = await Promise.all([
-                graph.getEntity(db, eid),
-                graph.getRelationsFrom(db, eid, { limit: 5 }),
-                graph.getRelationsTo(db, eid, { limit: 5 }),
-                memories.getMemoriesForEntity(db, eid, { limit: 5 }),
-              ]);
-              return {
-                entity: entity
-                  ? {
-                      id: entity.id,
-                      name: entity.name,
-                      type: entity.type,
-                      ...(isCompact
-                        ? {}
-                        : { summary: full ? entity.summary : trunc(entity.summary) }),
-                    }
-                  : null,
-                relations: [
-                  ...outRels.map((r) => ({
-                    id: r.id,
-                    target_id: r.target_id,
-                    type: r.relation_type,
-                  })),
-                  ...inRels.map((r) => ({
-                    id: r.id,
-                    source_id: r.source_id,
-                    type: r.relation_type,
-                  })),
-                ],
-                memories: entityMems.map((m) =>
-                  isCompact
-                    ? { id: m.id, type: m.type }
-                    : { id: m.id, content: trunc(m.content), type: m.type },
-                ),
-              };
-            }),
-        );
-        const entityIds = semanticResults.filter((r) => r.kind === "entity").length;
+        // Context mode: batch-hydrate entity matches (3 queries instead of 4×N)
+        const entityIds = semanticResults
+          .filter((r) => r.kind === "entity" && r.metadata.entity_id)
+          .map((r) => r.metadata.entity_id as string);
+        const contextMap = await hydrateEntityContext(db, entityIds);
+        const entityContext = entityIds
+          .map((eid) => {
+            const ctx = contextMap.get(eid);
+            if (!ctx) return null;
+            return {
+              entity: {
+                id: ctx.entity.id,
+                name: ctx.entity.name,
+                type: ctx.entity.type,
+                ...(isCompact
+                  ? {}
+                  : { summary: full ? ctx.entity.summary : trunc(ctx.entity.summary) }),
+              },
+              relations: [
+                ...ctx.relationsFrom.map((r) => ({
+                  id: r.id,
+                  target_id: r.target_id,
+                  type: r.relation_type,
+                })),
+                ...ctx.relationsTo.map((r) => ({
+                  id: r.id,
+                  source_id: r.source_id,
+                  type: r.relation_type,
+                })),
+              ],
+              memories: ctx.memories.map((m) =>
+                isCompact
+                  ? { id: m.id, type: m.type }
+                  : { id: m.id, content: trunc(m.content), type: m.type },
+              ),
+            };
+          })
+          .filter(Boolean);
         const ranked = await memories.recallMemories(db, namespace_id, {
-          limit: Math.max(1, n - entityIds),
+          limit: Math.max(1, n - entityIds.length),
         });
         return txt({
           matches: semanticResults.map(mapMatch),
