@@ -1,0 +1,86 @@
+{
+  "name": "memory-graph-mcp",
+  "account_id": "b15ec51cdf96746b05cb3983874d65a2",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "memory.taslabs.net",
+      "custom_domain": true,
+    },
+    {
+      "pattern": "memory.schenanigans.com",
+      "custom_domain": true,
+    },
+  ],
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-25",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MCP_OBJECT",
+        "class_name": "MemoryGraphMCP",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MemoryGraphMCP"],
+    },
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "memory-graph-mcp-db",
+      "database_id": "080fbc1c-3431-4ea6-9a8e-427244e21e05",
+    },
+  ],
+
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "memory-graph-mcp-embeddings",
+    },
+  ],
+
+  "ai": {
+    "binding": "AI",
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "94ae719d3fd842ec93f0728ad6771030",
+    },
+    {
+      "binding": "OAUTH_KV",
+      "id": "acbe5f3da3534db19bbe2c9b727298a8",
+    },
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "STORAGE",
+      "bucket_name": "memory-graph-mcp-storage",
+    },
+  ],
+
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true,
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1,
+    },
+  },
+}

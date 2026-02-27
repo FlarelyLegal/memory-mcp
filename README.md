@@ -1,7 +1,5 @@
 # Memory Graph MCP
 
-<!-- badges:start -->
-
 [![CI](https://github.com/FlarelyLegal/memory-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/FlarelyLegal/memory-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/FlarelyLegal/memory-mcp?logo=github&label=release)](https://github.com/FlarelyLegal/memory-mcp/releases/latest)
 [![Node.js](https://img.shields.io/badge/Node.js-≥24-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -10,9 +8,6 @@
 [![MCP SDK](https://img.shields.io/badge/MCP_SDK-1.27-blue)](https://modelcontextprotocol.io)
 [![GitHub Issues](https://img.shields.io/github/issues/FlarelyLegal/memory-mcp?logo=github)](https://github.com/FlarelyLegal/memory-mcp/issues)
 [![GitHub Stars](https://img.shields.io/github/stars/FlarelyLegal/memory-mcp?style=flat&logo=github&label=stars)](https://github.com/FlarelyLegal/memory-mcp/stargazers)
-
-<!-- badges:end -->
-
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/FlarelyLegal/memory-mcp)
 
 Remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory — knowledge graphs, semantic search, and temporally-decayed recall.
@@ -46,7 +41,10 @@ npx wrangler kv namespace create OAUTH_KV
 npx wrangler r2 bucket create memory-graph-mcp-storage
 ```
 
-Update `wrangler.jsonc` with the resource IDs from the commands above.
+Use account-specific configs and update resource IDs in each:
+
+- `wrangler-a.jsonc` (Account A)
+- `wrangler-b.jsonc` (Account B)
 
 For Vectorize filtering to work, add metadata indexes for:
 
@@ -60,7 +58,7 @@ You need a [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/
 1. In the [Zero Trust dashboard](https://one.dash.cloudflare.com/), go to **Access > Applications**
 2. Create a **Self-hosted** application for your Workers domain (e.g. `memory-graph-mcp.<subdomain>.workers.dev`)
 3. Add an **Allow** policy for your identity provider (Google, GitHub, etc.)
-4. If you plan to use service tokens for programmatic access, also add a **Service Auth** policy
+4. If you plan to use service tokens for programmatic access, add a **Service Auth** policy (`non_identity`, include `any_valid_service_token` or specific token)
 5. Note the following values from the application configuration:
 
 | Value                          | Where to find it                                           | Used as           |
@@ -82,17 +80,17 @@ You also need a **SaaS application** for the MCP OAuth flow (this is separate fr
 
 For local development, copy `.dev.vars.example` to `.dev.vars` and fill in the values.
 
-For production, set each secret on the Worker:
+For production, set each secret on the Worker. Run for both configs (`--config wrangler-a.jsonc` and `--config wrangler-b.jsonc`):
 
 ```bash
-npx wrangler secret put ACCESS_CLIENT_ID
-npx wrangler secret put ACCESS_CLIENT_SECRET
-npx wrangler secret put ACCESS_TOKEN_URL
-npx wrangler secret put ACCESS_AUTHORIZATION_URL
-npx wrangler secret put ACCESS_JWKS_URL
-npx wrangler secret put ACCESS_ISSUER          # optional, comma-separated allowed issuers
-npx wrangler secret put ACCESS_AUD_TAG
-npx wrangler secret put COOKIE_ENCRYPTION_KEY   # generate with: openssl rand -hex 32
+npx wrangler secret put ACCESS_CLIENT_ID --config wrangler-a.jsonc
+npx wrangler secret put ACCESS_CLIENT_SECRET --config wrangler-a.jsonc
+npx wrangler secret put ACCESS_TOKEN_URL --config wrangler-a.jsonc
+npx wrangler secret put ACCESS_AUTHORIZATION_URL --config wrangler-a.jsonc
+npx wrangler secret put ACCESS_JWKS_URL --config wrangler-a.jsonc
+npx wrangler secret put ACCESS_ISSUER --config wrangler-a.jsonc   # optional
+npx wrangler secret put ACCESS_AUD_TAG --config wrangler-a.jsonc
+npx wrangler secret put COOKIE_ENCRYPTION_KEY --config wrangler-a.jsonc
 ```
 
 `ACCESS_JWKS_URL` and `ACCESS_AUD_TAG` can be comma-separated when using both self-hosted and SaaS Access apps.
@@ -103,14 +101,23 @@ npx wrangler secret put COOKIE_ENCRYPTION_KEY   # generate with: openssl rand -h
 
 ```bash
 npm run deploy:init    # first deploy (creates D1 tables + deploys)
-npm run deploy         # subsequent deploys
+npm run deploy         # account A
+npm run deploy:b       # account B
+```
+
+Initialize schema per account:
+
+```bash
+npm run db:init      # account A
+npm run db:init:b    # account B
 ```
 
 ### Local development
 
 ```bash
 npm run db:init:local                  # create local D1 tables
-npx wrangler dev --local --port 8787   # start dev server
+npm run dev -- --local --port 8787      # account A config
+npm run dev:b -- --local --port 8787    # account B config
 ```
 
 Note: Workers AI and Vectorize are unavailable locally. Embedding/search tools fail gracefully. D1, KV, R2, and Durable Objects work.
@@ -194,6 +201,12 @@ The Worker resolves the service token to your email via KV. All operations run w
 - **Interactive docs:** `GET /api/docs` (Scalar UI)
 - Both endpoints are unauthenticated.
 
+### API response shaping
+
+- Most list/search endpoints support `fields=` for projection.
+- `fields=compact` and `fields=full` presets are supported.
+- Cursor pagination is exposed via `X-Next-Cursor` response header; pass that value as `cursor=` on the next request.
+
 ### Public endpoints (no auth)
 
 | Endpoint                | Response                                                      |
@@ -239,10 +252,11 @@ Default half-life: 7 days. Accessing a memory resets its recency.
 npm run typecheck
 npm run lint
 npm run build
-npm run test:e2e
+npm run test:e2e:a
+npm run test:e2e:b
 ```
 
-E2E tests call the live API and require:
+E2E tests call live APIs and require per-target env vars:
 
-- `CF_ACCESS_CLIENT_ID`
-- `CF_ACCESS_CLIENT_SECRET`
+- `CF_ACCESS_CLIENT_ID_A`, `CF_ACCESS_CLIENT_SECRET_A`, `API_BASE_URL_A`
+- `CF_ACCESS_CLIENT_ID_B`, `CF_ACCESS_CLIENT_SECRET_B`, `API_BASE_URL_B`

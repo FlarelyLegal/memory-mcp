@@ -1,0 +1,82 @@
+{
+  "name": "memory-graph-mcp",
+  "account_id": "f781a1227f9caa0da09922e28569d582",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "memory.flarelylegal.com",
+      "custom_domain": true,
+    },
+  ],
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-25",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MCP_OBJECT",
+        "class_name": "MemoryGraphMCP",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MemoryGraphMCP"],
+    },
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "memory-graph-mcp-db",
+      "database_id": "6e7c6051-347a-4fb7-80b4-bb443986630e",
+    },
+  ],
+
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "memory-graph-mcp-embeddings",
+    },
+  ],
+
+  "ai": {
+    "binding": "AI",
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "627f376cff62453b97fff5035ed17f09",
+    },
+    {
+      "binding": "OAUTH_KV",
+      "id": "362c6a215e5e4b9e9f1933bd2550f6e2",
+    },
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "STORAGE",
+      "bucket_name": "memory-graph-mcp-storage",
+    },
+  ],
+
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true,
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1,
+    },
+  },
+}
