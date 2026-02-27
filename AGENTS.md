@@ -46,7 +46,7 @@ See `package.json` scripts. Summary:
 - **Security headers:** All responses from the access handler include `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Strict-Transport-Security`.
 - **Input validation:** All MCP tool inputs have Zod `.max()` bounds on strings and arrays to prevent oversized payloads to D1/Workers AI.
 - **Relation ownership:** `manage_relation` create verifies both `source_id` and `target_id` belong to the specified namespace — cross-namespace relations are rejected.
-- **REST API auth:** API endpoints at `/api/v1/*` authenticate via JWT from Cloudflare Access. The middleware checks the `Cf-Access-Jwt-Assertion` header first, then falls back to the `CF_Authorization` cookie (Access sets the cookie for service token and browser flows). `/api/docs` and `/api/openapi.json` are unauthenticated.
+- **REST API auth:** API endpoints at `/api/v1/*` authenticate via JWT from Cloudflare Access. The middleware checks the `Cf-Access-Jwt-Assertion` header first, then falls back to the `CF_Authorization` cookie (Access sets the cookie for service token and browser flows). `/api/docs`, `/api/openapi.json`, and `/api/demo` are unauthenticated.
 - **Service token identity resolution:** Cloudflare Access service token JWTs have no `email` claim and an empty `sub`. Identity is resolved via `common_name` (= `CF-Access-Client-Id`, survives token rotation). The middleware looks up `st:<common_name>` in KV (`env.CACHE`) to get the bound email. Unregistered service tokens get 403 except for initial claim flow. Bind tokens with `POST /api/v1/admin/service-tokens/bind-request` then `POST /api/v1/admin/service-tokens/bind-self`. No MCP tool for token management — REST API only.
 - **`ACCESS_AUD_TAG` must match an Access application:** This secret must be the audience tag from the Cloudflare Access application protecting your Worker's domain. Mismatched audience tags cause `Invalid or expired token` errors on otherwise valid JWTs.
 - **OpenAPI spec is auto-generated:** Each route file registers both its handler and its OpenAPI `PathOperation`. The spec at `/api/openapi.json` is assembled dynamically — no separate spec file to maintain.
@@ -80,7 +80,7 @@ Code is organized into focused modules with a 250-line cap per file:
   - `openapi.ts` — Assembles OpenAPI 3.1 spec dynamically from registered routes
   - `schemas.ts` — Shared OpenAPI schema fragments, parameter helpers, `queryLimit()`, enum helpers (`memoryTypeEnum`, `roleEnum`, `metadataSchema`)
   - `docs.ts` — Scalar API reference UI
-  - `routes/` — One file per domain (namespaces, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, tokens, token-crud). Each registers routes + their OpenAPI path definitions.
+  - `routes/` — One file per domain (namespaces, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, tokens, token-crud, demo). Each registers routes + their OpenAPI path definitions.
 - `src/oauth/` — OAuth utilities split by concern (error, sanitize, csrf, state, approval) with barrel re-export via `index.ts`.
 - `schemas/schema.sql` — D1 schema (7 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links).
 
