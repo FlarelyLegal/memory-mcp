@@ -5,6 +5,7 @@ import { createNamespace, listNamespaces } from "../../graph/index.js";
 import { namespaceSchema } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseNamespaceRow } from "../row-parsers.js";
+import { audit } from "../../audit.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
@@ -81,6 +82,14 @@ export function registerNamespaceRoutes(): void {
           name: body.name,
           description: body.description,
           owner: ctx.email,
+        });
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "namespace.create",
+          email: ctx.email,
+          namespace_id: id,
+          resource_type: "namespace",
+          resource_id: id,
+          detail: { name: body.name },
         });
         return json({ id, name: body.name }, 201);
       } catch (e) {

@@ -2,6 +2,7 @@
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
 import { assertNamespaceAccess, isAdmin } from "../../auth.js";
+import { audit } from "../../audit.js";
 
 export function registerWorkflowRoutes(): void {
   // --- Reindex (workflow) ---
@@ -24,6 +25,14 @@ export function registerWorkflowRoutes(): void {
           params: { namespace_id: body.namespace_id, email: ctx.email },
         });
 
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "workflow.reindex",
+          email: ctx.email,
+          namespace_id: body.namespace_id === "all" ? null : body.namespace_id,
+          resource_type: "workflow",
+          resource_id: instance.id,
+          detail: { namespace_id: body.namespace_id },
+        });
         return json({ instance_id: instance.id, status: "queued" }, 202);
       } catch (e) {
         return handleError(e);
@@ -100,6 +109,18 @@ export function registerWorkflowRoutes(): void {
           },
         });
 
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "workflow.consolidate",
+          email: ctx.email,
+          namespace_id: body.namespace_id,
+          resource_type: "workflow",
+          resource_id: instance.id,
+          detail: {
+            decay_threshold: body.decay_threshold,
+            skip_summaries: body.skip_summaries,
+            purge_after_days: body.purge_after_days,
+          },
+        });
         return json({ instance_id: instance.id, status: "queued" }, 202);
       } catch (e) {
         return handleError(e);

@@ -17,6 +17,7 @@ import { messageCreateSchema, searchMessagesQuerySchema } from "../validators.js
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseMessageRow } from "../row-parsers.js";
 import { enforceSearchRateLimit } from "../rate-limit.js";
+import { audit } from "../../audit.js";
 
 export function registerMessageRoutes(): void {
   defineRoute(
@@ -113,6 +114,13 @@ export function registerMessageRoutes(): void {
             });
           }
         }
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "message.create",
+          email: ctx.email,
+          resource_type: "message",
+          resource_id: msgId,
+          detail: { conversation_id: ctx.params.id, role: body.role },
+        });
         return json({ id: msgId, role: body.role }, 201);
       } catch (e) {
         return handleError(e);

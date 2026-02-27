@@ -7,6 +7,7 @@ import * as graph from "../graph/index.js";
 import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../auth.js";
 import { parseJson } from "../utils.js";
 import { track, resolveNamespace } from "../state.js";
+import { audit } from "../audit.js";
 import {
   txt,
   err,
@@ -85,12 +86,26 @@ export function registerRelationTools(
             metadata: meta,
           });
           track(agent, { namespace: namespace_id, entity: [source_id, target_id] });
+          await audit(db, env.STORAGE, {
+            action: "relation.create",
+            email,
+            namespace_id,
+            resource_type: "relation",
+            resource_id: rid,
+            detail: { source_id, target_id, relation_type },
+          });
           return txt({ id: rid, source_id, target_id, relation_type });
         }
         if (!id) return err("id required");
         await assertRelationAccess(db, id, email);
         if (!(await confirm(server, `Delete relation ${id}?`))) return err("Cancelled");
         await graph.deleteRelation(db, id);
+        await audit(db, env.STORAGE, {
+          action: "relation.delete",
+          email,
+          resource_type: "relation",
+          resource_id: id,
+        });
         return ok(`Deleted ${id}`);
       },
     ),

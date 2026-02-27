@@ -8,6 +8,7 @@ import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess } from "../auth.js";
 import { parseJson, toISO } from "../utils.js";
 import { track, untrack, resolveNamespace } from "../state.js";
+import { audit } from "../audit.js";
 import {
   txt,
   err,
@@ -75,6 +76,14 @@ export function registerEntityTools(
               summary: summary ?? null,
             });
             track(agent, { namespace: namespace_id, entity: eid });
+            await audit(db, env.STORAGE, {
+              action: "entity.create",
+              email,
+              namespace_id,
+              resource_type: "entity",
+              resource_id: eid,
+              detail: { name, type },
+            });
             return txt({ id: eid, name, type });
           }
           case "get": {
@@ -119,6 +128,13 @@ export function registerEntityTools(
                 });
             }
             track(agent, { entity: id });
+            await audit(db, env.STORAGE, {
+              action: "entity.update",
+              email,
+              resource_type: "entity",
+              resource_id: id,
+              detail: { name, type, summary: !!summary, metadata: !!metadata },
+            });
             return ok(`Updated ${id}`);
           }
           case "delete": {
@@ -131,6 +147,14 @@ export function registerEntityTools(
             await graph.deleteEntity(db, id);
             await vectorize.deleteVector(env, "entity", id);
             untrack(agent, id);
+            await audit(db, env.STORAGE, {
+              action: "entity.delete",
+              email,
+              namespace_id: entity?.namespace_id,
+              resource_type: "entity",
+              resource_id: id,
+              detail: { name: entity?.name, type: entity?.type },
+            });
             return ok(`Deleted ${id}`);
           }
         }

@@ -196,3 +196,14 @@ export interface NamespaceRow {
   created_at: number;
   updated_at: number;
 }
+
+export interface AuditLogRow {
+  id: string;
+  namespace_id: string | null;
+  email: string;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  detail: string | null;
+  created_at: number;
+}

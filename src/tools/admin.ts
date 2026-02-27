@@ -7,6 +7,7 @@ import { assertNamespaceAccess, isAdmin } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { getNamespaceStats } from "../consolidation.js";
 import { track } from "../state.js";
+import { audit } from "../audit.js";
 import { txt, err, ok, toolHandler, confirm } from "../response-helpers.js";
 
 export function registerAdminTools(server: McpServer, env: Env, email: string, agent: StateHandle) {
@@ -40,6 +41,14 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
         params: { namespace_id, email },
       });
 
+      await audit(db, env.STORAGE, {
+        action: "workflow.reindex",
+        email,
+        namespace_id: namespace_id === "all" ? null : namespace_id,
+        resource_type: "workflow",
+        resource_id: instance.id,
+        detail: { namespace_id },
+      });
       return txt({ instance_id: instance.id, status: "queued" });
     }),
   );
@@ -91,6 +100,14 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
         params: { namespace_id, email, decay_threshold, skip_summaries, purge_after_days },
       });
 
+      await audit(db, env.STORAGE, {
+        action: "workflow.consolidate",
+        email,
+        namespace_id,
+        resource_type: "workflow",
+        resource_id: instance.id,
+        detail: { decay_threshold, skip_summaries, purge_after_days },
+      });
       return txt({ instance_id: instance.id, status: "queued" });
     }),
   );
@@ -162,6 +179,12 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
         return err("Cancelled");
       const claimed = await claimUnownedNamespaces(db, email);
       if (claimed === 0) return ok("No unowned namespaces found.");
+      await audit(db, env.STORAGE, {
+        action: "namespace.claim",
+        email,
+        resource_type: "namespace",
+        detail: { claimed },
+      });
       return txt({ claimed, owner: email });
     }),
   );

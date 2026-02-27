@@ -15,6 +15,7 @@ import {
 import { parseMemoryRow } from "../row-parsers.js";
 import type { MemoryType } from "../../types.js";
 import { memoryCreateSchema, memoryUpdateSchema } from "../validators.js";
+import { audit } from "../../audit.js";
 
 export function registerMemoryRoutes(): void {
   defineRoute(
@@ -40,6 +41,14 @@ export function registerMemoryRoutes(): void {
           namespace_id: ctx.params.namespace_id,
           content: body.content,
           type: body.type ?? "fact",
+        });
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "memory.create",
+          email: ctx.email,
+          namespace_id: ctx.params.namespace_id,
+          resource_type: "memory",
+          resource_id: id,
+          detail: { type: body.type ?? "fact" },
         });
         return json({ id, type: body.type ?? "fact" }, 201);
       } catch (e) {
@@ -136,6 +145,13 @@ export function registerMemoryRoutes(): void {
             });
           }
         }
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "memory.update",
+          email: ctx.email,
+          resource_type: "memory",
+          resource_id: ctx.params.id,
+          detail: { content: !!body.content, type: body.type, importance: body.importance },
+        });
         return json({ ok: true });
       } catch (e) {
         return handleError(e);
@@ -180,6 +196,12 @@ export function registerMemoryRoutes(): void {
         await assertMemoryAccess(ctx.db, ctx.params.id, ctx.email);
         await deleteMemory(ctx.db, ctx.params.id);
         await deleteVector(ctx.env, "memory", ctx.params.id);
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "memory.delete",
+          email: ctx.email,
+          resource_type: "memory",
+          resource_id: ctx.params.id,
+        });
         return json({ ok: true });
       } catch (e) {
         return handleError(e);

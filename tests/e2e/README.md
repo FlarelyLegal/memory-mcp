@@ -1,6 +1,8 @@
 # E2E API Tests
 
-This folder contains Playwright API tests for the live REST API.
+[< Back to main README](../../README.md) | [Docs](../../docs/README.md) | [REST API](../../docs/rest-api.md)
+
+Playwright API tests for the live REST API.
 
 ## What These Tests Cover
 

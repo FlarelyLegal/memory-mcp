@@ -9,6 +9,7 @@ import { ST_PREFIX } from "../service-tokens.js";
 import type { ServiceTokenMapping } from "../service-tokens.js";
 import { tokenSchema } from "../schemas.js";
 import { serviceTokenLabelSchema } from "../validators.js";
+import { audit } from "../../audit.js";
 
 const cnParam = {
   name: "common_name",
@@ -66,6 +67,13 @@ export function registerTokenCrudRoutes(): void {
 
         mapping.label = body.label;
         await ctx.env.CACHE.put(key, JSON.stringify(mapping));
+        audit(ctx.db, ctx.env.STORAGE, {
+          action: "service_token.update",
+          email: ctx.email,
+          resource_type: "service_token",
+          resource_id: ctx.params.common_name,
+          detail: { label: body.label },
+        });
         return json({ common_name: ctx.params.common_name, ...mapping });
       } catch (e) {
         return handleError(e);
@@ -112,6 +120,12 @@ export function registerTokenCrudRoutes(): void {
         if (!mapping) return jsonError("Service token not found", 404);
         if (mapping.email !== ctx.email) return jsonError("Access denied", 403);
         await ctx.env.CACHE.delete(key);
+        audit(ctx.db, ctx.env.STORAGE, {
+          action: "service_token.revoke",
+          email: ctx.email,
+          resource_type: "service_token",
+          resource_id: ctx.params.common_name,
+        });
         return json({ ok: true });
       } catch (e) {
         return handleError(e);

@@ -7,6 +7,7 @@ import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess, assertMemoryAccess } from "../auth.js";
 import { track, resolveNamespace } from "../state.js";
+import { audit } from "../audit.js";
 import {
   txt,
   err,
@@ -90,6 +91,14 @@ export function registerMemoryTools(
               type: type ?? "fact",
             });
             track(agent, { namespace: namespace_id, entity: entity_ids });
+            await audit(db, env.STORAGE, {
+              action: "memory.create",
+              email,
+              namespace_id,
+              resource_type: "memory",
+              resource_id: mid,
+              detail: { type: type ?? "fact", entity_ids },
+            });
             return txt({ id: mid, type: type ?? "fact" });
           }
           case "update": {
@@ -108,6 +117,13 @@ export function registerMemoryTools(
                   type: m.type,
                 });
             }
+            await audit(db, env.STORAGE, {
+              action: "memory.update",
+              email,
+              resource_type: "memory",
+              resource_id: id,
+              detail: { content: !!content, type, importance },
+            });
             return ok(`Updated ${id}`);
           }
           case "delete": {
@@ -118,6 +134,14 @@ export function registerMemoryTools(
             if (!(await confirm(server, `Delete ${label}?`))) return err("Cancelled");
             await memories.deleteMemory(db, id);
             await vectorize.deleteVector(env, "memory", id);
+            await audit(db, env.STORAGE, {
+              action: "memory.delete",
+              email,
+              namespace_id: m?.namespace_id,
+              resource_type: "memory",
+              resource_id: id,
+              detail: { type: m?.type },
+            });
             return ok(`Deleted ${id}`);
           }
         }

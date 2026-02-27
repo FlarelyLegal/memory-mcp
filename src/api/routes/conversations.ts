@@ -12,6 +12,7 @@ import {
 } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseConversationRow } from "../row-parsers.js";
+import { audit } from "../../audit.js";
 
 export function registerConversationRoutes(): void {
   defineRoute(
@@ -94,6 +95,14 @@ export function registerConversationRoutes(): void {
           namespace_id: ctx.params.namespace_id,
           title: body.title,
           metadata: body.metadata,
+        });
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "conversation.create",
+          email: ctx.email,
+          namespace_id: ctx.params.namespace_id,
+          resource_type: "conversation",
+          resource_id: id,
+          detail: { title: body.title },
         });
         return json({ id, title: body.title ?? null }, 201);
       } catch (e) {

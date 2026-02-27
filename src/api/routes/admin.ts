@@ -4,6 +4,7 @@ import { json, jsonError, handleError } from "../middleware.js";
 import { assertNamespaceAccess, isAdmin } from "../../auth.js";
 import { claimUnownedNamespaces } from "../../graph/index.js";
 import { getNamespaceStats } from "../../consolidation.js";
+import { audit } from "../../audit.js";
 
 export function registerAdminRoutes(): void {
   // --- Namespace stats ---
@@ -67,6 +68,14 @@ export function registerAdminRoutes(): void {
         if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
           return jsonError("Admin access required", 403);
         const claimed = await claimUnownedNamespaces(ctx.db, ctx.email);
+        if (claimed > 0) {
+          await audit(ctx.db, ctx.env.STORAGE, {
+            action: "namespace.claim",
+            email: ctx.email,
+            resource_type: "namespace",
+            detail: { claimed },
+          });
+        }
         return json({ claimed, owner: ctx.email });
       } catch (e) {
         return handleError(e);
