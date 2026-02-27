@@ -28,6 +28,10 @@ import { registerConversationTools } from "./tools/conversation.js";
 import { registerSearchTools } from "./tools/search.js";
 import { registerAdminTools } from "./tools/admin.js";
 
+// Workflow exports (Wrangler resolves class_name from these re-exports)
+export { ReindexWorkflow } from "./workflows/reindex.js";
+export { ConsolidationWorkflow } from "./workflows/consolidation.js";
+
 export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthProps> {
   server = new McpServer({
     name: SERVER_DISPLAY_NAME,

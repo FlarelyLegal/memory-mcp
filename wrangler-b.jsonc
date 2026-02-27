@@ -46,6 +46,19 @@
     "binding": "AI",
   },
 
+  "workflows": [
+    {
+      "name": "reindex-workflow",
+      "binding": "REINDEX_WORKFLOW",
+      "class_name": "ReindexWorkflow",
+    },
+    {
+      "name": "consolidation-workflow",
+      "binding": "CONSOLIDATION_WORKFLOW",
+      "class_name": "ConsolidationWorkflow",
+    },
+  ],
+
   "kv_namespaces": [
     {
       "binding": "CACHE",

@@ -24,6 +24,9 @@ export interface Env {
   COOKIE_ENCRYPTION_KEY: string;
   RATE_LIMIT_AUTH?: WorkerRateLimiter;
   RATE_LIMIT_SEARCH?: WorkerRateLimiter;
+  // Workflows
+  REINDEX_WORKFLOW: Workflow;
+  CONSOLIDATION_WORKFLOW: Workflow;
 }
 
 // Props passed through from the OAuth flow into McpAgent
