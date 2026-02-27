@@ -1,52 +1,16 @@
-# Roadmap — v0.11.0+
+# TODO
 
-Tracked improvements for memory-graph-mcp. Cross off as completed.
-
----
-
-## 1. ~~D1 Read Replication (Sessions API)~~ DONE
-
-**Impact:** High — read-heavy server gets global latency reduction at zero cost.
-
-- [x] Create `src/db.ts` helper: `DbHandle` type + `session()` + `getBookmark()`
-- [x] Refactor all graph modules to accept `DbHandle` (33 functions)
-- [x] Refactor `memories.ts`, `conversations.ts`, `auth.ts`, `reranker.ts` to accept `DbHandle`
-- [x] Read-only MCP tools use `session(env.DB, "first-unconstrained")`
-- [x] Write MCP tools use `session(env.DB, "first-primary")`
-- [x] API router creates sessions per-request, injects `ctx.db` into `ApiContext`
-- [x] API accepts `X-D1-Bookmark` header for cross-request consistency
-- [x] API returns `X-D1-Bookmark` header in responses
-- [ ] Enable read replication on D1 databases (both accounts, dashboard)
-- [ ] Verify with `meta.served_by_region` in logs
+Remaining improvements for memory-graph-mcp.
 
 ---
 
-## 2. ~~Maximize Vectorize Metadata Indexes~~ DONE
+## Infra (post-deploy)
 
-**Impact:** Medium — enable filtered semantic search without post-filtering. Now using 7 of 10 indexes.
-
-- [x] Audit current metadata: `namespace_id`, `kind`, `type` (3/10 used)
-- [x] Add `created_at` (epoch) to all vector upserts (entity, memory, message)
-- [x] Add `role`, `conversation_id`, `entity_id` indexes
-- [x] Update `vectorize:indexes` scripts (both accounts) — 7 indexes total
-- [x] Update `search` MCP tool with `after`, `before`, `role`, `conversation_id` params
-- [x] Update `semanticSearch()` to build range filters for `created_at`
-- [x] Update API search route + validator + OpenAPI spec
-- [x] Update `reindex_vectors` to include `created_at` in metadata
-- [ ] Run `vectorize:indexes` + `vectorize:indexes:b` to create new indexes (infra)
-- [ ] Run `reindex_vectors` on all namespaces to populate new metadata (infra)
-
----
-
-## 3. ~~Upgrade to bge-m3 Embedding Model~~ DONE
-
-**Impact:** High — 16x cheaper ($0.012 vs $0.20/M tokens), 100+ languages, 60K token context, same 1024 dims (drop-in).
-
-- [x] Update `EMBEDDING_MODEL` constant in `src/embeddings.ts` to `@cf/baai/bge-m3`
-- [x] Update README + AGENTS.md model references
-- [ ] Deploy to both accounts (infra)
-- [ ] Run `reindex_vectors` on all namespaces to re-embed with bge-m3 (infra)
-- [ ] Evaluate bge-m3's built-in reranking mode vs separate bge-reranker-base (future)
+- [ ] Deploy to both accounts
+- [ ] Enable D1 read replication (both accounts, dashboard)
+- [ ] Run `vectorize:indexes` + `vectorize:indexes:b` to create new metadata indexes
+- [ ] Run `reindex_vectors` on all namespaces (re-embed with bge-m3 + populate new metadata)
+- [ ] Evaluate bge-m3's built-in reranking mode vs separate bge-reranker-base
 
 ---
 
@@ -64,50 +28,6 @@ Tracked improvements for memory-graph-mcp. Cross off as completed.
 
 ---
 
-## 6. Elicitation (Human-in-the-Loop Confirmation)
-
-**Impact:** Medium — safety on destructive operations. Uses `this.server.server.elicitInput()`.
-
-- [ ] Add elicitation to `manage_entity` delete action: "Delete entity {name} and all its relations?"
-- [ ] Add elicitation to `manage_relation` delete action (if entity has many relations)
-- [ ] Add elicitation to `claim_namespaces`: "Claim {n} unowned namespaces?"
-- [ ] Add elicitation to `reindex_vectors` with namespace_id="all": "Re-embed all entities and memories?"
-- [ ] Handle `decline` action gracefully → return `err("Cancelled")`
-- [ ] Guard with feature flag or capability check (not all MCP clients support elicitation)
-- [ ] Pass `extra.requestId` through `toolHandler` wrapper
-
----
-
-## 7. Workflows for Batch Reindex
-
-**Impact:** Medium — reliable large-scale reindex with automatic retries, no CPU limits.
-
-- [ ] Create `src/workflows/reindex.ts` extending `WorkflowEntrypoint`
-- [ ] Define steps: fetch entities → chunk at 25 → embed each chunk → fetch memories → chunk → embed
-- [ ] Each `step.do()` has retry config (limit: 3, backoff: exponential)
-- [ ] Add `REINDEX_WORKFLOW` binding in both wrangler configs
-- [ ] Trigger from `reindex_vectors` MCP tool (start workflow, return instance ID)
-- [ ] Trigger from `POST /api/v1/admin/reindex` route
-- [ ] Add `GET /api/v1/admin/reindex/:instanceId` to check workflow status
-- [ ] Use `AgentWorkflow` if beneficial for progress reporting back to MCP session
-
----
-
-## 8. Memory Consolidation
-
-**Impact:** Medium-High — reduces noise, surfaces important patterns, keeps memory sharp over time.
-
-Ideas:
-
-- [ ] **Periodic decay sweep:** Workflow that runs daily/weekly, soft-deletes memories below a decay threshold
-- [ ] **Memory merging:** Use Workers AI LLM to summarize clusters of related memories into a single consolidated memory
-- [ ] **Entity summary refresh:** Periodically re-summarize entities based on their linked memories (auto-update entity.summary)
-- [ ] **Duplicate detection:** FTS5 + vector similarity to find near-duplicate memories, prompt for merge
-- [ ] **Archive tier:** Move old low-importance memories to R2 as JSON, keep index in D1 for search but mark as archived
-- [ ] **Stats endpoint:** `GET /api/v1/admin/stats` �� memory count by type, avg importance, decay distribution, namespace sizes
-
----
-
 ## 9. D1 Write Retry Logic
 
 **Impact:** Low-Medium — resilience for transient D1 errors on writes.
@@ -121,9 +41,6 @@ Ideas:
 
 ---
 
-## Not Doing
+## Future ideas
 
-- **Code mode / code execution sandbox:** No native Cloudflare support. The Anthropic blog describes a client-side pattern where agents write code to call MCP tools instead of calling them directly. This is a client concern (e.g., Claude Code already does this), not a server feature. Our server already works optimally with code-mode clients — tool schemas are well-typed with Zod, responses are structured JSON.
-- **AI Search integration:** Too high-level for structured knowledge graphs. Our FTS5 + Vectorize + reranker pipeline gives more control.
-- **DO SQLite session caching:** Premature — D1 read replicas solve the latency problem more cleanly.
-- **Data jurisdiction (`jurisdiction: "eu"`):** One-line config change, do it when there's a customer need.
+- Memory merging: cluster related memories via vector similarity, LLM summarize into one
