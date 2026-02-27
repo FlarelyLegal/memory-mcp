@@ -12,13 +12,14 @@ For Claude Desktop, Cursor, OpenCode, or any MCP-compatible client:
 {
   "mcpServers": {
     "memory-graph": {
-      "url": "https://memory-graph-mcp.<your-subdomain>.workers.dev/mcp"
+      "url": "https://memory.flarelylegal.com/mcp"
     }
   }
 }
 ```
 
 Your client opens the Cloudflare Access login page. All data is scoped to your email.
+Access is gated by Cloudflare Access — to request a test account, open an issue or reach out.
 
 ## Session state
 
