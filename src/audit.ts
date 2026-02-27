@@ -93,6 +93,20 @@ export async function audit(db: DbHandle, r2: R2Bucket, entry: AuditEntry): Prom
     created_at: ts,
   };
 
+  // Structured tail log — visible via `wrangler tail` in real-time.
+  // Only structural metadata; no email, detail, or other sensitive data.
+  // eslint-disable-next-line no-console
+  console.log(
+    JSON.stringify({
+      audit: true,
+      action: entry.action,
+      namespace_id: entry.namespace_id ?? null,
+      resource_type: entry.resource_type ?? null,
+      resource_id: entry.resource_id ?? null,
+      ts,
+    }),
+  );
+
   // Fire both writes concurrently; settle independently.
   await Promise.allSettled([writeD1(db, row), appendR2(r2, row)]);
 }
