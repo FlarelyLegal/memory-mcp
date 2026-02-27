@@ -3,7 +3,7 @@
  */
 import type { ConversationRow, MessageRow } from "./types.js";
 import { type DbHandle, withRetry, isReplayInsertConflict } from "./db.js";
-import { generateId, now, toJson, ftsEscape, handleFtsError } from "./utils.js";
+import { generateId, now, toJson, ftsEscape, handleFtsError, escapeLike } from "./utils.js";
 
 export async function createConversation(
   db: DbHandle,
@@ -145,11 +145,11 @@ export async function searchMessages(
       `SELECT m.*, c.title as conversation_title
        FROM messages m
        JOIN conversations c ON c.id = m.conversation_id
-       WHERE c.namespace_id = ? AND m.content LIKE ?
+       WHERE c.namespace_id = ? AND m.content LIKE ? ESCAPE '\\'
        ORDER BY m.created_at DESC
        LIMIT ? OFFSET ?`,
     )
-    .bind(namespace_id, `%${query}%`, limit, offset)
+    .bind(namespace_id, `%${escapeLike(query)}%`, limit, offset)
     .all<MessageRow & { conversation_title: string | null }>();
   return result.results;
 }

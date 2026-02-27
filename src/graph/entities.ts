@@ -1,7 +1,7 @@
 /** Entity CRUD operations against D1. */
 import type { EntityRow } from "../types.js";
 import { type DbHandle, withRetry, isReplayInsertConflict } from "../db.js";
-import { generateId, now, toJson, ftsEscape, handleFtsError } from "../utils.js";
+import { generateId, now, toJson, ftsEscape, handleFtsError, escapeLike } from "../utils.js";
 
 export async function createEntity(
   db: DbHandle,
@@ -95,8 +95,8 @@ export async function searchEntities(
     params.push(opts.type);
   }
   if (opts.query) {
-    clauses.push("(name LIKE ? OR summary LIKE ?)");
-    params.push(`%${opts.query}%`, `%${opts.query}%`);
+    clauses.push("(name LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')");
+    params.push(`%${escapeLike(opts.query)}%`, `%${escapeLike(opts.query)}%`);
   }
   params.push(limit, offset);
   const sql =

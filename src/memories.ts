@@ -3,7 +3,15 @@
  */
 import type { MemoryRow } from "./types.js";
 import { type DbHandle, withRetry, isReplayInsertConflict } from "./db.js";
-import { generateId, now, toJson, decayScore, ftsEscape, handleFtsError } from "./utils.js";
+import {
+  generateId,
+  now,
+  toJson,
+  decayScore,
+  ftsEscape,
+  handleFtsError,
+  escapeLike,
+} from "./utils.js";
 
 export async function createMemory(
   db: DbHandle,
@@ -108,8 +116,8 @@ export async function searchMemories(
     params.push(opts.type);
   }
   if (opts.query) {
-    clauses.push("content LIKE ?");
-    params.push(`%${opts.query}%`);
+    clauses.push("content LIKE ? ESCAPE '\\'");
+    params.push(`%${escapeLike(opts.query)}%`);
   }
   params.push(limit, offset);
   const sql =
