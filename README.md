@@ -40,13 +40,18 @@ Remote MCP server on Cloudflare Workers providing LLMs with persistent structure
 npm install
 
 npx wrangler d1 create memory-graph-mcp-db
-npx wrangler vectorize create memory-graph-mcp-embeddings --dimensions=1024 --metric=cosine
+npx wrangler vectorize create memory-graph-mcp-embeddings --preset=@cf/baai/bge-large-en-v1.5
 npx wrangler kv namespace create CACHE
 npx wrangler kv namespace create OAUTH_KV
 npx wrangler r2 bucket create memory-graph-mcp-storage
 ```
 
 Update `wrangler.jsonc` with the resource IDs from the commands above.
+
+For Vectorize filtering to work, add metadata indexes for:
+
+- `namespace_id` (string)
+- `kind` (string)
 
 ### 2. Configure Cloudflare Access
 
@@ -71,6 +76,7 @@ You also need a **SaaS application** for the MCP OAuth flow (this is separate fr
 | Client Secret     | SaaS app > OIDC settings  | `ACCESS_CLIENT_SECRET`     |
 | Token URL         | SaaS app > OIDC endpoints | `ACCESS_TOKEN_URL`         |
 | Authorization URL | SaaS app > OIDC endpoints | `ACCESS_AUTHORIZATION_URL` |
+| JWKS URL          | SaaS app > OIDC endpoints | `ACCESS_JWKS_URL` (append) |
 
 ### 3. Set secrets
 
@@ -84,11 +90,14 @@ npx wrangler secret put ACCESS_CLIENT_SECRET
 npx wrangler secret put ACCESS_TOKEN_URL
 npx wrangler secret put ACCESS_AUTHORIZATION_URL
 npx wrangler secret put ACCESS_JWKS_URL
+npx wrangler secret put ACCESS_ISSUER          # optional, comma-separated allowed issuers
 npx wrangler secret put ACCESS_AUD_TAG
 npx wrangler secret put COOKIE_ENCRYPTION_KEY   # generate with: openssl rand -hex 32
 ```
 
-**Important:** `ACCESS_AUD_TAG` must be the audience tag from the Cloudflare Access application protecting your Worker's domain. Mismatched audience tags cause `Invalid or expired token` errors.
+`ACCESS_JWKS_URL` and `ACCESS_AUD_TAG` can be comma-separated when using both self-hosted and SaaS Access apps.
+
+**Important:** `ACCESS_AUD_TAG` must match the Access applications that issue your JWTs. Mismatched audience tags cause `Invalid or expired token` errors.
 
 ### 4. Deploy
 
@@ -132,16 +141,28 @@ For agents, scripts, and CI pipelines that need programmatic access.
 
 **2. Add a Service Auth policy** to your Access application (Access > Applications > your app > Policies) that allows the service token.
 
-**3. Bind the token to your email.** Log in to your Worker in a browser, then grab the `CF_Authorization` cookie from DevTools (Application > Cookies). Use it to bind:
+**3. Create a bind challenge (human-authenticated).** Log in to your Worker in a browser, then grab the `CF_Authorization` cookie from DevTools (Application > Cookies):
 
 ```bash
-curl -X POST https://<your-worker>/api/v1/admin/service-tokens \
+curl -X POST https://<your-worker>/api/v1/admin/service-tokens/bind-request \
   -H "Cookie: CF_Authorization=<your-jwt-from-browser>" \
   -H "Content-Type: application/json" \
   -d '{"common_name": "<client-id>", "label": "My CI bot"}'
 ```
 
-**4. Make API calls.** Cloudflare Access validates the service token credentials and injects a signed JWT before the request reaches the Worker:
+This returns a short-lived `challenge_id`.
+
+**4. Complete bind as the service token (proof of possession).**
+
+```bash
+curl -X POST https://<your-worker>/api/v1/admin/service-tokens/bind-self \
+  -H "CF-Access-Client-Id: <client-id>" \
+  -H "CF-Access-Client-Secret: <client-secret>" \
+  -H "Content-Type: application/json" \
+  -d '{"challenge_id": "<challenge-id>"}'
+```
+
+**5. Make API calls.** Cloudflare Access validates the service token credentials and injects a signed JWT before the request reaches the Worker:
 
 ```bash
 curl https://<your-worker>/api/v1/namespaces \
@@ -149,20 +170,23 @@ curl https://<your-worker>/api/v1/namespaces \
   -H "CF-Access-Client-Secret: <client-secret>"
 ```
 
+You can also send a previously issued JWT as `cf-access-token` (or `CF_Authorization` cookie), but `Cf-Access-Jwt-Assertion` is preferred when present.
+
 The Worker resolves the service token to your email via KV. All operations run with your permissions.
 
 ### Service token management
 
-| Action           | Method   | Endpoint                                    |
-| ---------------- | -------- | ------------------------------------------- |
-| Bind token       | `POST`   | `/api/v1/admin/service-tokens`              |
-| List your tokens | `GET`    | `/api/v1/admin/service-tokens`              |
-| Get binding      | `GET`    | `/api/v1/admin/service-tokens/:common_name` |
-| Update label     | `PATCH`  | `/api/v1/admin/service-tokens/:common_name` |
-| Revoke           | `DELETE` | `/api/v1/admin/service-tokens/:common_name` |
+| Action                | Method   | Endpoint                                    |
+| --------------------- | -------- | ------------------------------------------- |
+| Create bind challenge | `POST`   | `/api/v1/admin/service-tokens/bind-request` |
+| Complete self-bind    | `POST`   | `/api/v1/admin/service-tokens/bind-self`    |
+| List your tokens      | `GET`    | `/api/v1/admin/service-tokens`              |
+| Get binding           | `GET`    | `/api/v1/admin/service-tokens/:common_name` |
+| Update label          | `PATCH`  | `/api/v1/admin/service-tokens/:common_name` |
+| Revoke                | `DELETE` | `/api/v1/admin/service-tokens/:common_name` |
 
 - `common_name` (= Client ID) survives token rotation — no need to re-bind after rotating the secret in the CF dashboard
-- Unbound service tokens receive 403
+- Unbound service tokens receive 403 for normal API routes (exception: `bind-self` during initial claim)
 
 ### API docs
 
@@ -208,3 +232,17 @@ recency   = e^(-ln(2) / half_life * age_hours)
 ```
 
 Default half-life: 7 days. Accessing a memory resets its recency.
+
+## Testing
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+npm run test:e2e
+```
+
+E2E tests call the live API and require:
+
+- `CF_ACCESS_CLIENT_ID`
+- `CF_ACCESS_CLIENT_SECRET`
