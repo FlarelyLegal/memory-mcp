@@ -61,11 +61,14 @@ export type MessageRole = "user" | "assistant" | "system" | "tool";
 
 // --- Domain types ---
 
+export type NamespaceVisibility = "private" | "public";
+
 export interface Namespace {
   id: string;
   name: string;
   description: string | null;
   owner: string | null;
+  visibility: NamespaceVisibility;
   metadata: Record<string, unknown> | null;
   created_at: number;
   updated_at: number;
@@ -192,6 +195,7 @@ export interface NamespaceRow {
   name: string;
   description: string | null;
   owner: string | null;
+  visibility: NamespaceVisibility;
   metadata: string | null;
   created_at: number;
   updated_at: number;
