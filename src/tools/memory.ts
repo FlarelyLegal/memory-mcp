@@ -5,7 +5,7 @@ import type { Env } from "../types.js";
 import * as memories from "../memories.js";
 import * as embeddings from "../embeddings.js";
 import { assertNamespaceAccess, assertEntityAccess, assertMemoryAccess } from "../auth.js";
-import { txt, ok, cap } from "../response-helpers.js";
+import { txt, ok, cap, trunc } from "../response-helpers.js";
 
 export function registerMemoryTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -92,26 +92,51 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
       query: z.string().max(1000).optional().describe("Required for search mode"),
       type: z.enum(["fact", "observation", "preference", "instruction"]).optional(),
       limit: z.number().optional(),
+      compact: z.boolean().optional().describe("Default true: return minimal fields"),
+      verbose: z.boolean().optional().describe("Default false: disable text truncation"),
     },
-    async ({ mode, namespace_id, entity_id, query, type, limit }) => {
+    async ({ mode, namespace_id, entity_id, query, type, limit, compact, verbose }) => {
       const n = cap(limit, 50, 20);
+      const isCompact = compact ?? true;
+      const full = verbose ?? false;
+      const mapMemory = (m: {
+        id: string;
+        type: string;
+        content: string;
+        importance?: number;
+        source?: string | null;
+      }) =>
+        isCompact
+          ? { id: m.id, type: m.type }
+          : {
+              id: m.id,
+              type: m.type,
+              content: full ? m.content : trunc(m.content),
+              importance: m.importance,
+              source: m.source,
+            };
       switch (mode) {
         case "recall": {
           if (!namespace_id) return ok("Error: namespace_id required");
           await assertNamespaceAccess(env.DB, namespace_id, email);
-          return txt(await memories.recallMemories(env.DB, namespace_id, { type, limit: n }));
+          const rows = await memories.recallMemories(env.DB, namespace_id, { type, limit: n });
+          return txt(rows.map(mapMemory));
         }
         case "search": {
           if (!namespace_id || !query) return ok("Error: namespace_id, query required");
           await assertNamespaceAccess(env.DB, namespace_id, email);
-          return txt(
-            await memories.searchMemories(env.DB, namespace_id, { query, type, limit: n }),
-          );
+          const rows = await memories.searchMemories(env.DB, namespace_id, {
+            query,
+            type,
+            limit: n,
+          });
+          return txt(rows.map(mapMemory));
         }
         case "entity": {
           if (!entity_id) return ok("Error: entity_id required");
           await assertEntityAccess(env.DB, entity_id, email);
-          return txt(await memories.getMemoriesForEntity(env.DB, entity_id, { limit: n }));
+          const rows = await memories.getMemoriesForEntity(env.DB, entity_id, { limit: n });
+          return txt(rows.map(mapMemory));
         }
       }
     },

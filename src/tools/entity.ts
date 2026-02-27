@@ -6,7 +6,7 @@ import * as graph from "../graph/index.js";
 import * as embeddings from "../embeddings.js";
 import { assertNamespaceAccess, assertEntityAccess } from "../auth.js";
 import { parseJson } from "../utils.js";
-import { txt, ok, cap } from "../response-helpers.js";
+import { txt, ok, cap, trunc } from "../response-helpers.js";
 
 export function registerEntityTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -93,16 +93,29 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
       query: z.string().max(1000).optional(),
       type: z.string().max(200).optional(),
       limit: z.number().optional(),
+      compact: z.boolean().optional().describe("Default true: return minimal fields"),
+      verbose: z.boolean().optional().describe("Default false: disable text truncation"),
     },
-    async ({ namespace_id, query, type, limit }) => {
+    async ({ namespace_id, query, type, limit, compact, verbose }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
       const results = await graph.searchEntities(env.DB, namespace_id, {
         query,
         type,
         limit: cap(limit, 50, 20),
       });
+      const isCompact = compact ?? true;
+      const full = verbose ?? false;
       return txt(
-        results.map((r) => ({ id: r.id, name: r.name, type: r.type, summary: r.summary })),
+        results.map((r) =>
+          isCompact
+            ? { id: r.id, name: r.name, type: r.type }
+            : {
+                id: r.id,
+                name: r.name,
+                type: r.type,
+                summary: full ? r.summary : trunc(r.summary),
+              },
+        ),
       );
     },
   );
