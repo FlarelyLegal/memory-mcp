@@ -37,6 +37,18 @@ export function chunks<T>(arr: T[], size: number): T[][] {
 }
 
 /**
+ * Log non-FTS errors from FTS5 queries. Always falls through to LIKE-based
+ * search so results are never lost, but unexpected errors are surfaced
+ * in `wrangler tail` for debugging.
+ */
+export function handleFtsError(err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/no such table.*_fts|fts5/i.test(msg)) return; // expected — FTS not set up
+  // eslint-disable-next-line no-console
+  console.warn("FTS query failed (unexpected, falling back to LIKE):", msg);
+}
+
+/**
  * Escape FTS5 special characters and add prefix matching for each term.
  * Produces an FTS5 query like `"term1"* "term2"*` (implicit AND, prefix match).
  */

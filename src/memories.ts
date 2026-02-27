@@ -3,7 +3,7 @@
  */
 import type { MemoryRow } from "./types.js";
 import { type DbHandle, withRetry, isReplayInsertConflict } from "./db.js";
-import { generateId, now, toJson, decayScore, ftsEscape } from "./utils.js";
+import { generateId, now, toJson, decayScore, ftsEscape, handleFtsError } from "./utils.js";
 
 export async function createMemory(
   db: DbHandle,
@@ -95,8 +95,8 @@ export async function searchMemories(
         .bind(...params)
         .all<MemoryRow>();
       if (result.results.length > 0 || result.success) return result.results;
-    } catch {
-      // FTS table doesn't exist yet — fall through to LIKE
+    } catch (err) {
+      handleFtsError(err);
     }
   }
 
