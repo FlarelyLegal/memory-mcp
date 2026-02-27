@@ -1,13 +1,21 @@
 /**
  * Semantic search via Vectorize + Workers AI embeddings.
  *
+ * Two-stage retrieval pipeline:
+ * 1. Vectorize ANN search (bi-encoder, fast) over-fetches 3x candidates
+ * 2. bge-reranker-base (cross-encoder, precise) re-scores and returns top N
+ *
  * Embeds entities and memories into a shared Vectorize index with metadata
  * to distinguish types and namespaces. This enables "what do I know about X?"
  * style queries across the entire memory graph.
  */
 import type { Env } from "./types.js";
+import { rerank, hydrateTexts } from "./reranker.js";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-large-en-v1.5";
+
+/** Over-fetch multiplier for the reranker candidate pool. */
+const RERANK_POOL_MULTIPLIER = 3;
 
 /**
  * Generate an embedding vector for the given text using Workers AI.
@@ -131,8 +139,13 @@ export interface SemanticSearchResult {
 }
 
 /**
- * Semantic search across all memory types within a namespace.
- * Returns the most relevant entities, memories, and messages.
+ * Two-stage semantic search across all memory types within a namespace.
+ *
+ * Stage 1: Vectorize ANN search (bi-encoder) over-fetches 3x candidates.
+ * Stage 2: bge-reranker-base (cross-encoder) re-scores candidates and
+ *          returns the top N with the reranker's relevance score.
+ *
+ * Falls back to single-stage Vectorize results when AI is unavailable.
  */
 export async function semanticSearch(
   env: Env,
@@ -140,6 +153,10 @@ export async function semanticSearch(
   namespace_id: string,
   opts?: { kind?: "entity" | "memory" | "message"; limit?: number },
 ): Promise<SemanticSearchResult[]> {
+  const desiredLimit = opts?.limit ?? 10;
+  // Over-fetch for reranking (capped at Vectorize max topK of 20 with metadata)
+  const fetchLimit = Math.min(desiredLimit * RERANK_POOL_MULTIPLIER, 20);
+
   const queryVector = await embed(env.AI, query);
 
   const filter: VectorizeVectorMetadataFilter = { namespace_id };
@@ -148,12 +165,39 @@ export async function semanticSearch(
   }
 
   const results = await env.VECTORIZE.query(queryVector, {
-    topK: opts?.limit ?? 10,
+    topK: fetchLimit,
     filter,
     returnMetadata: true,
   });
 
-  return results.matches.map((match) => ({
+  const candidates = results.matches;
+  if (candidates.length === 0) return [];
+
+  // Stage 2: Rerank with cross-encoder
+  const texts = await hydrateTexts(env.DB, candidates);
+  const reranked = await rerank(env.AI, query, texts);
+
+  if (reranked) {
+    // Sort by reranker score (descending) and take top N
+    const sorted = reranked
+      .map((r) => ({
+        match: candidates[r.id],
+        score: r.score,
+      }))
+      .filter((r) => r.match) // guard against index mismatch
+      .sort((a, b) => b.score - a.score)
+      .slice(0, desiredLimit);
+
+    return sorted.map((r) => ({
+      id: r.match.id,
+      kind: (r.match.metadata?.kind as "entity" | "memory" | "message") ?? "entity",
+      score: r.score,
+      metadata: (r.match.metadata ?? {}) as Record<string, string>,
+    }));
+  }
+
+  // Fallback: return Vectorize results directly (local dev / AI unavailable)
+  return candidates.slice(0, desiredLimit).map((match) => ({
     id: match.id,
     kind: (match.metadata?.kind as "entity" | "memory" | "message") ?? "entity",
     score: match.score,
