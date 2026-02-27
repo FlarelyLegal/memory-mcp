@@ -8,6 +8,7 @@ import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../auth.js";
 import { toISO } from "../utils.js";
 import { track, resolveNamespace, resolveConversation } from "../state.js";
+import { audit } from "../audit.js";
 import { txt, err, cap, trunc, safeMeta, isMetaError, toolHandler } from "../response-helpers.js";
 
 export function registerConversationTools(
@@ -49,6 +50,14 @@ export function registerConversationTools(
           metadata: meta,
         });
         track(agent, { conversation: id });
+        await audit(db, env.STORAGE, {
+          action: "conversation.create",
+          email,
+          namespace_id,
+          resource_type: "conversation",
+          resource_id: id,
+          detail: { title },
+        });
         return txt({ id, title });
       }
       const isCompact = compact ?? true;
@@ -112,6 +121,13 @@ export function registerConversationTools(
             role,
           });
       }
+      await audit(db, env.STORAGE, {
+        action: "message.create",
+        email,
+        resource_type: "message",
+        resource_id: id,
+        detail: { conversation_id, role },
+      });
       return txt({ id, role });
     }),
   );

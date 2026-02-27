@@ -14,6 +14,7 @@ import {
 import { parseEntityRow } from "../row-parsers.js";
 import { entityCreateSchema, entityListQuerySchema } from "../validators.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
+import { audit } from "../../audit.js";
 
 export function registerEntityRoutes(): void {
   defineRoute(
@@ -125,6 +126,14 @@ export function registerEntityRoutes(): void {
           name: body.name,
           type: body.type,
           summary: body.summary ?? null,
+        });
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "entity.create",
+          email: ctx.email,
+          namespace_id: ctx.params.namespace_id,
+          resource_type: "entity",
+          resource_id: id,
+          detail: { name: body.name, type: body.type },
         });
         return json({ id, name: body.name, type: body.type }, 201);
       } catch (e) {

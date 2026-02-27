@@ -7,6 +7,7 @@ import { upsertEntityVector, deleteVector } from "../../vectorize.js";
 import { idPathParam, entitySchema, okSchema, metadataSchema } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
 import { entityUpdateSchema } from "../validators.js";
+import { audit } from "../../audit.js";
 
 export function registerEntityCrudRoutes(): void {
   defineRoute(
@@ -59,6 +60,13 @@ export function registerEntityCrudRoutes(): void {
             });
           }
         }
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "entity.update",
+          email: ctx.email,
+          resource_type: "entity",
+          resource_id: ctx.params.id,
+          detail: { name: body.name, type: body.type, summary: !!body.summary },
+        });
         return json({ ok: true });
       } catch (e) {
         return handleError(e);
@@ -98,6 +106,12 @@ export function registerEntityCrudRoutes(): void {
         await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
         await deleteEntity(ctx.db, ctx.params.id);
         await deleteVector(ctx.env, "entity", ctx.params.id);
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "entity.delete",
+          email: ctx.email,
+          resource_type: "entity",
+          resource_id: ctx.params.id,
+        });
         return json({ ok: true });
       } catch (e) {
         return handleError(e);

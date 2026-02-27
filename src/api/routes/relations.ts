@@ -20,6 +20,7 @@ import {
 } from "../schemas.js";
 import { relationCreateSchema } from "../validators.js";
 import { parseRelationRow } from "../row-parsers.js";
+import { audit } from "../../audit.js";
 
 export function registerRelationRoutes(): void {
   defineRoute(
@@ -60,6 +61,18 @@ export function registerRelationRoutes(): void {
           relation_type: payload.relation_type,
           weight: payload.weight,
           metadata: payload.metadata,
+        });
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "relation.create",
+          email: ctx.email,
+          namespace_id: ctx.params.namespace_id,
+          resource_type: "relation",
+          resource_id: id,
+          detail: {
+            source_id: payload.source_id,
+            target_id: payload.target_id,
+            relation_type: payload.relation_type,
+          },
         });
         return json(
           {
@@ -179,6 +192,12 @@ export function registerRelationRoutes(): void {
       try {
         await assertRelationAccess(ctx.db, ctx.params.id, ctx.email);
         await deleteRelation(ctx.db, ctx.params.id);
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "relation.delete",
+          email: ctx.email,
+          resource_type: "relation",
+          resource_id: ctx.params.id,
+        });
         return json({ ok: true });
       } catch (e) {
         return handleError(e);

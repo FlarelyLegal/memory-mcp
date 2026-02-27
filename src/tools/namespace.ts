@@ -5,6 +5,7 @@ import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import { track } from "../state.js";
+import { audit } from "../audit.js";
 import { txt, err, toolHandler } from "../response-helpers.js";
 
 export function registerNamespaceTools(
@@ -39,6 +40,14 @@ export function registerNamespaceTools(
           owner: email,
         });
         track(agent, { namespace: id });
+        await audit(db, env.STORAGE, {
+          action: "namespace.create",
+          email,
+          namespace_id: id,
+          resource_type: "namespace",
+          resource_id: id,
+          detail: { name },
+        });
         return txt({ id, name });
       }
       const isCompact = compact ?? true;
