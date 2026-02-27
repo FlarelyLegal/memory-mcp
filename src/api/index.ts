@@ -110,7 +110,7 @@ function corsHeaders(): Record<string, string> {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, Cf-Access-Jwt-Assertion, cf-access-token, CF-Access-Client-Id, CF-Access-Client-Secret",
+      "Content-Type, Authorization, Cf-Access-Jwt-Assertion, cf-access-token, CF-Access-Client-Id",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -126,7 +126,8 @@ async function maybeGzip(request: Request, response: Response): Promise<Response
   if (!/^(application\/json|text\/plain|text\/html)/.test(contentType)) return response;
 
   const text = await response.clone().text();
-  if (text.length < 1024) return response;
+  // Keep CPU overhead low; Cloudflare edge compression also applies.
+  if (text.length < 8192) return response;
 
   const stream = new CompressionStream("gzip");
   const writer = stream.writable.getWriter();

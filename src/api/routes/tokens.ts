@@ -5,6 +5,8 @@ import { ST_BIND_PREFIX, ST_PREFIX } from "../service-tokens.js";
 import type { ServiceTokenBindChallenge, ServiceTokenMapping } from "../service-tokens.js";
 import { tokenSchema } from "../schemas.js";
 import { serviceTokenBindRequestSchema, serviceTokenBindSelfSchema } from "../validators.js";
+import { enforceAuthRateLimit } from "../rate-limit.js";
+import { writeAuditEvent } from "../audit.js";
 
 const BIND_TTL_SECONDS = 600;
 
@@ -15,13 +17,22 @@ export function registerTokenRoutes(): void {
     async (ctx, request) => {
       try {
         if (ctx.auth.type !== "human") return jsonError("Human authentication required", 403);
+        const rl = await enforceAuthRateLimit(ctx, "bind-request");
+        if (rl) return rl;
         const body = await parseBodyWithSchema(request, serviceTokenBindRequestSchema);
         if (body instanceof Response) return body;
-
         const key = `${ST_PREFIX}${body.common_name}`;
         const existing = await ctx.env.CACHE.get<ServiceTokenMapping>(key, "json");
-        if (existing) return jsonError(`Service token already bound to ${existing.email}`, 409);
-
+        if (existing) {
+          await writeAuditEvent(ctx.env, {
+            action: "service_token_bind_request_conflict",
+            actor_type: "human",
+            email: ctx.email,
+            common_name: body.common_name,
+            reason: "already_bound",
+          });
+          return jsonError(`Service token already bound to ${existing.email}`, 409);
+        }
         const now = Math.floor(Date.now() / 1000);
         const challengeId = crypto.randomUUID();
         const challenge: ServiceTokenBindChallenge = {
@@ -34,7 +45,15 @@ export function registerTokenRoutes(): void {
         await ctx.env.CACHE.put(`${ST_BIND_PREFIX}${challengeId}`, JSON.stringify(challenge), {
           expirationTtl: BIND_TTL_SECONDS,
         });
-        return json({ challenge_id: challengeId, ...challenge }, 201);
+        await writeAuditEvent(ctx.env, {
+          action: "service_token_bind_request_created",
+          actor_type: "human",
+          email: ctx.email,
+          common_name: body.common_name,
+        });
+        const response = json({ challenge_id: challengeId, ...challenge }, 201);
+        response.headers.set("Cache-Control", "no-store");
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -89,27 +108,61 @@ export function registerTokenRoutes(): void {
     async (ctx, request) => {
       try {
         if (ctx.auth.type !== "service_token") {
+          await writeAuditEvent(ctx.env, {
+            action: "service_token_bind_self_denied",
+            actor_type: "human",
+            email: ctx.email,
+            reason: "not_service_token",
+          });
           return jsonError("Service token authentication required", 403);
         }
+        const rl = await enforceAuthRateLimit(ctx, "bind-self");
+        if (rl) return rl;
         const body = await parseBodyWithSchema(request, serviceTokenBindSelfSchema);
         if (body instanceof Response) return body;
         const challenge = await ctx.env.CACHE.get<ServiceTokenBindChallenge>(
           `${ST_BIND_PREFIX}${body.challenge_id}`,
           "json",
         );
-        if (!challenge) return jsonError("Bind challenge not found or expired", 404);
+        if (!challenge) {
+          await writeAuditEvent(ctx.env, {
+            action: "service_token_bind_self_denied",
+            actor_type: "service_token",
+            common_name: ctx.auth.common_name,
+            reason: "challenge_missing",
+          });
+          return jsonError("Bind challenge not found or expired", 404);
+        }
         if (challenge.expires_at < Math.floor(Date.now() / 1000)) {
           await ctx.env.CACHE.delete(`${ST_BIND_PREFIX}${body.challenge_id}`);
+          await writeAuditEvent(ctx.env, {
+            action: "service_token_bind_self_denied",
+            actor_type: "service_token",
+            common_name: ctx.auth.common_name,
+            reason: "challenge_expired",
+          });
           return jsonError("Bind challenge expired", 400);
         }
         if (challenge.common_name !== ctx.auth.common_name) {
+          await writeAuditEvent(ctx.env, {
+            action: "service_token_bind_self_denied",
+            actor_type: "service_token",
+            common_name: ctx.auth.common_name,
+            reason: "challenge_common_name_mismatch",
+          });
           return jsonError("Service token does not match bind challenge", 403);
         }
-
         const key = `${ST_PREFIX}${ctx.auth.common_name}`;
         const existing = await ctx.env.CACHE.get<ServiceTokenMapping>(key, "json");
-        if (existing) return jsonError(`Service token already bound to ${existing.email}`, 409);
-
+        if (existing) {
+          await writeAuditEvent(ctx.env, {
+            action: "service_token_bind_self_conflict",
+            actor_type: "service_token",
+            common_name: ctx.auth.common_name,
+            reason: "already_bound",
+          });
+          return jsonError(`Service token already bound to ${existing.email}`, 409);
+        }
         const mapping: ServiceTokenMapping = {
           email: challenge.email,
           label: challenge.label,
@@ -117,6 +170,12 @@ export function registerTokenRoutes(): void {
         };
         await ctx.env.CACHE.put(key, JSON.stringify(mapping));
         await ctx.env.CACHE.delete(`${ST_BIND_PREFIX}${body.challenge_id}`);
+        await writeAuditEvent(ctx.env, {
+          action: "service_token_bound",
+          actor_type: "service_token",
+          email: mapping.email,
+          common_name: ctx.auth.common_name,
+        });
         return json({ common_name: ctx.auth.common_name, ...mapping }, 201);
       } catch (e) {
         return handleError(e);
@@ -149,7 +208,6 @@ export function registerTokenRoutes(): void {
     },
     { allowUnboundServiceToken: true },
   );
-
   defineRoute(
     "GET",
     "/api/v1/admin/service-tokens",

@@ -38,26 +38,46 @@ function parseCsv(value: string): string[] {
     .filter(Boolean);
 }
 
+type JwkWithKid = JsonWebKey & { kid: string };
+type JwksCacheEntry = { fetchedAt: number; keys: JwkWithKid[] };
+
+const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const jwksCache = new Map<string, JwksCacheEntry>();
+
+async function fetchJwks(url: string, forceRefresh = false): Promise<JwkWithKid[]> {
+  const cached = jwksCache.get(url);
+  const now = Date.now();
+  if (!forceRefresh && cached && now - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
+    return cached.keys;
+  }
+  const resp = await fetch(url, {
+    headers: { "Cache-Control": "no-cache" },
+  });
+  const body = (await resp.json()) as { keys?: JwkWithKid[] };
+  const keys = body.keys ?? [];
+  jwksCache.set(url, { fetchedAt: now, keys });
+  return keys;
+}
+
 async function fetchAccessPublicKey(env: Env, kid: string): Promise<CryptoKey> {
   if (!env.ACCESS_JWKS_URL) {
     throw new Error("ACCESS_JWKS_URL not configured");
   }
   // ACCESS_JWKS_URL may be comma-separated (e.g. team-level + SaaS app JWKS).
   const urls = parseCsv(env.ACCESS_JWKS_URL);
-  for (const url of urls) {
-    const resp = await fetch(url);
-    const keys = (await resp.json()) as {
-      keys: (JsonWebKey & { kid: string })[];
-    };
-    const jwk = keys.keys.find((key) => key.kid === kid);
-    if (jwk) {
-      return crypto.subtle.importKey(
-        "jwk",
-        jwk,
-        { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
-        false,
-        ["verify"],
-      );
+  for (const forceRefresh of [false, true]) {
+    for (const url of urls) {
+      const keys = await fetchJwks(url, forceRefresh);
+      const jwk = keys.find((key) => key.kid === kid);
+      if (jwk) {
+        return crypto.subtle.importKey(
+          "jwk",
+          jwk,
+          { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
+          false,
+          ["verify"],
+        );
+      }
     }
   }
   throw new Error(`No matching JWK found for kid: ${kid}`);

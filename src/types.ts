@@ -1,5 +1,9 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
+export interface WorkerRateLimiter {
+  limit(input: { key: string }): Promise<{ success: boolean }>;
+}
+
 // Cloudflare bindings
 export interface Env {
   DB: D1Database;
@@ -18,6 +22,8 @@ export interface Env {
   ACCESS_ISSUER?: string;
   ACCESS_AUD_TAG: string;
   COOKIE_ENCRYPTION_KEY: string;
+  RATE_LIMIT_AUTH?: WorkerRateLimiter;
+  RATE_LIMIT_SEARCH?: WorkerRateLimiter;
 }
 
 // Props passed through from the OAuth flow into McpAgent
