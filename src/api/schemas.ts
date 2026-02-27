@@ -42,6 +42,7 @@ export function namespaceSchema(): SchemaObject {
       name: { type: "string" },
       description: { type: "string", nullable: true },
       owner: { type: "string", nullable: true },
+      visibility: { type: "string", enum: ["private", "public"] },
       metadata: { type: "string", nullable: true },
       created_at: { type: "number" },
       updated_at: { type: "number" },

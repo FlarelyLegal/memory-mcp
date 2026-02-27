@@ -1,5 +1,5 @@
 /** Namespace CRUD operations against D1. */
-import type { NamespaceRow } from "../types.js";
+import type { NamespaceRow, NamespaceVisibility } from "../types.js";
 import { type DbHandle, withRetry, isReplayInsertConflict } from "../db.js";
 import { generateId, toJson } from "../utils.js";
 
@@ -66,6 +66,16 @@ export async function listNamespaces(
  * Claim all unowned namespaces (owner IS NULL) for the given owner.
  * Returns the number of namespaces claimed.
  */
+export async function updateNamespaceVisibility(
+  db: DbHandle,
+  id: string,
+  visibility: NamespaceVisibility,
+): Promise<void> {
+  await withRetry(() =>
+    db.prepare(`UPDATE namespaces SET visibility = ? WHERE id = ?`).bind(visibility, id).run(),
+  );
+}
+
 export async function claimUnownedNamespaces(db: DbHandle, owner: string): Promise<number> {
   const result = await withRetry(() =>
     db.prepare(`UPDATE namespaces SET owner = ? WHERE owner IS NULL`).bind(owner).run(),

@@ -144,26 +144,47 @@ async function assertResourceWriteAccess(
   id: string,
   label: string,
   email: string,
+  admin = false,
 ): Promise<string> {
   const row = await fetchResourceNs(db, table, id, label);
-  if (row.owner !== email) {
+  if (row.owner !== email && !(admin && row.visibility === "public")) {
     throw new AccessDeniedError("You do not have write access to this namespace");
   }
   return row.namespace_id;
 }
 
-// --- Write access (owner only) ---
-export function assertEntityAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceWriteAccess(db, "entities", id, "Entity", email);
+// --- Write access (owner, or admin for public namespaces) ---
+export function assertEntityAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  return assertResourceWriteAccess(db, "entities", id, "Entity", email, admin);
 }
-export function assertMemoryAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceWriteAccess(db, "memories", id, "Memory", email);
+export function assertMemoryAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  return assertResourceWriteAccess(db, "memories", id, "Memory", email, admin);
 }
-export function assertConversationAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceWriteAccess(db, "conversations", id, "Conversation", email);
+export function assertConversationAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  return assertResourceWriteAccess(db, "conversations", id, "Conversation", email, admin);
 }
-export function assertRelationAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceWriteAccess(db, "relations", id, "Relation", email);
+export function assertRelationAccess(
+  db: DbHandle,
+  id: string,
+  email: string,
+  admin = false,
+): Promise<string> {
+  return assertResourceWriteAccess(db, "relations", id, "Relation", email, admin);
 }
 
 // --- Read access (owner OR public) ---
