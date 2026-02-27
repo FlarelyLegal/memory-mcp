@@ -1,7 +1,7 @@
 /** Tool registration: add_message, get_messages */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { messageRole, messageContent, metadataJsonStr, queryField } from "../tool-schemas.js";
+import { messageRole, messageContent, metadataObject, queryField } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as conversations from "../conversations.js";
@@ -15,7 +15,7 @@ import {
 import { toISO } from "../utils.js";
 import { track, resolveNamespace, resolveConversation } from "../state.js";
 import { audit } from "../audit.js";
-import { txt, err, cap, trunc, safeMeta, isMetaError, trackTools } from "../response-helpers.js";
+import { txt, err, cap, trunc, trackTools } from "../response-helpers.js";
 
 export function registerMessageTools(
   server: McpServer,
@@ -31,7 +31,7 @@ export function registerMessageTools(
       conversation_id: z.string().uuid().optional().describe("Defaults to last-used conversation"),
       role: messageRole,
       content: messageContent,
-      metadata: metadataJsonStr.optional(),
+      metadata: metadataObject.optional(),
     },
     {
       title: "Add Message",
@@ -47,13 +47,11 @@ export function registerMessageTools(
       const admin = await isAdmin(env.CACHE, email);
       await assertConversationAccess(db, conversation_id, email, admin);
       track(agent, { conversation: conversation_id });
-      const meta = safeMeta(metadata);
-      if (isMetaError(meta)) return meta;
       const id = await conversations.addMessage(db, {
         conversation_id,
         role,
         content,
-        metadata: meta,
+        metadata,
       });
       if (role === "user" || role === "assistant") {
         const convo = await conversations.getConversation(db, conversation_id);

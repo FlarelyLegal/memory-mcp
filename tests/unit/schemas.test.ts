@@ -6,7 +6,6 @@ import {
   typeFilter,
   summaryField,
   descriptionField,
-  metadataJsonStr,
   metadataObject,
   memoryContent,
   messageContent,
@@ -73,13 +72,6 @@ describe("field schemas", () => {
       expect(descriptionField.safeParse("a".repeat(2000)).success).toBe(true));
     it("rejects over 2000", () =>
       expect(descriptionField.safeParse("a".repeat(2001)).success).toBe(false));
-  });
-
-  describe("metadataJsonStr", () => {
-    it("accepts JSON string", () =>
-      expect(metadataJsonStr.safeParse('{"k":"v"}').success).toBe(true));
-    it("rejects over 5000 chars", () =>
-      expect(metadataJsonStr.safeParse("a".repeat(5001)).success).toBe(false));
   });
 
   describe("metadataObject", () => {

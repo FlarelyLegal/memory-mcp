@@ -1,7 +1,7 @@
 /** Tool registration: manage_entity */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { nameField, typeField, summaryField, metadataJsonStr } from "../tool-schemas.js";
+import { nameField, typeField, summaryField, metadataObject } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
@@ -15,7 +15,7 @@ import {
 import { parseJson, toISO } from "../utils.js";
 import { track, untrack, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
-import { txt, err, ok, safeMeta, isMetaError, trackTools, confirm } from "../response-helpers.js";
+import { txt, err, ok, trackTools, confirm } from "../response-helpers.js";
 
 export function registerEntityTools(
   server: McpServer,
@@ -38,7 +38,7 @@ export function registerEntityTools(
       name: nameField.optional(),
       type: typeField.optional().describe("person, concept, project, tool, etc."),
       summary: summaryField.optional(),
-      metadata: metadataJsonStr.optional().describe("JSON string"),
+      metadata: metadataObject.optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields (get only)"),
     },
     {
@@ -52,8 +52,6 @@ export function registerEntityTools(
       "manage_entity",
       async ({ action, id, namespace_id: nsParam, name, type, summary, metadata, compact }) => {
         const db = session(env.DB, "first-primary");
-        const meta = safeMeta(metadata);
-        if (isMetaError(meta)) return meta;
         const admin = action !== "get" ? await isAdmin(env.CACHE, email) : false;
         switch (action) {
           case "create": {
@@ -65,7 +63,7 @@ export function registerEntityTools(
               name,
               type,
               summary,
-              metadata: meta,
+              metadata,
             });
             await vectorize.upsertEntityVector(env, {
               entity_id: eid,
@@ -114,7 +112,7 @@ export function registerEntityTools(
             if (!name && !type && !summary && !metadata)
               return err("at least one field (name, type, summary, metadata) required");
             await assertEntityAccess(db, id, email, admin);
-            await graph.updateEntity(db, id, { name, type, summary, metadata: meta });
+            await graph.updateEntity(db, id, { name, type, summary, metadata });
             if (name || type || summary) {
               const e = await graph.getEntity(db, id);
               if (e)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { txt, ok, err, safeMeta, isMetaError, cap, trunc } from "../../src/response-helpers.js";
+import { txt, ok, err, cap, trunc } from "../../src/response-helpers.js";
 
 describe("txt", () => {
   it("wraps data as JSON text content", () => {
@@ -33,41 +33,6 @@ describe("err", () => {
 
   it("sets isError to true", () => {
     expect(err("failed").isError).toBe(true);
-  });
-});
-
-describe("safeMeta", () => {
-  it("parses valid JSON string", () => {
-    const result = safeMeta('{"key":"val"}');
-    expect(result).toEqual({ key: "val" });
-  });
-
-  it("returns empty object for undefined", () => {
-    expect(safeMeta(undefined)).toEqual({});
-  });
-
-  it("returns error result for invalid JSON", () => {
-    const result = safeMeta("{bad}");
-    expect(isMetaError(result)).toBe(true);
-  });
-
-  it("returns empty object for empty string", () => {
-    // empty string is falsy → treated like undefined
-    expect(safeMeta("")).toEqual({});
-  });
-});
-
-describe("isMetaError", () => {
-  it("returns true for error results", () => {
-    expect(isMetaError(err("bad"))).toBe(true);
-  });
-
-  it("returns false for plain objects", () => {
-    expect(isMetaError({ key: "val" })).toBe(false);
-  });
-
-  it("returns false for objects with isError=false", () => {
-    expect(isMetaError({ isError: false } as never)).toBe(false);
   });
 });
 

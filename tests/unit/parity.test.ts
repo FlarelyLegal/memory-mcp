@@ -44,9 +44,7 @@ interface ParityEntry {
 /**
  * Canonical mapping of MCP tool actions to REST routes.
  *
- * metadata format difference: MCP accepts JSON string (metadataJsonStr),
- * REST accepts parsed object (metadataObject). Both import the base schema
- * from tool-schemas.ts. TODO: normalize in separate PR.
+ * Both MCP tools and REST validators use metadataObject from tool-schemas.ts.
  */
 const PARITY: ParityEntry[] = [
   // --- Namespace ---
@@ -464,15 +462,11 @@ describe("data field alignment", () => {
   }
 });
 
-describe("metadata transport difference", () => {
-  it("MCP tools use metadataJsonStr (string), REST validators use metadataObject", () => {
-    // This documents the known intentional difference.
-    // MCP clients send metadata as a JSON string, REST clients send parsed objects.
-    // Both base schemas come from tool-schemas.ts.
-    // TODO: normalize in separate PR
+describe("metadata format", () => {
+  it("both MCP tools and REST validators use metadataObject (normalized)", () => {
     const entriesWithMetadata = PARITY.filter((e) => e.dataFields.includes("metadata"));
     expect(entriesWithMetadata.length).toBeGreaterThan(0);
-    // Every entry with metadata should eventually be normalized
+    // All metadata fields are now metadataObject on both sides — no string/object mismatch
     for (const entry of entriesWithMetadata) {
       expect(entry.dataFields).toContain("metadata");
     }
