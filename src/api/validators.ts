@@ -66,6 +66,7 @@ export const semanticSearchSchema = z.object({
   query: z.string().min(1).max(1000),
   mode: z.enum(["semantic", "context"]).optional(),
   kind: z.enum(["entity", "memory", "message"]).optional(),
+  type: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(20).optional(),
 });
 

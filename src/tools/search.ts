@@ -16,7 +16,12 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
       namespace_id: z.string().max(100),
       query: z.string().max(1000),
       mode: z.enum(["semantic", "context"]).optional().describe("Default: semantic"),
-      kind: z.enum(["entity", "memory", "message"]).optional().describe("Filter by type"),
+      kind: z.enum(["entity", "memory", "message"]).optional().describe("Filter by kind"),
+      type: z
+        .string()
+        .max(200)
+        .optional()
+        .describe("Filter by entity type or memory type (e.g. person, fact)"),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
@@ -26,13 +31,14 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
       readOnlyHint: true,
       openWorldHint: false,
     },
-    async ({ namespace_id, query, mode, kind, limit, compact, verbose }) => {
+    async ({ namespace_id, query, mode, kind, type, limit, compact, verbose }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
       const n = cap(limit, 20, mode === "context" ? 5 : 10);
       const isCompact = compact ?? true;
       const full = verbose ?? false;
       const semanticResults = await vectorize.semanticSearch(env, query, namespace_id, {
         kind,
+        type,
         limit: n,
       });
 

@@ -30,9 +30,11 @@ export function registerSearchRoutes(): void {
         const limit = Math.min(body.limit ?? (mode === "context" ? 5 : 10), 20);
         const offset = parseCursor(ctx.query);
         const kind = body.kind;
+        const type = body.type;
 
         const matches = await semanticSearch(ctx.env, body.query, ctx.params.namespace_id, {
           kind,
+          type,
           limit: limit + offset + 1,
         });
         const page = matches.slice(offset, offset + limit + 1);
@@ -115,7 +117,13 @@ export function registerSearchRoutes(): void {
                 kind: {
                   type: "string",
                   enum: ["entity", "memory", "message"],
-                  description: "Filter by type",
+                  description: "Filter by kind",
+                },
+                type: {
+                  type: "string",
+                  maxLength: 200,
+                  description:
+                    "Filter by entity type (person, concept, ...) or memory type (fact, observation, ...)",
                 },
                 limit: {
                   type: "integer",

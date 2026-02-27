@@ -128,7 +128,11 @@ export async function semanticSearch(
   env: Env,
   query: string,
   namespace_id: string,
-  opts?: { kind?: "entity" | "memory" | "message"; limit?: number },
+  opts?: {
+    kind?: "entity" | "memory" | "message";
+    type?: string;
+    limit?: number;
+  },
 ): Promise<SemanticSearchResult[]> {
   const desiredLimit = opts?.limit ?? 10;
   // Over-fetch for reranking (capped at Vectorize max topK of 20 with metadata)
@@ -139,6 +143,9 @@ export async function semanticSearch(
   const filter: VectorizeVectorMetadataFilter = { namespace_id };
   if (opts?.kind) {
     filter.kind = opts.kind;
+  }
+  if (opts?.type) {
+    filter.type = opts.type;
   }
 
   const results = await env.VECTORIZE.query(queryVector, {

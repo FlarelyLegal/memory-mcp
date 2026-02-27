@@ -27,6 +27,8 @@
     "db:migrate:fts": "wrangler d1 execute memory-graph-mcp-db --remote --file=schemas/fts5.sql",
     "db:migrate:fts:b": "wrangler d1 execute memory-graph-mcp-db --config wrangler-b.jsonc --remote --file=schemas/fts5.sql",
     "db:migrate:fts:local": "wrangler d1 execute memory-graph-mcp-db --local --file=schemas/fts5.sql",
+    "vectorize:indexes": "wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --property-name=namespace_id --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --property-name=kind --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --property-name=type --type=string",
+    "vectorize:indexes:b": "wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=namespace_id --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=kind --type=string && wrangler vectorize create-metadata-index memory-graph-mcp-embeddings --config wrangler-b.jsonc --property-name=type --type=string",
     "deploy:init": "npm run db:init && wrangler deploy --config wrangler-a.jsonc",
     "seed:demo": "node scripts/seed-demo.mjs",
     "test:e2e": "playwright test",
