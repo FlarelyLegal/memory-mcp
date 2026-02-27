@@ -21,6 +21,13 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
+      - name: Preflight API availability
+        run: |
+          curl -fsS "${API_BASE_URL_B}/health"
+          curl -fsS "${API_BASE_URL_B}/api/openapi.json" >/dev/null
+        env:
+          API_BASE_URL_B: ${{ secrets.API_BASE_URL_B }}
+
       - name: Run E2E tests
         run: npx playwright test
         env:
