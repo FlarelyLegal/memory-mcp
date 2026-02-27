@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Env } from "../types.js";
 import * as graph from "../graph/index.js";
 import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../auth.js";
+import { parseJson } from "../utils.js";
 import { txt, ok, cap } from "../response-helpers.js";
 
 export function registerRelationTools(server: McpServer, env: Env, email: string) {
@@ -66,44 +67,56 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       direction: z.enum(["from", "to", "both"]).optional(),
       relation_type: z.string().max(200).optional(),
       limit: z.number().optional(),
+      compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
     {
       title: "Get Relations",
       readOnlyHint: true,
       openWorldHint: false,
     },
-    async ({ entity_id, direction, relation_type, limit }) => {
+    async ({ entity_id, direction, relation_type, limit, compact }) => {
       await assertEntityAccess(env.DB, entity_id, email);
       const dir = direction ?? "both";
       const n = cap(limit, 50, 20);
+      const isCompact = compact ?? true;
+      const mapRel = (r: {
+        id: string;
+        source_id: string;
+        target_id: string;
+        relation_type: string;
+        weight: number;
+        metadata: string | null;
+      }) =>
+        isCompact
+          ? {
+              id: r.id,
+              source_id: r.source_id,
+              target_id: r.target_id,
+              relation_type: r.relation_type,
+              weight: r.weight,
+            }
+          : {
+              id: r.id,
+              source_id: r.source_id,
+              target_id: r.target_id,
+              relation_type: r.relation_type,
+              weight: r.weight,
+              metadata: parseJson(r.metadata),
+            };
       const results: unknown[] = [];
       if (dir === "from" || dir === "both") {
         const rels = await graph.getRelationsFrom(env.DB, entity_id, {
           relation_type,
           limit: n,
         });
-        results.push(
-          ...rels.map((r) => ({
-            id: r.id,
-            target_id: r.target_id,
-            type: r.relation_type,
-            weight: r.weight,
-          })),
-        );
+        results.push(...rels.map(mapRel));
       }
       if (dir === "to" || dir === "both") {
         const rels = await graph.getRelationsTo(env.DB, entity_id, {
           relation_type,
           limit: n,
         });
-        results.push(
-          ...rels.map((r) => ({
-            id: r.id,
-            source_id: r.source_id,
-            type: r.relation_type,
-            weight: r.weight,
-          })),
-        );
+        results.push(...rels.map(mapRel));
       }
       return txt(results);
     },

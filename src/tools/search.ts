@@ -42,16 +42,16 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
         limit: n,
       });
 
+      const mapMatch = (r: (typeof semanticResults)[number]) => ({
+        id: r.id,
+        name: typeof r.metadata?.name === "string" ? r.metadata.name : undefined,
+        kind: r.kind,
+        score: r.score,
+        ...(isCompact ? {} : { metadata: r.metadata }),
+      });
+
       if ((mode ?? "semantic") === "semantic") {
-        return txt(
-          semanticResults.map((r) => ({
-            id: r.id,
-            name: typeof r.metadata?.name === "string" ? r.metadata.name : undefined,
-            kind: r.kind,
-            score: r.score,
-            ...(isCompact ? {} : { metadata: r.metadata }),
-          })),
-        );
+        return txt({ matches: semanticResults.map(mapMatch) });
       }
 
       // Context mode: enrich entity matches with graph + memories
@@ -85,15 +85,12 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
           ),
         });
       }
-      const ranked = await memories.recallMemories(env.DB, namespace_id, { limit: n });
+      const entityIds = semanticResults.filter((r) => r.kind === "entity").length;
+      const ranked = await memories.recallMemories(env.DB, namespace_id, {
+        limit: Math.max(1, n - entityIds),
+      });
       return txt({
-        matches: semanticResults.map((r) => ({
-          id: r.id,
-          name: typeof r.metadata?.name === "string" ? r.metadata.name : undefined,
-          kind: r.kind,
-          score: r.score,
-          ...(isCompact ? {} : { metadata: r.metadata }),
-        })),
+        matches: semanticResults.map(mapMatch),
         entities: entityContext,
         top_memories: ranked.map((m) => ({
           id: m.id,

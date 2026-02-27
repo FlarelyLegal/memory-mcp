@@ -22,6 +22,11 @@ export function toJson(obj: Record<string, unknown> | null | undefined): string 
   return JSON.stringify(obj);
 }
 
+/** Convert a Unix epoch (seconds) to an ISO 8601 string. */
+export function toISO(epoch: number): string {
+  return new Date(epoch * 1000).toISOString();
+}
+
 /** Split an array into chunks of the given size. */
 export function chunks<T>(arr: T[], size: number): T[][] {
   const result: T[][] = [];

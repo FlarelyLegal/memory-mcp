@@ -5,7 +5,7 @@ import type { Env } from "../types.js";
 import * as graph from "../graph/index.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertEntityAccess } from "../auth.js";
-import { parseJson } from "../utils.js";
+import { parseJson, toISO } from "../utils.js";
 import { txt, ok, cap, trunc } from "../response-helpers.js";
 
 export function registerEntityTools(server: McpServer, env: Env, email: string) {
@@ -20,6 +20,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
       type: z.string().max(200).optional().describe("person, concept, project, tool, etc."),
       summary: z.string().max(10000).optional(),
       metadata: z.string().max(5000).optional().describe("JSON string"),
+      compact: z.boolean().optional().describe("Default true: return minimal fields (get only)"),
     },
     {
       title: "Manage Entity",
@@ -28,7 +29,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ action, id, namespace_id, name, type, summary, metadata }) => {
+    async ({ action, id, namespace_id, name, type, summary, metadata, compact }) => {
       const meta = metadata ? JSON.parse(metadata) : undefined;
       switch (action) {
         case "create": {
@@ -56,13 +57,23 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
           await assertEntityAccess(env.DB, id, email);
           const e = await graph.getEntity(env.DB, id);
           if (!e) return ok("Not found");
-          return txt({
-            id: e.id,
-            name: e.name,
-            type: e.type,
-            summary: e.summary,
-            metadata: parseJson(e.metadata),
-          });
+          const isCompact = compact ?? true;
+          return txt(
+            isCompact
+              ? { id: e.id, name: e.name, type: e.type, summary: e.summary }
+              : {
+                  id: e.id,
+                  namespace_id: e.namespace_id,
+                  name: e.name,
+                  type: e.type,
+                  summary: e.summary,
+                  metadata: parseJson(e.metadata),
+                  created_at: toISO(e.created_at),
+                  updated_at: toISO(e.updated_at),
+                  last_accessed_at: toISO(e.last_accessed_at),
+                  access_count: e.access_count,
+                },
+          );
         }
         case "update": {
           if (!id) return ok("Error: id required");
@@ -128,6 +139,7 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
                 name: r.name,
                 type: r.type,
                 summary: full ? r.summary : trunc(r.summary),
+                metadata: parseJson(r.metadata),
               },
         ),
       );
