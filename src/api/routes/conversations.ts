@@ -2,13 +2,27 @@
 import { z } from "zod";
 import { defineRoute } from "../registry.js";
 import { json, parseBody, handleError } from "../middleware.js";
-import { createConversation, listConversations } from "../../conversations.js";
-import { assertNamespaceWriteAccess, assertNamespaceReadAccess, isAdmin } from "../../auth.js";
+import {
+  createConversation,
+  listConversations,
+  getConversation,
+  collectConversationVectorIds,
+  deleteConversation,
+} from "../../conversations.js";
+import { deleteVectorBatch } from "../../vectorize.js";
+import {
+  assertNamespaceWriteAccess,
+  assertNamespaceReadAccess,
+  assertConversationAccess,
+  isAdmin,
+} from "../../auth.js";
 import {
   nsPathParam,
+  idPathParam,
   limitQueryParam,
   queryLimit,
   conversationSchema,
+  okSchema,
   zodSchema,
 } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
@@ -137,6 +151,46 @@ export function registerConversationRoutes(): void {
               },
             },
           },
+        },
+      },
+    },
+  );
+
+  defineRoute(
+    "DELETE",
+    "/api/v1/namespaces/:namespace_id/conversations/:id",
+    async (ctx) => {
+      try {
+        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        await assertConversationAccess(ctx.db, ctx.params.id, ctx.email, admin);
+        const convo = await getConversation(ctx.db, ctx.params.id);
+        const vectorIds = await collectConversationVectorIds(ctx.db, ctx.params.id);
+        await deleteConversation(ctx.db, ctx.params.id);
+        await deleteVectorBatch(ctx.env, vectorIds);
+        await audit(ctx.db, ctx.env.STORAGE, {
+          action: "conversation.delete",
+          email: ctx.email,
+          namespace_id: ctx.params.namespace_id,
+          resource_type: "conversation",
+          resource_id: ctx.params.id,
+          detail: { title: convo?.title, vectors_deleted: vectorIds.length },
+        });
+        return json({ ok: true });
+      } catch (e) {
+        return handleError(e);
+      }
+    },
+    {
+      summary: "Delete conversation",
+      description:
+        "Delete a conversation and all its messages. Message vectors are removed from Vectorize.",
+      tags: ["Conversations"],
+      operationId: "deleteConversation",
+      parameters: [nsPathParam(), idPathParam("Conversation ID")],
+      responses: {
+        "200": {
+          description: "Deleted",
+          content: { "application/json": { schema: okSchema() } },
         },
       },
     },

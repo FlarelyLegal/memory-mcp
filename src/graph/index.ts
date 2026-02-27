@@ -3,6 +3,7 @@ export {
   createNamespace,
   getNamespace,
   listNamespaces,
+  updateNamespace,
   updateNamespaceVisibility,
   collectNamespaceVectorIds,
   deleteNamespace,

@@ -154,6 +154,21 @@ export async function searchMessages(
   return result.results;
 }
 
+/**
+ * Collect prefixed vector IDs for all messages in a conversation.
+ * Must be called BEFORE deleting the conversation since cascade removes messages.
+ */
+export async function collectConversationVectorIds(
+  db: DbHandle,
+  conversationId: string,
+): Promise<string[]> {
+  const result = await db
+    .prepare(`SELECT id FROM messages WHERE conversation_id = ?`)
+    .bind(conversationId)
+    .all<{ id: string }>();
+  return result.results.map((r) => `message:${r.id}`);
+}
+
 export async function deleteConversation(db: DbHandle, id: string): Promise<void> {
   await withRetry(() => db.prepare(`DELETE FROM conversations WHERE id = ?`).bind(id).run());
 }
