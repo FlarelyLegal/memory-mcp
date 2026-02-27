@@ -26,6 +26,7 @@ import { registerSearchRoutes } from "./routes/search.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerTokenRoutes } from "./routes/tokens.js";
 import { registerTokenCrudRoutes } from "./routes/token-crud.js";
+import { registerDemoRoutes } from "./routes/demo.js";
 
 // Register all route modules once at module load time.
 let registered = false;
@@ -45,6 +46,7 @@ function ensureRegistered(): void {
   registerAdminRoutes();
   registerTokenRoutes();
   registerTokenCrudRoutes();
+  registerDemoRoutes();
 }
 
 /**

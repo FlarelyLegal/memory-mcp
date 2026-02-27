@@ -219,12 +219,13 @@ The Worker resolves the service token to your email via KV. All operations run w
 
 ### Public endpoints (no auth)
 
-| Endpoint                | Response                                                      |
-| ----------------------- | ------------------------------------------------------------- |
-| `GET /`                 | Plain-text landing page (version, description, repo)          |
-| `GET /health`           | `{"status":"ok","server":"memory-graph-mcp","version":"..."}` |
-| `GET /api/docs`         | Scalar API reference UI                                       |
-| `GET /api/openapi.json` | OpenAPI 3.1 spec                                              |
+| Endpoint                | Response                                                           |
+| ----------------------- | ------------------------------------------------------------------ |
+| `GET /`                 | Plain-text landing page (version, description, repo)               |
+| `GET /health`           | `{"status":"ok","server":"memory-graph-mcp","version":"..."}`      |
+| `GET /api/docs`         | Scalar API reference UI                                            |
+| `GET /api/openapi.json` | OpenAPI 3.1 spec                                                   |
+| `GET /api/demo`         | Full demo namespace graph snapshot (entities, relations, memories) |
 
 ## MCP Tools (14)
 
@@ -255,6 +256,23 @@ recency   = e^(-ln(2) / half_life * age_hours)
 ```
 
 Default half-life: 7 days. Accessing a memory resets its recency.
+
+## Demo Seed
+
+Seeds a `demo` namespace with the server modeled as its own knowledge graph — 14 entities, 18 relations, and 14 memories spanning all 4 memory types with varied importance. This showcases graph traversal, semantic search, context-mode enrichment, and temporal decay ranking.
+
+```bash
+API_BASE_URL="https://<your-worker-domain>" \
+CF_ACCESS_CLIENT_ID="<service-token-id>" \
+CF_ACCESS_CLIENT_SECRET="<service-token-secret>" \
+npm run seed:demo
+```
+
+The seeder is idempotent �� it skips entities, relations, and memories that already exist.
+
+GitHub Actions workflows for manual seeding are available: **Seed Demo (A Manual)** and **Seed Demo (B Manual)** under Actions > workflow_dispatch.
+
+Seed source: `seeds/demo-directions.json`.
 
 ## Testing
 

@@ -1,0 +1,312 @@
+{
+  "namespace": {
+    "name": "demo",
+    "description": "Capability showcase — the Memory Graph MCP server modeled as its own knowledge graph."
+  },
+  "entities": [
+    {
+      "key": "memory_graph_mcp",
+      "name": "Memory Graph MCP",
+      "type": "project",
+      "summary": "Remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory — knowledge graphs, semantic search, and temporally-decayed recall.",
+      "metadata": { "repo": "https://github.com/FlarelyLegal/memory-mcp", "license": "MIT" }
+    },
+    {
+      "key": "d1_database",
+      "name": "D1 (SQLite)",
+      "type": "tool",
+      "summary": "Cloudflare D1 stores the structured graph: entities, relations, memories, conversations, and messages across 7 tables.",
+      "metadata": { "docs": "https://developers.cloudflare.com/d1/" }
+    },
+    {
+      "key": "vectorize",
+      "name": "Vectorize",
+      "type": "tool",
+      "summary": "Cloudflare Vectorize stores 1024-dimension embedding vectors for semantic similarity search across entities, memories, and messages.",
+      "metadata": { "docs": "https://developers.cloudflare.com/vectorize/" }
+    },
+    {
+      "key": "workers_ai",
+      "name": "Workers AI",
+      "type": "tool",
+      "summary": "Generates text embeddings using the bge-large-en-v1.5 model (1024 dimensions). Runs on Cloudflare's inference network.",
+      "metadata": { "model": "@cf/baai/bge-large-en-v1.5", "dimensions": 1024 }
+    },
+    {
+      "key": "durable_objects",
+      "name": "Durable Objects",
+      "type": "tool",
+      "summary": "Each MCP session runs inside a Durable Object, providing stateful per-session context for the MCP agent."
+    },
+    {
+      "key": "kv_store",
+      "name": "Workers KV",
+      "type": "tool",
+      "summary": "Key-value store used for OAuth state management, JWKS caching, and service-token-to-email bindings."
+    },
+    {
+      "key": "cloudflare_access",
+      "name": "Cloudflare Access",
+      "type": "tool",
+      "summary": "Zero Trust authentication layer. Interactive users authenticate via OIDC; service tokens use challenge-based binding for programmatic access.",
+      "metadata": { "docs": "https://developers.cloudflare.com/cloudflare-one/applications/" }
+    },
+    {
+      "key": "knowledge_graph",
+      "name": "Knowledge Graph",
+      "type": "concept",
+      "summary": "Directed graph of entities connected by typed, weighted relations. Supports BFS traversal up to 5 hops and relation-type filtering."
+    },
+    {
+      "key": "semantic_search",
+      "name": "Semantic Search",
+      "type": "concept",
+      "summary": "Vector similarity search across entities, memories, and messages. Context mode enriches matches with graph neighbors and linked memories."
+    },
+    {
+      "key": "temporal_decay",
+      "name": "Temporal Decay",
+      "type": "concept",
+      "summary": "Recall ranking blends importance (40%) with recency (60%) using an exponential decay curve. Default half-life is 7 days."
+    },
+    {
+      "key": "mcp_protocol",
+      "name": "Model Context Protocol",
+      "type": "concept",
+      "summary": "Open protocol for connecting LLMs to external tools and data sources. The server exposes 14 tools across 6 domains.",
+      "metadata": { "spec": "https://modelcontextprotocol.io" }
+    },
+    {
+      "key": "rest_api",
+      "name": "REST API",
+      "type": "concept",
+      "summary": "Full HTTP API with OpenAPI 3.1 spec, Scalar docs UI, field projection, cursor pagination, and gzip compression."
+    },
+    {
+      "key": "service_token_auth",
+      "name": "Service Token Auth",
+      "type": "concept",
+      "summary": "Challenge-based binding flow: a human creates a bind challenge, then the service token proves possession to complete the bind. Identity persists across secret rotation via common_name."
+    },
+    {
+      "key": "openapi_spec",
+      "name": "OpenAPI Specification",
+      "type": "concept",
+      "summary": "Auto-generated OpenAPI 3.1 spec assembled dynamically from route registrations. No separate spec file to maintain."
+    },
+    {
+      "key": "r2_storage",
+      "name": "R2 (Object Storage)",
+      "type": "tool",
+      "summary": "Cloudflare R2 provides S3-compatible object storage. Used for audit event logs with date-partitioned keys under audit/YYYY-MM-DD/.",
+      "metadata": { "docs": "https://developers.cloudflare.com/r2/" }
+    }
+  ],
+  "relations": [
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "d1_database",
+      "relation_type": "depends_on",
+      "weight": 1.0
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "vectorize",
+      "relation_type": "depends_on",
+      "weight": 1.0
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "workers_ai",
+      "relation_type": "depends_on",
+      "weight": 1.0
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "durable_objects",
+      "relation_type": "depends_on",
+      "weight": 1.0
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "kv_store",
+      "relation_type": "depends_on",
+      "weight": 0.8
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "cloudflare_access",
+      "relation_type": "uses",
+      "weight": 1.0
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "mcp_protocol",
+      "relation_type": "implements",
+      "weight": 1.0
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "rest_api",
+      "relation_type": "exposes",
+      "weight": 0.9
+    },
+    {
+      "source_key": "rest_api",
+      "target_key": "service_token_auth",
+      "relation_type": "uses",
+      "weight": 0.8
+    },
+    {
+      "source_key": "rest_api",
+      "target_key": "openapi_spec",
+      "relation_type": "exposes",
+      "weight": 0.7
+    },
+    {
+      "source_key": "semantic_search",
+      "target_key": "vectorize",
+      "relation_type": "depends_on",
+      "weight": 1.0
+    },
+    {
+      "source_key": "semantic_search",
+      "target_key": "workers_ai",
+      "relation_type": "depends_on",
+      "weight": 1.0
+    },
+    {
+      "source_key": "knowledge_graph",
+      "target_key": "memory_graph_mcp",
+      "relation_type": "part_of",
+      "weight": 1.0
+    },
+    {
+      "source_key": "temporal_decay",
+      "target_key": "knowledge_graph",
+      "relation_type": "part_of",
+      "weight": 0.9
+    },
+    {
+      "source_key": "cloudflare_access",
+      "target_key": "service_token_auth",
+      "relation_type": "provides",
+      "weight": 0.8
+    },
+    {
+      "source_key": "semantic_search",
+      "target_key": "knowledge_graph",
+      "relation_type": "enhances",
+      "weight": 0.7
+    },
+    {
+      "source_key": "d1_database",
+      "target_key": "knowledge_graph",
+      "relation_type": "stores",
+      "weight": 1.0
+    },
+    {
+      "source_key": "vectorize",
+      "target_key": "semantic_search",
+      "relation_type": "enables",
+      "weight": 1.0
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "r2_storage",
+      "relation_type": "depends_on",
+      "weight": 0.5
+    }
+  ],
+  "memories": [
+    {
+      "type": "fact",
+      "content": "The structured graph is stored in D1 across 7 tables: namespaces, entities, relations, conversations, messages, memories, and memory_entity_links. Vectors live in Vectorize.",
+      "importance": 0.9,
+      "source": "schemas/schema.sql",
+      "entity_keys": ["d1_database", "vectorize"]
+    },
+    {
+      "type": "fact",
+      "content": "Text embeddings are generated by Workers AI using bge-large-en-v1.5, producing 1024-dimension vectors for semantic similarity search.",
+      "importance": 0.7,
+      "entity_keys": ["workers_ai", "vectorize"]
+    },
+    {
+      "type": "fact",
+      "content": "The server exposes 14 MCP tools across 6 domains: namespace, entity, relation, memory, conversation, and search. Each tool has Zod-validated inputs with max-length bounds.",
+      "importance": 0.9,
+      "entity_keys": ["memory_graph_mcp", "mcp_protocol"]
+    },
+    {
+      "type": "fact",
+      "content": "Temporal decay ranks memories by blending importance (40%) with recency (60%). The formula is: relevance = importance * 0.4 + e^(-ln(2)/half_life * age_hours) * 0.6. Default half-life is 7 days.",
+      "importance": 0.8,
+      "source": "README.md",
+      "entity_keys": ["temporal_decay"]
+    },
+    {
+      "type": "fact",
+      "content": "The OpenAPI 3.1 spec is assembled dynamically from route registrations in the registry — there is no separate spec file to maintain. Interactive docs use Scalar UI at /api/docs.",
+      "importance": 0.6,
+      "entity_keys": ["openapi_spec", "rest_api"]
+    },
+    {
+      "type": "observation",
+      "content": "Workers AI and Vectorize bindings are unavailable when running locally with --local. Embedding and semantic search tools fail gracefully. D1, KV, R2, and Durable Objects all work.",
+      "importance": 0.6,
+      "entity_keys": ["workers_ai", "vectorize"]
+    },
+    {
+      "type": "observation",
+      "content": "Context-mode semantic search enriches each vector match with the entity's graph neighborhood: up to 5 outgoing relations, 5 incoming relations, 5 linked memories, plus top decay-ranked memories.",
+      "importance": 0.8,
+      "entity_keys": ["semantic_search", "knowledge_graph"]
+    },
+    {
+      "type": "observation",
+      "content": "Vectorize requires explicit metadata index declarations for namespace_id and kind. Filtering on unindexed fields silently returns empty results.",
+      "importance": 0.7,
+      "entity_keys": ["vectorize"]
+    },
+    {
+      "type": "preference",
+      "content": "Protect only /api/v1 paths with Cloudflare Access. Keep /api/docs and /api/openapi.json outside the Access policy so API documentation stays publicly reachable.",
+      "importance": 0.7,
+      "source": "HOWTO.md",
+      "entity_keys": ["cloudflare_access", "rest_api"]
+    },
+    {
+      "type": "fact",
+      "content": "Conversations track interaction history with four message roles: user, assistant, system, and tool. User and assistant messages are automatically embedded into Vectorize for semantic search across conversation history.",
+      "importance": 0.7,
+      "source": "README.md",
+      "entity_keys": ["memory_graph_mcp", "d1_database"]
+    },
+    {
+      "type": "instruction",
+      "content": "Service tokens must be bound to a user email via a two-step challenge-response flow before they can access API routes. Step 1: human creates bind challenge. Step 2: service token proves possession.",
+      "importance": 0.8,
+      "entity_keys": ["service_token_auth", "cloudflare_access"]
+    },
+    {
+      "type": "instruction",
+      "content": "Before first local dev run, execute 'npm run db:init:local' to create the D1 SQLite tables in .wrangler/state/. Without this, all database operations will fail.",
+      "importance": 0.6,
+      "entity_keys": ["d1_database"]
+    },
+    {
+      "type": "observation",
+      "content": "Graph traversal uses breadth-first search from a start entity, following outgoing relations up to 5 hops deep. Relation-type filtering lets you walk only specific edge types like depends_on or part_of.",
+      "importance": 0.7,
+      "source": "README.md",
+      "entity_keys": ["knowledge_graph"]
+    },
+    {
+      "type": "observation",
+      "content": "The JWKS cache uses a 5-minute TTL with a single forced refresh on kid miss. This handles key rotation without breaking active sessions, at the cost of up to one extra fetch per rotation event.",
+      "importance": 0.6,
+      "entity_keys": ["cloudflare_access", "kv_store"]
+    }
+  ]
+}

@@ -7,6 +7,29 @@ on:
     branches: [main]
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'src/**'
+              - 'schemas/**'
+              - 'tests/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig.json'
+              - 'wrangler*.jsonc'
+              - 'playwright.config.ts'
+
   lint:
     name: Lint
     uses: ./.github/workflows/lint.yml
@@ -22,7 +45,8 @@ jobs:
 
   e2e:
     name: E2E Tests
-    needs: [build]
+    needs: [build, changes]
+    if: needs.changes.outputs.src == 'true'
     uses: ./.github/workflows/e2e.yml
     secrets:
       CF_ACCESS_CLIENT_ID_B: ${{ secrets.CF_ACCESS_CLIENT_ID_B }}

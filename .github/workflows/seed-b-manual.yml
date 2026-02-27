@@ -1,0 +1,25 @@
+name: Seed Demo (B Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      seed_file:
+        description: "Path to seed JSON file"
+        required: false
+        default: "seeds/demo-directions.json"
+
+jobs:
+  seed_b:
+    name: Seed Demo (b)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Seed demo namespace
+        run: node scripts/seed-demo.mjs
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL_B }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID_B }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET_B }}
+          SEED_FILE: ${{ inputs.seed_file }}
