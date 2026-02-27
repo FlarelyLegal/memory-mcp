@@ -65,12 +65,12 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   if (pathname === "/api/openapi.json" && request.method === "GET") {
     const serverUrl = `${url.protocol}//${url.host}`;
-    return json(buildOpenApiSpec(serverUrl));
+    return withCors(request, json(buildOpenApiSpec(serverUrl)));
   }
 
   if (pathname === "/api/docs" && request.method === "GET") {
     const specUrl = `${url.protocol}//${url.host}/api/openapi.json`;
-    return renderScalarDocs(specUrl);
+    return withCors(request, renderScalarDocs(specUrl));
   }
 
   // --- CORS preflight ---
@@ -83,7 +83,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   const matched = matchRoute(request.method as HttpMethod, pathname);
   if (!matched) {
-    return jsonError("Not found", 404);
+    return withCors(request, jsonError("Not found", 404));
   }
 
   const { route, params } = matched;

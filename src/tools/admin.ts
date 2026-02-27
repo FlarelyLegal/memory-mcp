@@ -114,8 +114,12 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
         const instance = await binding.get(instance_id);
         const status = await instance.status();
         return txt(status);
-      } catch {
-        return err(`Workflow instance ${instance_id} not found`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.toLowerCase().includes("not found")) {
+          return err(`Workflow instance ${instance_id} not found`);
+        }
+        throw e;
       }
     }),
   );
