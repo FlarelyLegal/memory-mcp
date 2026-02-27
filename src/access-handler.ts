@@ -35,11 +35,20 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 };
 
+/**
+ * Strict fallback CSP for non-HTML and routes without custom policies.
+ * Route-specific handlers can set their own CSP and it will be preserved.
+ */
+const DEFAULT_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+
 /** Attach security headers to a response. */
 function withSecurityHeaders(response: Response): Response {
   const patched = new Response(response.body, response);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
     patched.headers.set(k, v);
+  }
+  if (!patched.headers.has("Content-Security-Policy")) {
+    patched.headers.set("Content-Security-Policy", DEFAULT_CSP);
   }
   return patched;
 }

@@ -15,7 +15,22 @@ export function renderScalarDocs(specUrl: string): Response {
 </body>
 </html>`;
 
+  const csp = [
+    "default-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'none'",
+    "script-src https://cdn.jsdelivr.net",
+    "style-src 'unsafe-inline' https:",
+    "img-src 'self' data: https:",
+    "font-src 'self' data: https:",
+    "connect-src 'self' https:",
+  ].join("; ");
+
   return new Response(html, {
-    headers: { "content-type": "text/html; charset=utf-8" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "content-security-policy": csp,
+    },
   });
 }

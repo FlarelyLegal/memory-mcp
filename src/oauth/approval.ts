@@ -54,6 +54,15 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
   const serverDescription = server.description ? sanitizeText(server.description) : "";
   const logoUrl = server.logo ? sanitizeText(sanitizeUrl(server.logo)) : "";
   const clientUri = client?.clientUri ? sanitizeText(sanitizeUrl(client.clientUri)) : "";
+  const cancelUrl = new URL("/", request.url).pathname;
+  const csp = [
+    "default-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "style-src 'unsafe-inline'",
+    "img-src 'self' data: https:",
+  ].join("; ");
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -74,6 +83,7 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
           .client-info { border: 1px solid #e5e7eb; border-radius: 6px; padding: 1rem; margin-bottom: 1.5rem; }
           .actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem; }
           .button { padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; font-size: 1rem; }
+          a.button { display: inline-block; text-decoration: none; }
           .button-primary { background: #0070f3; color: white; }
           .button-secondary { background: transparent; border: 1px solid #e5e7eb; color: #333; }
         </style>
@@ -98,7 +108,7 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
               <input type="hidden" name="state" value="${encodedState}">
               <input type="hidden" name="csrf_token" value="${csrfToken}">
               <div class="actions">
-                <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
+                <a href="${cancelUrl}" class="button button-secondary">Cancel</a>
                 <button type="submit" class="button button-primary">Approve</button>
               </div>
             </form>
@@ -110,7 +120,7 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
 
   return new Response(htmlContent, {
     headers: {
-      "Content-Security-Policy": "frame-ancestors 'none'",
+      "Content-Security-Policy": csp,
       "Content-Type": "text/html; charset=utf-8",
       "Set-Cookie": setCookie,
       "X-Frame-Options": "DENY",
