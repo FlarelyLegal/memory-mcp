@@ -6,7 +6,7 @@
 
 Memory Graph MCP — a remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory (knowledge graphs, semantic search, conversation history, temporal decay). Single-package TypeScript project using npm.
 
-Built on: **D1** (graph + memories + audit logs), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-m3`), **KV** (caching + OAuth state), **R2** (audit log archive), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
+Built on: **D1** (graph + memories + audit logs), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-m3`), **AI Gateway** (observability + caching for all AI calls), **KV** (caching + OAuth state), **R2** (audit log archive), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
 
 ### Key commands, coding standards, and versioning
 
@@ -38,6 +38,7 @@ Local dev setup (local flag, AI/Vectorize limitations, D1 init) is covered in [d
 - **Audit logging:** All write operations (MCP tools + REST API) are audit-logged via `audit()` from `src/audit.ts`. Each call writes to D1 `audit_logs` (queryable hot window) and an individual R2 object at `audit/events/{day}/{id}.json`. Both writes are fire-and-forget — failures never block the request flow. The consolidation workflow merges individual R2 events into daily NDJSON files (`audit/{YYYY-MM-DD}.ndjson`), then purges D1 audit logs older than 90 days. R2 archive is retained indefinitely.
 - **Namespace visibility:** Namespaces have a `visibility` column (`private` | `public`, default `private`). Public namespaces appear in every user's namespace list and allow read operations (get, find, search, traverse, query memories, get messages) for any authenticated user. Write operations require `owner === email` OR (`isAdmin` AND `visibility = 'public'`). Use `manage_namespace` `set_visibility` action (admin only) or `PATCH /api/v1/namespaces/:id`.
 - **Relation ownership:** `manage_relation` create verifies both `source_id` and `target_id` belong to the specified namespace — cross-namespace relations are rejected.
+- **AI Gateway:** All Workers AI calls (`embeddings.ts`, `summaries.ts`, `merge.ts`, `reranker.ts`) are routed through AI Gateway via `aiRun()` from `src/ai.ts`. Uses the native binding approach — `env.AI.run(model, input, { gateway: { id } })` — no extra packages or API tokens needed. Gateway ID is a constant in `ai.ts` (`flarelylegal-ai-gateway`). Provides analytics, caching, rate limiting, and logging for all AI inference.
 - **Elicitation (human-in-the-loop):** Destructive MCP tool operations (entity/relation/memory delete, consolidate, reindex-all, claim namespaces) prompt the user for confirmation via `server.server.elicitInput()`. The `confirm()` helper in `response-helpers.ts` checks `getClientCapabilities().elicitation.form` first ��� if the client doesn't support elicitation, operations proceed without confirmation (graceful degradation).
 
 ### File structure
@@ -51,6 +52,7 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/access-handler.ts` — OAuth route handler (`/authorize`, `/callback`, `/health`, `/`, `/api/*`)
 - `src/auth.ts` — Per-user authorization: read/write access checks with namespace visibility support (`assertNamespaceReadAccess`, `assertNamespaceWriteAccess`, `assertEntityReadAccess`, `assertEntityAccess`, etc.), `isAdmin()` KV lookup, `AccessDeniedError`
 - `src/jwt.ts` — JWT verification (RSA signature + expiry + audience validation)
+- `src/ai.ts` — AI Gateway wrapper: `aiRun()` injects gateway routing into all `env.AI.run()` calls
 - `src/embeddings.ts` — Vectorize + Workers AI: embed, upsert, delete, semantic search
 - `src/memories.ts` — Memory CRUD + temporal-decay recall ranking
 - `src/conversations.ts` — Conversation and message history
