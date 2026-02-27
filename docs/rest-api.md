@@ -1,6 +1,6 @@
 # REST API
 
-[< Docs](README.md) | [MCP Tools](mcp-tools.md) | [Observability >](observability.md)
+[< Back to docs](README.md)
 
 ## Live docs
 

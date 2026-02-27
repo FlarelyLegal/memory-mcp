@@ -1,6 +1,6 @@
 # Configuration
 
-[< Docs](README.md) | [Deployment](deployment.md) | [Architecture >](architecture.md)
+[< Back to docs](README.md)
 
 ## Secrets
 

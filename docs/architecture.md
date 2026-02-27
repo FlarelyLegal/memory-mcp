@@ -1,6 +1,6 @@
 # Architecture
 
-[< Docs](README.md) | [Configuration](configuration.md) | [MCP Tools >](mcp-tools.md)
+[< Back to docs](README.md)
 
 ## Components
 

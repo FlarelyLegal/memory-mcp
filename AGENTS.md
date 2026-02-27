@@ -8,37 +8,19 @@ Memory Graph MCP — a remote MCP server on Cloudflare Workers providing LLMs wi
 
 Built on: **D1** (graph + memories + audit logs), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-m3`), **KV** (caching + OAuth state), **R2** (audit log archive), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
 
-### Key commands
+### Key commands, coding standards, and versioning
 
-See `package.json` scripts. Summary:
+See [docs/contributing.md](docs/contributing.md) for commands, checks, coding standards, branch workflow, and how to add tools/routes.
 
-| Task                   | Command                                |
-| ---------------------- | -------------------------------------- |
-| Install deps           | `npm install`                          |
-| Typecheck              | `npm run typecheck`                    |
-| Build (dry-run, A)     | `npm run build`                        |
-| Build (dry-run, B)     | `npm run build:b`                      |
-| Lint                   | `npm run lint`                         |
-| Format                 | `npm run format`                       |
-| Dev server (local, A)  | `npm run dev -- --local --port 8787`   |
-| Dev server (local, B)  | `npm run dev:b -- --local --port 8787` |
-| Init local D1 schema   | `npm run db:init:local`                |
-| Deploy (first time)    | `npm run deploy:init`                  |
-| Deploy (subsequent, A) | `npm run deploy`                       |
-| Deploy (subsequent, B) | `npm run deploy:b`                     |
+Key agent-relevant details not in contributing.md:
 
-### Versioning and releases
-
-- **Single source of truth:** version lives in `package.json` only. `src/version.ts` reads it at build time. Never hardcode version strings elsewhere.
-- **Automated releases:** pushing to `main` triggers `.github/workflows/release.yml` which uses git-cliff to calculate the next semver from conventional commits, bumps `package.json`, syncs README badges (Node, TypeScript, MCP SDK versions), creates a GitHub Release with a changelog, and commits with `[skip ci]` to prevent loops.
-- **Conventional commits required:** `feat` → minor bump, `fix` → patch bump, `feat!` / `fix!` → major bump. The changelog groups by commit type and credits PR authors.
 - **Description constants:** `src/version.ts` exports `VERSION`, `SERVER_NAME`, `SERVER_DISPLAY_NAME`, `SERVER_DESCRIPTION`, and `REPO_URL`. These are consumed by the MCP server constructor, OAuth approval page, root URL landing page, and `/health` endpoint. Update description in `version.ts` only.
+- **Deploy commands:** `npm run deploy` (site A), `npm run deploy:b` (site B), `npm run deploy:init` (first time).
 
 ### Non-obvious caveats
 
-- **Local dev requires `--local` flag:** Without a `CLOUDFLARE_API_TOKEN`, use `npx wrangler dev --local`. Without `--local`, Wrangler requires an API token for the AI and Vectorize bindings (remote services).
-- **AI and Vectorize not available locally:** When running `--local`, Workers AI and Vectorize bindings are unsupported. Tools relying on embeddings/semantic search fail gracefully. D1, KV, R2, and Durable Objects all work locally.
-- **Local D1 must be initialized:** Before first dev server run, execute `npm run db:init:local` to create SQLite tables in `.wrangler/state/`.
+Local dev setup (local flag, AI/Vectorize limitations, D1 init) is covered in [docs/contributing.md](docs/contributing.md#local-dev-caveats).
+
 - **OAuth flow requires secrets:** The full OAuth login flow needs seven secrets in `.dev.vars` (see `.dev.vars.example`): `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET`, `ACCESS_TOKEN_URL`, `ACCESS_AUTHORIZATION_URL`, `ACCESS_JWKS_URL`, `ACCESS_AUD_TAG`, and `COOKIE_ENCRYPTION_KEY`. Without these, `/health` and `/register` still work, but the `/authorize` → `/callback` flow and authenticated MCP tool calls will not.
 - **JWT audience validation:** `ACCESS_AUD_TAG` is the Cloudflare Access Application Audience tag (not the OAuth client ID). It validates the `aud` claim in ID tokens to prevent cross-application token reuse.
 - **Root URL:** `GET /` returns a plain-text landing page with version, description, and repo link. All other unknown paths return 404.
