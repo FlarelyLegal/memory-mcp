@@ -1,14 +1,15 @@
 /** Tool registration: admin tools (reindex, consolidate, workflow status, claim) */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { Env } from "../types.js";
+import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import { assertNamespaceAccess, isAdmin } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { getNamespaceStats } from "../consolidation.js";
+import { track } from "../state.js";
 import { txt, err, ok, toolHandler, confirm } from "../response-helpers.js";
 
-export function registerAdminTools(server: McpServer, env: Env, email: string) {
+export function registerAdminTools(server: McpServer, env: Env, email: string, agent: StateHandle) {
   server.tool(
     "reindex_vectors",
     "Re-embed all entities and memories into Vectorize via a durable Workflow. Returns instance ID for status tracking.",
@@ -31,6 +32,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       if (namespace_id === "all") {
         if (!(await confirm(server, "Re-embed ALL entities and memories across all namespaces?")))
           return err("Cancelled");
+      } else {
+        track(agent, { namespace: namespace_id });
       }
 
       const instance = await env.REINDEX_WORKFLOW.create({
@@ -75,6 +78,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       await assertNamespaceAccess(db, namespace_id, email);
+      track(agent, { namespace: namespace_id });
       if (
         !(await confirm(
           server,
@@ -130,6 +134,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
     toolHandler(async ({ namespace_id }) => {
       const db = session(env.DB, "first-unconstrained");
       await assertNamespaceAccess(db, namespace_id, email);
+      track(agent, { namespace: namespace_id });
       const stats = await getNamespaceStats(db, namespace_id);
       return txt(stats);
     }),

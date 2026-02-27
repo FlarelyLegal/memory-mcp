@@ -14,20 +14,6 @@ Remaining improvements for memory-graph-mcp.
 
 ---
 
-## 5. Per-Session State (`this.state` / `this.setState()`)
-
-**Impact:** Medium — smarter tools with session context, no extra params needed.
-
-- [ ] Define `State` type: `{ currentNamespace?: string, recentEntities?: string[], recentConversation?: string }`
-- [ ] Set `initialState` on `MemoryGraphMCP` McpAgent class
-- [ ] Auto-track current namespace when tools reference one
-- [ ] Auto-track recently accessed entity IDs (last 10)
-- [ ] Auto-track current conversation ID
-- [ ] Tools can use state as defaults when params are omitted (e.g., `namespace_id` defaults to last-used)
-- [ ] Expose `get_session_context` tool or include in tool descriptions
-
----
-
 ## 9. D1 Write Retry Logic
 
 **Impact:** Low-Medium — resilience for transient D1 errors on writes.

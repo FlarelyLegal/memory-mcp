@@ -60,7 +60,7 @@ Code is organized into focused modules with a 250-line cap per file:
 
 - `src/index.ts` — MCP server entry point (McpAgent class + OAuthProvider export + Workflow class re-exports)
 - `src/version.ts` — Single source of truth for version, name, description, repo URL
-- `src/types.ts` — `Env` interface (all bindings), `AuthProps`, domain types + DB row types
+- `src/types.ts` — `Env` interface (all bindings), `AuthProps`, `SessionState`, `StateHandle`, domain types + DB row types
 - `src/db.ts` — D1 Sessions API helpers: `DbHandle` type, `session()`, `getBookmark()`
 - `src/access-handler.ts` — OAuth route handler (`/authorize`, `/callback`, `/health`, `/`, `/api/*`)
 - `src/auth.ts` — Per-user authorization: `assertNamespaceAccess`, `assertEntityAccess`, `assertMemoryAccess`, `assertConversationAccess`, `assertRelationAccess`
@@ -70,6 +70,7 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/conversations.ts` — Conversation and message history
 - `src/utils.ts` — `generateId`, `decayScore`, JSON helpers
 - `src/response-helpers.ts` — Shared MCP response helpers (`txt`, `ok`, `err`, `safeMeta`, `toolHandler`, `cap`, `trunc`, `confirm`)
+- `src/state.ts` — Session state helpers: `track`, `untrack`, `resolveNamespace`, `resolveConversation`
 - `src/reindex.ts` — Shared batch-reindex logic (entity/memory chunk embedding + Vectorize upsert) used by workflows and REST API
 - `src/consolidation.ts` — Data-layer for consolidation: decay sweep, duplicate detection, archive purge, entity summary helpers, namespace stats
 - `src/workflows/reindex.ts` — `ReindexWorkflow` WorkflowEntrypoint: durable batch re-embedding with chunked steps and retries

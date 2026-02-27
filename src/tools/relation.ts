@@ -1,11 +1,12 @@
 /** Tool registration: manage_relation, get_relations */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { Env } from "../types.js";
+import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../auth.js";
 import { parseJson } from "../utils.js";
+import { track, resolveNamespace } from "../state.js";
 import {
   txt,
   err,
@@ -17,14 +18,23 @@ import {
   confirm,
 } from "../response-helpers.js";
 
-export function registerRelationTools(server: McpServer, env: Env, email: string) {
+export function registerRelationTools(
+  server: McpServer,
+  env: Env,
+  email: string,
+  agent: StateHandle,
+) {
   server.tool(
     "manage_relation",
     "Create or delete a directed relation between entities.",
     {
       action: z.enum(["create", "delete"]),
       id: z.string().uuid().optional().describe("Required for delete"),
-      namespace_id: z.string().uuid().optional().describe("Required for create"),
+      namespace_id: z
+        .string()
+        .uuid()
+        .optional()
+        .describe("Required for create (defaults to last-used)"),
       source_id: z.string().uuid().optional().describe("From entity"),
       target_id: z.string().uuid().optional().describe("To entity"),
       relation_type: z
@@ -47,7 +57,7 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       async ({
         action,
         id,
-        namespace_id,
+        namespace_id: nsParam,
         source_id,
         target_id,
         relation_type,
@@ -56,6 +66,7 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       }) => {
         const db = session(env.DB, "first-primary");
         if (action === "create") {
+          const namespace_id = resolveNamespace(nsParam, agent);
           if (!namespace_id || !source_id || !target_id || !relation_type)
             return err("namespace_id, source_id, target_id, relation_type required");
           await assertNamespaceAccess(db, namespace_id, email);
@@ -73,6 +84,7 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
             weight,
             metadata: meta,
           });
+          track(agent, { namespace: namespace_id, entity: [source_id, target_id] });
           return txt({ id: rid, source_id, target_id, relation_type });
         }
         if (!id) return err("id required");
@@ -102,6 +114,7 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
     toolHandler(async ({ entity_id, direction, relation_type, limit, compact }) => {
       const db = session(env.DB, "first-unconstrained");
       await assertEntityAccess(db, entity_id, email);
+      track(agent, { entity: entity_id });
       const dir = direction ?? "both";
       const n = cap(limit, 50, 20);
       const isCompact = compact ?? true;

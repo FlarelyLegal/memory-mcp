@@ -1,12 +1,18 @@
 /** Tool registration: manage_namespace */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { Env } from "../types.js";
+import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
+import { track } from "../state.js";
 import { txt, err, toolHandler } from "../response-helpers.js";
 
-export function registerNamespaceTools(server: McpServer, env: Env, email: string) {
+export function registerNamespaceTools(
+  server: McpServer,
+  env: Env,
+  email: string,
+  agent: StateHandle,
+) {
   server.tool(
     "manage_namespace",
     "Create or list memory namespaces (scopes for organizing data).",
@@ -32,6 +38,7 @@ export function registerNamespaceTools(server: McpServer, env: Env, email: strin
           description,
           owner: email,
         });
+        track(agent, { namespace: id });
         return txt({ id, name });
       }
       const isCompact = compact ?? true;

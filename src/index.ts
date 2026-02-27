@@ -14,7 +14,7 @@ import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import type { Env, AuthProps } from "./types.js";
+import type { Env, AuthProps, SessionState } from "./types.js";
 import { VERSION, SERVER_DISPLAY_NAME, SERVER_DESCRIPTION } from "./version.js";
 import { handleAccessRequest } from "./access-handler.js";
 
@@ -32,12 +32,14 @@ import { registerAdminTools } from "./tools/admin.js";
 export { ReindexWorkflow } from "./workflows/reindex.js";
 export { ConsolidationWorkflow } from "./workflows/consolidation.js";
 
-export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthProps> {
+export class MemoryGraphMCP extends McpAgent<Env, SessionState, AuthProps> {
   server = new McpServer({
     name: SERVER_DISPLAY_NAME,
     version: VERSION,
     description: SERVER_DESCRIPTION,
   });
+
+  initialState: SessionState = { recentEntities: [] };
 
   /** Get the authenticated user's email, or throw. */
   private get email(): string {
@@ -47,14 +49,14 @@ export class MemoryGraphMCP extends McpAgent<Env, Record<string, never>, AuthPro
   }
 
   async init() {
-    registerNamespaceTools(this.server, this.env, this.email);
-    registerEntityTools(this.server, this.env, this.email);
-    registerRelationTools(this.server, this.env, this.email);
-    registerTraversalTools(this.server, this.env, this.email);
-    registerMemoryTools(this.server, this.env, this.email);
-    registerConversationTools(this.server, this.env, this.email);
-    registerSearchTools(this.server, this.env, this.email);
-    registerAdminTools(this.server, this.env, this.email);
+    registerNamespaceTools(this.server, this.env, this.email, this);
+    registerEntityTools(this.server, this.env, this.email, this);
+    registerRelationTools(this.server, this.env, this.email, this);
+    registerTraversalTools(this.server, this.env, this.email, this);
+    registerMemoryTools(this.server, this.env, this.email, this);
+    registerConversationTools(this.server, this.env, this.email, this);
+    registerSearchTools(this.server, this.env, this.email, this);
+    registerAdminTools(this.server, this.env, this.email, this);
   }
 }
 
