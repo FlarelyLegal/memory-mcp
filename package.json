@@ -25,6 +25,7 @@
     "db:init:b": "wrangler d1 execute memory-graph-mcp-db --config wrangler-b.jsonc --remote --file=schemas/schema.sql",
     "db:init:local": "wrangler d1 execute memory-graph-mcp-db --local --file=schemas/schema.sql",
     "deploy:init": "npm run db:init && wrangler deploy --config wrangler-a.jsonc",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "test:e2e": "playwright test",
     "test:e2e:a": "API_TARGET=a playwright test",
     "test:e2e:b": "API_TARGET=b playwright test"

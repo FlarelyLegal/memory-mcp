@@ -1,0 +1,98 @@
+{
+  "namespace": {
+    "name": "demo",
+    "description": "Generic demo namespace seeded from repository runbook guidance."
+  },
+  "entities": [
+    {
+      "key": "deploy_model",
+      "name": "Deploy Model",
+      "type": "runbook",
+      "summary": "Use one repository with account-specific Wrangler configs and explicit target selection."
+    },
+    {
+      "key": "access_scope",
+      "name": "Access Scope",
+      "type": "security",
+      "summary": "Protect only versioned API paths; keep docs and OpenAPI endpoints public."
+    },
+    {
+      "key": "build_parity",
+      "name": "Workers Builds Parity",
+      "type": "ci",
+      "summary": "Pin account-specific build/deploy/version commands in dashboard settings."
+    },
+    {
+      "key": "secrets_matrix",
+      "name": "Secrets Matrix",
+      "type": "ops",
+      "summary": "Use target-scoped GitHub secrets with placeholder values per account."
+    },
+    {
+      "key": "rate_limiting",
+      "name": "Rate Limiting",
+      "type": "security",
+      "summary": "Optional bindings should guard auth-sensitive and search-heavy paths."
+    },
+    {
+      "key": "jwks_jwt",
+      "name": "JWT and JWKS",
+      "type": "security",
+      "summary": "JWT verification supports multiple audiences and JWKS endpoints with cache fallback."
+    },
+    {
+      "key": "audit_logging",
+      "name": "Audit Logging",
+      "type": "security",
+      "summary": "Write security-significant auth events to object storage with retention policy."
+    },
+    {
+      "key": "merge_strategy",
+      "name": "Merge Strategy",
+      "type": "workflow",
+      "summary": "Use merge commits to preserve granular conventional commits for changelogs."
+    }
+  ],
+  "memories": [
+    {
+      "type": "fact",
+      "content": "Template: single-repo model uses per-account deployment configs and explicit target selection.",
+      "entity_keys": ["deploy_model"]
+    },
+    {
+      "type": "fact",
+      "content": "Template: Access scope protects /api/v1 while /api/docs and /api/openapi.json remain public.",
+      "entity_keys": ["access_scope"]
+    },
+    {
+      "type": "fact",
+      "content": "Template: dashboard build commands should always reference the correct wrangler config.",
+      "entity_keys": ["build_parity", "deploy_model"]
+    },
+    {
+      "type": "fact",
+      "content": "Template: secrets use target suffixes (_A, _B) for IDs, secrets, and API base URLs.",
+      "entity_keys": ["secrets_matrix"]
+    },
+    {
+      "type": "fact",
+      "content": "Template: RATE_LIMIT_AUTH and RATE_LIMIT_SEARCH are optional and tuned per environment.",
+      "entity_keys": ["rate_limiting", "access_scope"]
+    },
+    {
+      "type": "fact",
+      "content": "Template: JWKS cache uses short TTL and retries once on kid miss for key rotation.",
+      "entity_keys": ["jwks_jwt"]
+    },
+    {
+      "type": "fact",
+      "content": "Template: audit events include bind request/create/deny/conflict and successful token bind actions.",
+      "entity_keys": ["audit_logging"]
+    },
+    {
+      "type": "fact",
+      "content": "Template: merge commits are preferred for release-note quality with git-cliff.",
+      "entity_keys": ["merge_strategy"]
+    }
+  ]
+}
