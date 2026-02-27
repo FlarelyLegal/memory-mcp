@@ -28,6 +28,12 @@ jobs:
             exit 1
           fi
 
+      - name: ESLint (JUnit)
+        if: always()
+        run: |
+          mkdir -p test-results
+          npx eslint src/ --format eslint-formatter-junit --output-file test-results/eslint-junit.xml || true
+
       - name: ESLint
         run: |
           set -o pipefail
@@ -41,3 +47,20 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eslint-junit
+          path: test-results/eslint-junit.xml
+          retention-days: 14
+
+      - name: Publish lint results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: ESLint Results
+          path: test-results/eslint-junit.xml
+          reporter: java-junit
+          fail-on-error: false
