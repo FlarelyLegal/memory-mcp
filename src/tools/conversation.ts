@@ -14,8 +14,8 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     "Create or list conversations in a namespace.",
     {
       action: z.enum(["create", "list"]),
-      namespace_id: z.string().max(100),
-      title: z.string().max(500).optional(),
+      namespace_id: z.string().uuid(),
+      title: z.string().min(1).max(500).optional(),
       metadata: z.string().max(5000).optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
@@ -61,9 +61,9 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     "add_message",
     "Add a message to a conversation and embed it for search.",
     {
-      conversation_id: z.string().max(100),
+      conversation_id: z.string().uuid(),
       role: z.enum(["user", "assistant", "system", "tool"]),
-      content: z.string().max(50000),
+      content: z.string().min(1).max(50000),
       metadata: z.string().max(5000).optional(),
     },
     {
@@ -102,16 +102,17 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     {
       conversation_id: z
         .string()
-        .max(100)
+        .uuid()
         .optional()
         .describe("Get messages from a specific conversation"),
       namespace_id: z
         .string()
-        .max(100)
+        .uuid()
         .optional()
         .describe("Required when using query to search across conversations"),
       query: z
         .string()
+        .min(1)
         .max(1000)
         .optional()
         .describe("Keyword search across all conversations in namespace"),

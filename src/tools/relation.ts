@@ -13,16 +13,17 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
     "Create or delete a directed relation between entities.",
     {
       action: z.enum(["create", "delete"]),
-      id: z.string().max(100).optional().describe("Required for delete"),
-      namespace_id: z.string().max(100).optional().describe("Required for create"),
-      source_id: z.string().max(100).optional().describe("From entity"),
-      target_id: z.string().max(100).optional().describe("To entity"),
+      id: z.string().uuid().optional().describe("Required for delete"),
+      namespace_id: z.string().uuid().optional().describe("Required for create"),
+      source_id: z.string().uuid().optional().describe("From entity"),
+      target_id: z.string().uuid().optional().describe("To entity"),
       relation_type: z
         .string()
+        .min(1)
         .max(200)
         .optional()
         .describe("knows, uses, depends_on, part_of, etc."),
-      weight: z.number().optional(),
+      weight: z.number().min(0).max(1).optional(),
       metadata: z.string().max(5000).optional(),
     },
     {
@@ -63,7 +64,7 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
     "get_relations",
     "Get relations from/to an entity.",
     {
-      entity_id: z.string().max(100),
+      entity_id: z.string().uuid(),
       direction: z.enum(["from", "to", "both"]).optional(),
       relation_type: z.string().max(200).optional(),
       limit: z.number().optional(),

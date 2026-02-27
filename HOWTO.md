@@ -88,6 +88,28 @@ Recommended lifecycle policy in R2:
 - Keep 90 days for production
 - Keep 30 days for non-production
 
+## Database Migrations (Existing Deployments)
+
+Fresh installs via `db:init` include everything. For existing databases, run these migrations in order:
+
+| Migration                   | Script (A / B / local)                                  | When                                |
+| --------------------------- | ------------------------------------------------------- | ----------------------------------- |
+| FTS5 tables + triggers      | `db:migrate:fts` / `fts:b` / `fts:local`                | After upgrading to FTS5 search      |
+| Optimize indexes + triggers | `db:migrate:optimize` / `optimize:b` / `optimize:local` | After upgrading to optimized schema |
+
+Migrations are idempotent (`IF NOT EXISTS`, `DROP IF EXISTS`).
+
+## Vectorize Metadata Indexes
+
+Run once per Vectorize index to enable server-side filtered ANN search:
+
+```sh
+npm run vectorize:indexes    # account A
+npm run vectorize:indexes:b  # account B
+```
+
+Creates indexes on `namespace_id`, `kind`, and `type`. Without these, metadata filters silently return empty results.
+
 ## Merge Strategy
 
 Use merge commits only (no squash/rebase) to preserve commit granularity for `git-cliff` release notes.

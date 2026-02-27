@@ -50,10 +50,14 @@ Use account-specific configs and update resource IDs in each:
 - `wrangler-a.jsonc` (Account A)
 - `wrangler-b.jsonc` (Account B)
 
-For Vectorize filtering to work, add metadata indexes for:
+Create Vectorize metadata indexes (required for filtered search):
 
-- `namespace_id` (string)
-- `kind` (string)
+```bash
+npm run vectorize:indexes    # account A
+npm run vectorize:indexes:b  # account B
+```
+
+This creates indexes on `namespace_id`, `kind`, and `type`. Without these, Vectorize metadata filters silently return empty results.
 
 ### 2. Configure Cloudflare Access
 

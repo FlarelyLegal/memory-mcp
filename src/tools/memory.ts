@@ -13,14 +13,14 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
     "Create, update, or delete a memory (knowledge fragment).",
     {
       action: z.enum(["create", "update", "delete"]),
-      id: z.string().max(100).optional().describe("Required for update/delete"),
-      namespace_id: z.string().max(100).optional().describe("Required for create"),
-      content: z.string().max(10000).optional().describe("Required for create"),
+      id: z.string().uuid().optional().describe("Required for update/delete"),
+      namespace_id: z.string().uuid().optional().describe("Required for create"),
+      content: z.string().min(1).max(10000).optional().describe("Required for create"),
       type: z.enum(["fact", "observation", "preference", "instruction"]).optional(),
-      importance: z.number().optional().describe("0.0-1.0, higher decays slower"),
+      importance: z.number().min(0).max(1).optional().describe("0.0-1.0, higher decays slower"),
       source: z.string().max(500).optional().describe("Create only: where this came from"),
       entity_ids: z
-        .array(z.string().max(100))
+        .array(z.string().uuid())
         .max(100)
         .optional()
         .describe("Create only: link to entities"),
@@ -100,9 +100,9 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
     "Retrieve memories. Modes: recall (ranked by importance+recency), search (keyword), entity (linked to an entity).",
     {
       mode: z.enum(["recall", "search", "entity"]),
-      namespace_id: z.string().max(100).optional().describe("Required for recall/search"),
-      entity_id: z.string().max(100).optional().describe("Required for entity mode"),
-      query: z.string().max(1000).optional().describe("Required for search mode"),
+      namespace_id: z.string().uuid().optional().describe("Required for recall/search"),
+      entity_id: z.string().uuid().optional().describe("Required for entity mode"),
+      query: z.string().min(1).max(1000).optional().describe("Required for search mode"),
       type: z.enum(["fact", "observation", "preference", "instruction"]).optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
