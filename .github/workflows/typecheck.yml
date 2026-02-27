@@ -17,13 +17,33 @@ jobs:
       - name: Type check
         run: |
           set -o pipefail
+          mkdir -p test-results
           echo "## TypeScript Results" >> $GITHUB_STEP_SUMMARY
           if npm run typecheck 2>&1 | tee output.txt; then
             echo "**No type errors found**" >> $GITHUB_STEP_SUMMARY
+            echo '<?xml version="1.0" encoding="utf-8"?><testsuites tests="1" failures="0"><testsuite name="Typecheck" tests="1" failures="0"><testcase name="tsc --noEmit" classname="typecheck"/></testsuite></testsuites>' > test-results/tsc-junit.xml
           else
+            cat output.txt | npx tsc-junit --output test-results/tsc-junit.xml
             echo "**Type errors detected:**" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             cat output.txt >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: typecheck-junit
+          path: test-results/tsc-junit.xml
+          retention-days: 14
+
+      - name: Publish typecheck results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: TypeCheck Results
+          path: test-results/tsc-junit.xml
+          reporter: java-junit
+          fail-on-error: false

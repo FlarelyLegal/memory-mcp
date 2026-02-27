@@ -86,10 +86,14 @@ jobs:
           NODE_MIN=$(node -p "require('./package.json').engines?.node?.replace('>=','') || '24'")
           TS_VER=$(node -p "require('./package.json').devDependencies.typescript.replace('^','').split('.').slice(0,2).join('.')")
           MCP_VER=$(node -p "require('./package.json').dependencies['@modelcontextprotocol/sdk'].replace('^','').split('.').slice(0,2).join('.')")
+          TEST_COUNT=$(npx vitest run 2>&1 | grep 'Tests' | grep -o '[0-9]* passed' | grep -o '[0-9]*')
 
           sed -i "s|Node.js-[^-]*-5FA04E|Node.js-≥${NODE_MIN}-5FA04E|" README.md
           sed -i "s|TypeScript-[^-]*-3178C6|TypeScript-${TS_VER}-3178C6|" README.md
           sed -i "s|MCP_SDK-[^-]*-blue|MCP_SDK-${MCP_VER}-blue|" README.md
+          if [ -n "$TEST_COUNT" ]; then
+            sed -i "s|tests-[^-]*-2ea44f|tests-${TEST_COUNT}_passed-2ea44f|" README.md
+          fi
 
       - name: Commit version bump
         if: steps.check.outputs.skip != 'true'
