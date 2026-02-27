@@ -26,16 +26,23 @@ export async function getNamespace(db: D1Database, id: string): Promise<Namespac
   return db.prepare(`SELECT * FROM namespaces WHERE id = ?`).bind(id).first<NamespaceRow>();
 }
 
-export async function listNamespaces(db: D1Database, owner?: string): Promise<NamespaceRow[]> {
+export async function listNamespaces(
+  db: D1Database,
+  owner?: string,
+  opts?: { limit?: number; offset?: number },
+): Promise<NamespaceRow[]> {
+  const limit = opts?.limit ?? 100;
+  const offset = opts?.offset ?? 0;
   if (owner) {
     const result = await db
-      .prepare(`SELECT * FROM namespaces WHERE owner = ? ORDER BY created_at DESC`)
-      .bind(owner)
+      .prepare(`SELECT * FROM namespaces WHERE owner = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+      .bind(owner, limit, offset)
       .all<NamespaceRow>();
     return result.results;
   }
   const result = await db
-    .prepare(`SELECT * FROM namespaces ORDER BY created_at DESC`)
+    .prepare(`SELECT * FROM namespaces ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .bind(limit, offset)
     .all<NamespaceRow>();
   return result.results;
 }

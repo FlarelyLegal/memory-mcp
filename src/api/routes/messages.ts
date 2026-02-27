@@ -14,7 +14,8 @@ import {
   roleEnum,
 } from "../schemas.js";
 import { messageCreateSchema, searchMessagesQuerySchema } from "../validators.js";
-import { parseFields, projectRows } from "../fields.js";
+import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
+import { enforceSearchRateLimit } from "../rate-limit.js";
 
 export function registerMessageRoutes(): void {
   defineRoute(
@@ -24,16 +25,29 @@ export function registerMessageRoutes(): void {
       try {
         await assertConversationAccess(ctx.env.DB, ctx.params.id, ctx.email);
         const limit = queryLimit(ctx.query, 100, 50);
-        const fields = parseFields(ctx.query, [
+        const offset = parseCursor(ctx.query);
+        const allowed = [
           "id",
           "conversation_id",
           "role",
           "content",
           "metadata",
           "created_at",
-        ]);
-        const rows = await getMessages(ctx.env.DB, ctx.params.id, { limit });
-        return json(projectRows(rows, fields));
+        ] as const;
+        const fields = parseFields(ctx.query, allowed, {
+          compact: ["id", "role", "created_at"],
+          full: allowed,
+        });
+        const rows = await getMessages(ctx.env.DB, ctx.params.id, {
+          limit: limit + 1,
+          offset,
+        });
+        const hasMore = rows.length > limit;
+        const data = projectRows(rows.slice(0, limit), fields);
+        const response = json(data);
+        const cursor = nextCursor(offset, limit, hasMore);
+        if (cursor) response.headers.set("X-Next-Cursor", cursor);
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -49,6 +63,12 @@ export function registerMessageRoutes(): void {
           name: "fields",
           in: "query",
           description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+        {
+          name: "cursor",
+          in: "query",
+          description: "Opaque pagination cursor from X-Next-Cursor",
           schema: { type: "string" },
         },
         limitQueryParam(100),
@@ -141,6 +161,8 @@ export function registerMessageRoutes(): void {
     async (ctx) => {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        const rl = await enforceSearchRateLimit(ctx, "message-search");
+        if (rl) return rl;
         const queryInput = searchMessagesQuerySchema.safeParse({
           q: ctx.query.get("q") ?? undefined,
         });
@@ -149,16 +171,29 @@ export function registerMessageRoutes(): void {
         }
         const query = queryInput.data.q;
         const limit = queryLimit(ctx.query, 100, 50);
-        const fields = parseFields(ctx.query, [
+        const offset = parseCursor(ctx.query);
+        const allowed = [
           "id",
           "conversation_id",
           "role",
           "content",
           "metadata",
           "created_at",
-        ]);
-        const rows = await searchMessages(ctx.env.DB, ctx.params.namespace_id, query, { limit });
-        return json(projectRows(rows, fields));
+        ] as const;
+        const fields = parseFields(ctx.query, allowed, {
+          compact: ["id", "role", "created_at"],
+          full: allowed,
+        });
+        const rows = await searchMessages(ctx.env.DB, ctx.params.namespace_id, query, {
+          limit: limit + 1,
+          offset,
+        });
+        const hasMore = rows.length > limit;
+        const data = projectRows(rows.slice(0, limit), fields);
+        const response = json(data);
+        const cursor = nextCursor(offset, limit, hasMore);
+        if (cursor) response.headers.set("X-Next-Cursor", cursor);
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -181,6 +216,12 @@ export function registerMessageRoutes(): void {
           name: "fields",
           in: "query",
           description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+        {
+          name: "cursor",
+          in: "query",
+          description: "Opaque pagination cursor from X-Next-Cursor",
           schema: { type: "string" },
         },
         limitQueryParam(100),

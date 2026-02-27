@@ -3,6 +3,7 @@ import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
 import {
   createRelation,
+  getEntity,
   getRelationsFrom,
   getRelationsTo,
   deleteRelation,
@@ -17,6 +18,7 @@ import {
   okSchema,
   metadataSchema,
 } from "../schemas.js";
+import { relationCreateSchema } from "../validators.js";
 
 export function registerRelationRoutes(): void {
   defineRoute(
@@ -25,35 +27,45 @@ export function registerRelationRoutes(): void {
     async (ctx, request) => {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
-        const body = await parseBody<{
-          source_id?: string;
-          target_id?: string;
-          relation_type?: string;
-          weight?: number;
-          metadata?: Record<string, unknown>;
-        }>(request);
+        const body = await parseBody(request);
         if (body instanceof Response) return body;
-        if (!body.source_id || !body.target_id || !body.relation_type) {
-          return jsonError("source_id, target_id, and relation_type are required", 400);
+        const parsed = relationCreateSchema.safeParse(body);
+        if (!parsed.success) {
+          return jsonError(parsed.error.issues[0]?.message ?? "Invalid request body", 400);
         }
+        const payload = parsed.data;
 
-        await assertEntityAccess(ctx.env.DB, body.source_id, ctx.email);
-        await assertEntityAccess(ctx.env.DB, body.target_id, ctx.email);
+        await assertEntityAccess(ctx.env.DB, payload.source_id, ctx.email);
+        await assertEntityAccess(ctx.env.DB, payload.target_id, ctx.email);
+
+        const [source, target] = await Promise.all([
+          getEntity(ctx.env.DB, payload.source_id),
+          getEntity(ctx.env.DB, payload.target_id),
+        ]);
+        if (!source || !target) {
+          return jsonError("source_id and target_id must exist", 400);
+        }
+        if (
+          source.namespace_id !== ctx.params.namespace_id ||
+          target.namespace_id !== ctx.params.namespace_id
+        ) {
+          return jsonError("source_id and target_id must belong to namespace_id", 400);
+        }
 
         const id = await createRelation(ctx.env.DB, {
           namespace_id: ctx.params.namespace_id,
-          source_id: body.source_id,
-          target_id: body.target_id,
-          relation_type: body.relation_type,
-          weight: body.weight,
-          metadata: body.metadata,
+          source_id: payload.source_id,
+          target_id: payload.target_id,
+          relation_type: payload.relation_type,
+          weight: payload.weight,
+          metadata: payload.metadata,
         });
         return json(
           {
             id,
-            source_id: body.source_id,
-            target_id: body.target_id,
-            relation_type: body.relation_type,
+            source_id: payload.source_id,
+            target_id: payload.target_id,
+            relation_type: payload.relation_type,
           },
           201,
         );

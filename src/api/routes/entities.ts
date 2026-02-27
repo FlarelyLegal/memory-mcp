@@ -13,7 +13,7 @@ import {
 } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
 import { entityCreateSchema, entityListQuerySchema } from "../validators.js";
-import { parseFields, projectRows } from "../fields.js";
+import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 
 export function registerEntityRoutes(): void {
   defineRoute(
@@ -31,7 +31,8 @@ export function registerEntityRoutes(): void {
         }
         const { q: query, type } = queryInput.data;
         const limit = queryLimit(ctx.query, 50);
-        const fields = parseFields(ctx.query, [
+        const offset = parseCursor(ctx.query);
+        const allowed = [
           "id",
           "namespace_id",
           "name",
@@ -42,13 +43,23 @@ export function registerEntityRoutes(): void {
           "updated_at",
           "last_accessed_at",
           "access_count",
-        ]);
+        ] as const;
+        const fields = parseFields(ctx.query, allowed, {
+          compact: ["id", "name", "type"],
+          full: allowed,
+        });
         const rows = await searchEntities(ctx.env.DB, ctx.params.namespace_id, {
           query,
           type,
-          limit,
+          limit: limit + 1,
+          offset,
         });
-        return json(projectRows(rows.map(parseEntityRow), fields));
+        const hasMore = rows.length > limit;
+        const data = projectRows(rows.slice(0, limit).map(parseEntityRow), fields);
+        const response = json(data);
+        const cursor = nextCursor(offset, limit, hasMore);
+        if (cursor) response.headers.set("X-Next-Cursor", cursor);
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -71,6 +82,12 @@ export function registerEntityRoutes(): void {
           name: "fields",
           in: "query",
           description: "Comma-separated fields to include",
+          schema: { type: "string" },
+        },
+        {
+          name: "cursor",
+          in: "query",
+          description: "Opaque pagination cursor from X-Next-Cursor",
           schema: { type: "string" },
         },
         limitQueryParam(50),

@@ -1,6 +1,6 @@
 /** Memory CRUD REST endpoints + OpenAPI definitions. */
 import { defineRoute } from "../registry.js";
-import { json, jsonError, parseBody, handleError } from "../middleware.js";
+import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
 import { createMemory, getMemory, updateMemory, deleteMemory } from "../../memories.js";
 import { assertNamespaceAccess, assertMemoryAccess } from "../../auth.js";
 import { upsertMemoryVector, deleteVector } from "../../embeddings.js";
@@ -14,6 +14,7 @@ import {
 } from "../schemas.js";
 import { parseMemoryRow } from "../row-parsers.js";
 import type { MemoryType } from "../../types.js";
+import { memoryCreateSchema, memoryUpdateSchema } from "../validators.js";
 
 export function registerMemoryRoutes(): void {
   defineRoute(
@@ -22,16 +23,8 @@ export function registerMemoryRoutes(): void {
     async (ctx, request) => {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
-        const body = await parseBody<{
-          content?: string;
-          type?: string;
-          importance?: number;
-          source?: string;
-          entity_ids?: string[];
-          metadata?: Record<string, unknown>;
-        }>(request);
+        const body = await parseBodyWithSchema(request, memoryCreateSchema);
         if (body instanceof Response) return body;
-        if (!body.content) return jsonError("content is required", 400);
 
         const id = await createMemory(ctx.env.DB, {
           namespace_id: ctx.params.namespace_id,
@@ -129,12 +122,7 @@ export function registerMemoryRoutes(): void {
     async (ctx, request) => {
       try {
         await assertMemoryAccess(ctx.env.DB, ctx.params.id, ctx.email);
-        const body = await parseBody<{
-          content?: string;
-          type?: string;
-          importance?: number;
-          metadata?: Record<string, unknown>;
-        }>(request);
+        const body = await parseBodyWithSchema(request, memoryUpdateSchema);
         if (body instanceof Response) return body;
         await updateMemory(ctx.env.DB, ctx.params.id, body);
         if (body.content) {

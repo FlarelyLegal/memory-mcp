@@ -6,7 +6,8 @@ import { semanticSearch } from "../../embeddings.js";
 import { getEntity, getRelationsFrom, getRelationsTo } from "../../graph/index.js";
 import { recallMemories, getMemoriesForEntity } from "../../memories.js";
 import { semanticSearchSchema } from "../validators.js";
-import { parseFields, projectRows } from "../fields.js";
+import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
+import { enforceSearchRateLimit } from "../rate-limit.js";
 
 export function registerSearchRoutes(): void {
   defineRoute(
@@ -15,26 +16,39 @@ export function registerSearchRoutes(): void {
     async (ctx, request) => {
       try {
         await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        const rl = await enforceSearchRateLimit(ctx, "semantic-search");
+        if (rl) return rl;
         const body = await parseBodyWithSchema(request, semanticSearchSchema);
         if (body instanceof Response) return body;
-        const fields = parseFields(ctx.query, ["id", "kind", "score", "metadata"]);
+        const allowed = ["id", "kind", "score", "metadata"] as const;
+        const fields = parseFields(ctx.query, allowed, {
+          compact: ["id", "kind", "score"],
+          full: allowed,
+        });
 
         const mode = body.mode ?? "semantic";
         const limit = Math.min(body.limit ?? (mode === "context" ? 5 : 10), 20);
+        const offset = parseCursor(ctx.query);
         const kind = body.kind;
 
         const matches = await semanticSearch(ctx.env, body.query, ctx.params.namespace_id, {
           kind,
-          limit,
+          limit: limit + offset + 1,
         });
+        const page = matches.slice(offset, offset + limit + 1);
+        const hasMore = page.length > limit;
+        const pagedMatches = page.slice(0, limit);
 
         if (mode === "semantic") {
-          return json({ matches: projectRows(matches, fields) });
+          const response = json({ matches: projectRows(pagedMatches, fields) });
+          const cursor = nextCursor(offset, limit, hasMore);
+          if (cursor) response.headers.set("X-Next-Cursor", cursor);
+          return response;
         }
 
         // Context mode: enrich entity matches with graph + memories
         const entities: unknown[] = [];
-        const entityIds = matches
+        const entityIds = pagedMatches
           .filter((m) => m.kind === "entity")
           .map((m) => m.metadata.entity_id)
           .filter(Boolean);
@@ -54,7 +68,14 @@ export function registerSearchRoutes(): void {
           limit: Math.max(1, limit - entityIds.length),
         });
 
-        return json({ matches: projectRows(matches, fields), entities, top_memories: topMemories });
+        const response = json({
+          matches: projectRows(pagedMatches, fields),
+          entities,
+          top_memories: topMemories,
+        });
+        const cursor = nextCursor(offset, limit, hasMore);
+        if (cursor) response.headers.set("X-Next-Cursor", cursor);
+        return response;
       } catch (e) {
         return handleError(e);
       }
@@ -72,6 +93,12 @@ export function registerSearchRoutes(): void {
           name: "fields",
           in: "query",
           description: "Comma-separated match fields to include",
+          schema: { type: "string" },
+        },
+        {
+          name: "cursor",
+          in: "query",
+          description: "Opaque pagination cursor from X-Next-Cursor",
           schema: { type: "string" },
         },
       ],
