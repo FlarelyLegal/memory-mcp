@@ -51,6 +51,7 @@ See `package.json` scripts. Summary:
 - **`ACCESS_AUD_TAG` must match an Access application:** This secret must be the audience tag from the Cloudflare Access application protecting your Worker's domain. Mismatched audience tags cause `Invalid or expired token` errors on otherwise valid JWTs.
 - **OpenAPI spec is auto-generated:** Each route file registers both its handler and its OpenAPI `PathOperation`. The spec at `/api/openapi.json` is assembled dynamically — no separate spec file to maintain.
 - **CORS:** All `/api/*` responses include permissive CORS headers (`Access-Control-Allow-Origin: *`).
+- **D1 read replication:** All D1 queries go through `D1DatabaseSession` (via `src/db.ts`). Read-only operations use `"first-unconstrained"` (any replica), write operations use `"first-primary"` (primary first). API routes accept/return `X-D1-Bookmark` header for cross-request consistency. All data-layer functions accept `DbHandle` (union of `D1Database` and `D1DatabaseSession`) — never raw `D1Database`.
 
 ### File structure
 
@@ -59,6 +60,7 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/index.ts` — MCP server entry point (McpAgent class + OAuthProvider export)
 - `src/version.ts` — Single source of truth for version, name, description, repo URL
 - `src/types.ts` — `Env` interface (all bindings), `AuthProps`, domain types + DB row types
+- `src/db.ts` — D1 Sessions API helpers: `DbHandle` type, `session()`, `getBookmark()`
 - `src/access-handler.ts` — OAuth route handler (`/authorize`, `/callback`, `/health`, `/`, `/api/*`)
 - `src/auth.ts` — Per-user authorization: `assertNamespaceAccess`, `assertEntityAccess`, `assertMemoryAccess`, `assertConversationAccess`, `assertRelationAccess`
 - `src/jwt.ts` — JWT verification (RSA signature + expiry + audience validation)
