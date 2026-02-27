@@ -6,7 +6,7 @@ import { session } from "../db.js";
 import { assertNamespaceAccess, isAdmin } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { getNamespaceStats } from "../consolidation.js";
-import { txt, err, ok, toolHandler } from "../response-helpers.js";
+import { txt, err, ok, toolHandler, confirm } from "../response-helpers.js";
 
 export function registerAdminTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -27,6 +27,10 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       if (namespace_id !== "all") {
         await assertNamespaceAccess(db, namespace_id, email);
+      }
+      if (namespace_id === "all") {
+        if (!(await confirm(server, "Re-embed ALL entities and memories across all namespaces?")))
+          return err("Cancelled");
       }
 
       const instance = await env.REINDEX_WORKFLOW.create({
@@ -71,6 +75,13 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       await assertNamespaceAccess(db, namespace_id, email);
+      if (
+        !(await confirm(
+          server,
+          `Run consolidation on namespace ${namespace_id}? This archives low-relevance memories and purges old archived data.`,
+        ))
+      )
+        return err("Cancelled");
 
       const instance = await env.CONSOLIDATION_WORKFLOW.create({
         params: { namespace_id, email, decay_threshold, skip_summaries, purge_after_days },
@@ -138,6 +149,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
     toolHandler(async () => {
       const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+      if (!(await confirm(server, "Claim all unowned namespaces for your account?")))
+        return err("Cancelled");
       const claimed = await claimUnownedNamespaces(db, email);
       if (claimed === 0) return ok("No unowned namespaces found.");
       return txt({ claimed, owner: email });

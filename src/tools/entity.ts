@@ -16,6 +16,7 @@ import {
   safeMeta,
   isMetaError,
   toolHandler,
+  confirm,
 } from "../response-helpers.js";
 
 export function registerEntityTools(server: McpServer, env: Env, email: string) {
@@ -108,6 +109,10 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
         case "delete": {
           if (!id) return err("id required");
           await assertEntityAccess(db, id, email);
+          const entity = await graph.getEntity(db, id);
+          const label = entity ? `entity "${entity.name}" (${entity.type})` : `entity ${id}`;
+          if (!(await confirm(server, `Delete ${label} and all its relations?`)))
+            return err("Cancelled");
           await graph.deleteEntity(db, id);
           await vectorize.deleteVector(env, "entity", id);
           return ok(`Deleted ${id}`);

@@ -6,7 +6,16 @@ import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../auth.js";
 import { parseJson } from "../utils.js";
-import { txt, err, ok, cap, safeMeta, isMetaError, toolHandler } from "../response-helpers.js";
+import {
+  txt,
+  err,
+  ok,
+  cap,
+  safeMeta,
+  isMetaError,
+  toolHandler,
+  confirm,
+} from "../response-helpers.js";
 
 export function registerRelationTools(server: McpServer, env: Env, email: string) {
   server.tool(
@@ -68,6 +77,7 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
         }
         if (!id) return err("id required");
         await assertRelationAccess(db, id, email);
+        if (!(await confirm(server, `Delete relation ${id}?`))) return err("Cancelled");
         await graph.deleteRelation(db, id);
         return ok(`Deleted ${id}`);
       },

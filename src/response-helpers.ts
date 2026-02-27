@@ -1,5 +1,6 @@
 /** Shared response helpers for MCP tool handlers. */
 
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AccessDeniedError } from "./auth.js";
 
 /** Tool result type matching MCP SDK CallToolResult. */
@@ -57,6 +58,32 @@ export function toolHandler<T>(
       return err("Internal error — please try again");
     }
   };
+}
+
+/**
+ * Ask the user for confirmation before a destructive operation.
+ * Gracefully degrades: if the client doesn't support elicitation, returns true.
+ * Returns true if confirmed (or unsupported), false if declined/cancelled.
+ */
+export async function confirm(server: McpServer, message: string): Promise<boolean> {
+  const caps = server.server.getClientCapabilities();
+  if (!caps?.elicitation?.form) return true;
+  const result = await server.server.elicitInput({
+    message,
+    requestedSchema: {
+      type: "object",
+      properties: {
+        confirm: {
+          type: "boolean",
+          title: "Confirm",
+          description: "Proceed with this operation?",
+          default: false,
+        },
+      },
+      required: ["confirm"],
+    },
+  });
+  return result.action === "accept" && result.content?.confirm === true;
 }
 
 export function cap(n: number | undefined, max: number, def: number) {

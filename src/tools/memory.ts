@@ -15,6 +15,7 @@ import {
   safeMeta,
   isMetaError,
   toolHandler,
+  confirm,
 } from "../response-helpers.js";
 
 export function registerMemoryTools(server: McpServer, env: Env, email: string) {
@@ -100,6 +101,9 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
           case "delete": {
             if (!id) return err("id required");
             await assertMemoryAccess(db, id, email);
+            const m = await memories.getMemory(db, id);
+            const label = m ? `memory (${m.type}): "${trunc(m.content, 60)}"` : `memory ${id}`;
+            if (!(await confirm(server, `Delete ${label}?`))) return err("Cancelled");
             await memories.deleteMemory(db, id);
             await vectorize.deleteVector(env, "memory", id);
             return ok(`Deleted ${id}`);
