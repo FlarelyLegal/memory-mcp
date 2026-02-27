@@ -1,0 +1,144 @@
+name: pr-standards
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize]
+
+jobs:
+  check-title:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check PR title and linked issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const login = pr.user.login;
+
+            // Skip bots
+            if (login.endsWith('[bot]')) return;
+
+            const title = pr.title;
+
+            async function addLabel(label) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: [label],
+              });
+            }
+
+            async function removeLabel(label) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  name: label,
+                });
+              } catch {}
+            }
+
+            async function commentOnce(marker, body) {
+              const tag = `<!-- pr-standards:${marker} -->`;
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+              });
+              if (comments.some((c) => c.body.includes(tag))) return;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: tag + "\n" + body,
+              });
+            }
+
+            // Check conventional commit title
+            const pattern = /^(feat|fix|docs|chore|refactor|test|ci|perf)(!?\s*(\([a-zA-Z0-9_-]+\))?\s*!?):?\s/;
+            if (!pattern.test(title)) {
+              await addLabel("needs:title");
+              await commentOnce(
+                "title",
+                [
+                  `PR title \`${title}\` doesn't follow conventional commit format.`,
+                  "",
+                  "Please update it to match: `type(scope): description`",
+                  "",
+                  "Types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, `perf`",
+                  "Append `!` for breaking changes (e.g. `feat!:` or `feat(api)!:`)",
+                  "",
+                  "See [contributing guide](../blob/main/docs/contributing.md) for details.",
+                ].join("\n"),
+              );
+              return;
+            }
+            await removeLabel("needs:title");
+
+            // Skip issue check for docs, refactor, chore, and ci PRs
+            if (/^(docs|refactor|chore|ci)\s*(\([a-zA-Z0-9_-]+\))?\s*!?:/.test(title)) {
+              await removeLabel("needs:issue");
+              return;
+            }
+
+            // Check for linked issue
+            const query = `
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 1) {
+                      totalCount
+                    }
+                  }
+                }
+              }
+            `;
+            const result = await github.graphql(query, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: pr.number,
+            });
+            const linked = result.repository.pullRequest.closingIssuesReferences.totalCount;
+
+            if (linked === 0) {
+              await addLabel("needs:issue");
+              await commentOnce(
+                "issue",
+                [
+                  "This PR doesn't have a linked issue.",
+                  "",
+                  "For `feat` and `fix` PRs, please:",
+                  "1. Open an issue describing the bug/feature (if one doesn't exist)",
+                  "2. Add `Fixes #<number>` or `Closes #<number>` to this PR description",
+                ].join("\n"),
+              );
+              return;
+            }
+            await removeLabel("needs:issue");
+
+  add-contributor-label:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Label external contributors
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const assoc = pr.author_association;
+
+            // Label PRs from non-members (CONTRIBUTOR, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR, NONE)
+            if (!["OWNER", "MEMBER", "COLLABORATOR"].includes(assoc)) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ["contributor"],
+              });
+            }
