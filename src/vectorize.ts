@@ -112,6 +112,16 @@ export async function deleteVector(env: Env, kind: string, id: string): Promise<
   await env.VECTORIZE.deleteByIds([`${kind}:${id}`]);
 }
 
+/** Batch-delete vectors by their full prefixed IDs. Chunks to stay within limits. */
+export async function deleteVectorBatch(env: Env, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  // Vectorize deleteByIds supports up to 1000 IDs per call
+  const CHUNK = 1000;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    await env.VECTORIZE.deleteByIds(ids.slice(i, i + CHUNK));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Semantic search
 // ---------------------------------------------------------------------------

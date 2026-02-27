@@ -76,6 +76,42 @@ export async function updateNamespaceVisibility(
   );
 }
 
+/**
+ * Collect all vector IDs for a namespace (entities, memories, messages).
+ * Must be called BEFORE deleting the namespace since cascade removes the rows.
+ */
+export async function collectNamespaceVectorIds(
+  db: DbHandle,
+  namespaceId: string,
+): Promise<string[]> {
+  const [entities, memories, messages] = await Promise.all([
+    db
+      .prepare(`SELECT id FROM entities WHERE namespace_id = ?`)
+      .bind(namespaceId)
+      .all<{ id: string }>(),
+    db
+      .prepare(`SELECT id FROM memories WHERE namespace_id = ?`)
+      .bind(namespaceId)
+      .all<{ id: string }>(),
+    db
+      .prepare(
+        `SELECT m.id FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.namespace_id = ?`,
+      )
+      .bind(namespaceId)
+      .all<{ id: string }>(),
+  ]);
+  return [
+    ...entities.results.map((r) => `entity:${r.id}`),
+    ...memories.results.map((r) => `memory:${r.id}`),
+    ...messages.results.map((r) => `message:${r.id}`),
+  ];
+}
+
+/** Delete a namespace and all its contents. D1 ON DELETE CASCADE handles child rows. */
+export async function deleteNamespace(db: DbHandle, id: string): Promise<void> {
+  await withRetry(() => db.prepare(`DELETE FROM namespaces WHERE id = ?`).bind(id).run());
+}
+
 export async function claimUnownedNamespaces(db: DbHandle, owner: string): Promise<number> {
   const result = await withRetry(() =>
     db.prepare(`UPDATE namespaces SET owner = ? WHERE owner IS NULL`).bind(owner).run(),
