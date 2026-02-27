@@ -27,7 +27,7 @@ import {
   cap,
   safeMeta,
   isMetaError,
-  toolHandler,
+  trackTools,
   confirm,
 } from "../response-helpers.js";
 
@@ -37,6 +37,7 @@ export function registerRelationTools(
   email: string,
   agent: StateHandle,
 ) {
+  const tracked = trackTools(env, email);
   server.tool(
     "manage_relation",
     "Create or delete a directed relation between entities.",
@@ -61,7 +62,8 @@ export function registerRelationTools(
       idempotentHint: false,
       openWorldHint: false,
     },
-    toolHandler(
+    tracked(
+      "manage_relation",
       async ({
         action,
         id,
@@ -134,7 +136,7 @@ export function registerRelationTools(
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ entity_id, direction, relation_type, limit, compact }) => {
+    tracked("get_relations", async ({ entity_id, direction, relation_type, limit, compact }) => {
       const db = session(env.DB, "first-unconstrained");
       await assertEntityReadAccess(db, entity_id, email);
       track(agent, { entity: entity_id });

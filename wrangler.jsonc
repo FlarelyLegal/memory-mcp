@@ -54,6 +54,14 @@
     },
   ],
 
+  // Analytics Engine for request metrics
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS",
+      "dataset": "memory-graph-mcp",
+    },
+  ],
+
   // R2 bucket for blob storage (reserved for future use)
   "r2_buckets": [
     {

@@ -1,7 +1,9 @@
 /** Shared response helpers for MCP tool handlers. */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Env } from "./types.js";
 import { AccessDeniedError } from "./auth.js";
+import { trackEvent } from "./analytics.js";
 
 /** Tool result type matching MCP SDK CallToolResult. */
 type ToolResult = {
@@ -39,17 +41,42 @@ export function isMetaError(v: Record<string, unknown> | ToolResult): v is ToolR
   return "isError" in v && v.isError === true;
 }
 
+/** Analytics context for MCP tool tracking. */
+export interface ToolAnalytics {
+  env: Env;
+  email: string;
+  tool: string;
+}
+
 /**
- * Wrap a tool handler with centralized error handling.
+ * Wrap a tool handler with centralized error handling and analytics tracking.
  * Catches AccessDeniedError → err(), unknown errors → err() with generic message.
+ * Tracks every invocation to Analytics Engine (fire-and-forget).
  */
 export function toolHandler<T>(
+  analytics: ToolAnalytics,
   fn: (args: T) => Promise<ToolResult>,
 ): (args: T) => Promise<ToolResult> {
   return async (args: T) => {
+    const start = Date.now();
     try {
-      return await fn(args);
+      const result = await fn(args);
+      trackEvent(analytics.env, {
+        channel: "mcp",
+        tool: analytics.tool,
+        status: result.isError ? "error" : "ok",
+        email: analytics.email,
+        latencyMs: Date.now() - start,
+      });
+      return result;
     } catch (e) {
+      trackEvent(analytics.env, {
+        channel: "mcp",
+        tool: analytics.tool,
+        status: "error",
+        email: analytics.email,
+        latencyMs: Date.now() - start,
+      });
       if (e instanceof AccessDeniedError) {
         return err(e.message);
       }
@@ -58,6 +85,16 @@ export function toolHandler<T>(
       return err("Internal error — please try again");
     }
   };
+}
+
+/**
+ * Create a scoped tool handler factory with analytics pre-bound.
+ * Use in register*Tools functions: `const tracked = trackTools(env, email);`
+ * then `tracked("tool_name", async (args) => { ... })`.
+ */
+export function trackTools(env: Env, email: string) {
+  return <T>(tool: string, fn: (args: T) => Promise<ToolResult>) =>
+    toolHandler({ env, email, tool }, fn);
 }
 
 /**

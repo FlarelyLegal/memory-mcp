@@ -24,6 +24,8 @@ export interface Env {
   COOKIE_ENCRYPTION_KEY: string;
   RATE_LIMIT_AUTH?: WorkerRateLimiter;
   RATE_LIMIT_SEARCH?: WorkerRateLimiter;
+  // Analytics
+  ANALYTICS?: AnalyticsEngineDataset;
   // Workflows
   REINDEX_WORKFLOW: Workflow;
   CONSOLIDATION_WORKFLOW: Workflow;

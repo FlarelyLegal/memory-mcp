@@ -95,7 +95,8 @@ Code is organized into focused modules with a 250-line cap per file:
 
 ### REST API
 
-- `src/api/index.ts` -- Router, route registration, CORS
+- `src/api/index.ts` -- Router, route registration, public endpoints
+- `src/api/cors.ts` -- CORS headers (wildcard `*`) and gzip compression
 - `src/api/registry.ts` -- Single source of truth for routing + OpenAPI spec
 - `src/api/middleware.ts` -- JWT auth, service token resolution, JSON helpers
 - `src/api/openapi.ts` -- Assembles OpenAPI 3.1 spec dynamically

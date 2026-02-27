@@ -31,7 +31,7 @@ import {
   trunc,
   safeMeta,
   isMetaError,
-  toolHandler,
+  trackTools,
   confirm,
 } from "../response-helpers.js";
 
@@ -41,6 +41,7 @@ export function registerMemoryTools(
   email: string,
   agent: StateHandle,
 ) {
+  const tracked = trackTools(env, email);
   server.tool(
     "manage_memory",
     "Create, update, or delete a memory (knowledge fragment).",
@@ -66,7 +67,8 @@ export function registerMemoryTools(
       idempotentHint: false,
       openWorldHint: false,
     },
-    toolHandler(
+    tracked(
+      "manage_memory",
       async ({
         action,
         id,
@@ -183,7 +185,8 @@ export function registerMemoryTools(
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(
+    tracked(
+      "query_memories",
       async ({ mode, namespace_id: nsParam, entity_id, query, type, limit, compact, verbose }) => {
         const db = session(env.DB, "first-unconstrained");
         const n = cap(limit, 50, 20);

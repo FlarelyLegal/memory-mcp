@@ -22,7 +22,7 @@ import {
 import { toISO } from "../utils.js";
 import { track, resolveNamespace, resolveConversation } from "../state.js";
 import { audit } from "../audit.js";
-import { txt, err, cap, trunc, safeMeta, isMetaError, toolHandler } from "../response-helpers.js";
+import { txt, err, cap, trunc, safeMeta, isMetaError, trackTools } from "../response-helpers.js";
 
 export function registerConversationTools(
   server: McpServer,
@@ -30,6 +30,7 @@ export function registerConversationTools(
   email: string,
   agent: StateHandle,
 ) {
+  const tracked = trackTools(env, email);
   server.tool(
     "manage_conversation",
     "Create or list conversations in a namespace.",
@@ -48,53 +49,56 @@ export function registerConversationTools(
       idempotentHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ action, namespace_id: nsParam, title, metadata, limit, compact }) => {
-      const namespace_id = resolveNamespace(nsParam, agent);
-      if (!namespace_id) return err("namespace_id required");
-      if (action === "create") {
-        const db = session(env.DB, "first-primary");
-        const admin = await isAdmin(env.CACHE, email);
-        await assertNamespaceWriteAccess(db, namespace_id, email, admin);
+    tracked(
+      "manage_conversation",
+      async ({ action, namespace_id: nsParam, title, metadata, limit, compact }) => {
+        const namespace_id = resolveNamespace(nsParam, agent);
+        if (!namespace_id) return err("namespace_id required");
+        if (action === "create") {
+          const db = session(env.DB, "first-primary");
+          const admin = await isAdmin(env.CACHE, email);
+          await assertNamespaceWriteAccess(db, namespace_id, email, admin);
+          track(agent, { namespace: namespace_id });
+          const meta = safeMeta(metadata);
+          if (isMetaError(meta)) return meta;
+          const id = await conversations.createConversation(db, {
+            namespace_id,
+            title,
+            metadata: meta,
+          });
+          track(agent, { conversation: id });
+          await audit(db, env.STORAGE, {
+            action: "conversation.create",
+            email,
+            namespace_id,
+            resource_type: "conversation",
+            resource_id: id,
+            detail: { title },
+          });
+          return txt({ id, title });
+        }
+        const db = session(env.DB, "first-unconstrained");
+        await assertNamespaceReadAccess(db, namespace_id, email);
         track(agent, { namespace: namespace_id });
-        const meta = safeMeta(metadata);
-        if (isMetaError(meta)) return meta;
-        const id = await conversations.createConversation(db, {
-          namespace_id,
-          title,
-          metadata: meta,
+        const isCompact = compact ?? true;
+        const rows = await conversations.listConversations(db, namespace_id, {
+          limit: cap(limit, 50, 20),
         });
-        track(agent, { conversation: id });
-        await audit(db, env.STORAGE, {
-          action: "conversation.create",
-          email,
-          namespace_id,
-          resource_type: "conversation",
-          resource_id: id,
-          detail: { title },
-        });
-        return txt({ id, title });
-      }
-      const db = session(env.DB, "first-unconstrained");
-      await assertNamespaceReadAccess(db, namespace_id, email);
-      track(agent, { namespace: namespace_id });
-      const isCompact = compact ?? true;
-      const rows = await conversations.listConversations(db, namespace_id, {
-        limit: cap(limit, 50, 20),
-      });
-      return txt(
-        rows.map((r) =>
-          isCompact
-            ? { id: r.id, title: r.title, updated_at: toISO(r.updated_at) }
-            : {
-                id: r.id,
-                title: r.title,
-                metadata: r.metadata,
-                created_at: toISO(r.created_at),
-                updated_at: toISO(r.updated_at),
-              },
-        ),
-      );
-    }),
+        return txt(
+          rows.map((r) =>
+            isCompact
+              ? { id: r.id, title: r.title, updated_at: toISO(r.updated_at) }
+              : {
+                  id: r.id,
+                  title: r.title,
+                  metadata: r.metadata,
+                  created_at: toISO(r.created_at),
+                  updated_at: toISO(r.updated_at),
+                },
+          ),
+        );
+      },
+    ),
   );
 
   server.tool(
@@ -113,7 +117,7 @@ export function registerConversationTools(
       idempotentHint: false,
       openWorldHint: false,
     },
-    toolHandler(async ({ conversation_id: cParam, role, content, metadata }) => {
+    tracked("add_message", async ({ conversation_id: cParam, role, content, metadata }) => {
       const conversation_id = resolveConversation(cParam, agent);
       if (!conversation_id) return err("conversation_id required");
       const db = session(env.DB, "first-primary");
@@ -174,7 +178,8 @@ export function registerConversationTools(
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(
+    tracked(
+      "get_messages",
       async ({
         conversation_id: cParam,
         namespace_id: nsParam,
