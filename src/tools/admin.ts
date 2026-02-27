@@ -15,6 +15,13 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
     {
       namespace_id: z.string().max(100).describe("Namespace ID or 'all'"),
     },
+    {
+      title: "Reindex Vectors",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ namespace_id }) => {
       if (namespace_id !== "all") {
         await assertNamespaceAccess(env.DB, namespace_id, email);
@@ -66,6 +73,13 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
     "claim_namespaces",
     "Claim all unowned namespaces for the logged-in user. Run once to adopt legacy data.",
     {},
+    {
+      title: "Claim Namespaces",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async () => {
       const claimed = await claimUnownedNamespaces(env.DB, email);
       if (claimed === 0) return ok("No unowned namespaces found.");

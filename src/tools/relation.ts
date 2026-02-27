@@ -24,6 +24,13 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       weight: z.number().optional(),
       metadata: z.string().max(5000).optional(),
     },
+    {
+      title: "Manage Relation",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     async ({ action, id, namespace_id, source_id, target_id, relation_type, weight, metadata }) => {
       if (action === "create") {
         if (!namespace_id || !source_id || !target_id || !relation_type)
@@ -59,6 +66,11 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       direction: z.enum(["from", "to", "both"]).optional(),
       relation_type: z.string().max(200).optional(),
       limit: z.number().optional(),
+    },
+    {
+      title: "Get Relations",
+      readOnlyHint: true,
+      openWorldHint: false,
     },
     async ({ entity_id, direction, relation_type, limit }) => {
       await assertEntityAccess(env.DB, entity_id, email);

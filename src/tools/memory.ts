@@ -22,6 +22,13 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
       entity_ids: z.array(z.string().max(100)).max(100).optional().describe("Link to entities"),
       metadata: z.string().max(5000).optional(),
     },
+    {
+      title: "Manage Memory",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     async ({
       action,
       id,
@@ -94,6 +101,11 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
+    },
+    {
+      title: "Query Memories",
+      readOnlyHint: true,
+      openWorldHint: false,
     },
     async ({ mode, namespace_id, entity_id, query, type, limit, compact, verbose }) => {
       const n = cap(limit, 50, 20);

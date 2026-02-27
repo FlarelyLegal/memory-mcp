@@ -21,6 +21,13 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
       summary: z.string().max(10000).optional(),
       metadata: z.string().max(5000).optional().describe("JSON string"),
     },
+    {
+      title: "Manage Entity",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     async ({ action, id, namespace_id, name, type, summary, metadata }) => {
       const meta = metadata ? JSON.parse(metadata) : undefined;
       switch (action) {
@@ -95,6 +102,11 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
+    },
+    {
+      title: "Find Entities",
+      readOnlyHint: true,
+      openWorldHint: false,
     },
     async ({ namespace_id, query, type, limit, compact, verbose }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);

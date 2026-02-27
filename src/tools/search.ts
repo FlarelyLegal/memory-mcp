@@ -21,6 +21,11 @@ export function registerSearchTools(server: McpServer, env: Env, email: string) 
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
     },
+    {
+      title: "Search",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     async ({ namespace_id, query, mode, kind, limit, compact, verbose }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
       const n = cap(limit, 20, mode === "context" ? 5 : 10);

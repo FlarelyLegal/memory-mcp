@@ -19,6 +19,13 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
+    {
+      title: "Manage Conversation",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ action, namespace_id, title, metadata, limit, compact }) => {
       await assertNamespaceAccess(env.DB, namespace_id, email);
       if (action === "create") {
@@ -51,6 +58,13 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       role: z.enum(["user", "assistant", "system", "tool"]),
       content: z.string().max(50000),
       metadata: z.string().max(5000).optional(),
+    },
+    {
+      title: "Add Message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     },
     async ({ conversation_id, role, content, metadata }) => {
       await assertConversationAccess(env.DB, conversation_id, email);
@@ -97,6 +111,11 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
       verbose: z.boolean().optional().describe("Default false: disable text truncation"),
+    },
+    {
+      title: "Get Messages",
+      readOnlyHint: true,
+      openWorldHint: false,
     },
     async ({ conversation_id, namespace_id, query, limit, compact, verbose }) => {
       const n = cap(limit, 100, 50);

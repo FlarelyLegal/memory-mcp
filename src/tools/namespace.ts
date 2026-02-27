@@ -15,6 +15,13 @@ export function registerNamespaceTools(server: McpServer, env: Env, email: strin
       description: z.string().max(2000).optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
+    {
+      title: "Manage Namespace",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ action, name, description, compact }) => {
       if (action === "create") {
         if (!name) return ok("Error: name required");

@@ -15,6 +15,11 @@ export function registerTraversalTools(server: McpServer, env: Env, email: strin
       max_depth: z.number().optional(),
       relation_types: z.array(z.string().max(200)).max(20).optional(),
     },
+    {
+      title: "Traverse Graph",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     async ({ entity_id, max_depth, relation_types }) => {
       await assertEntityAccess(env.DB, entity_id, email);
       return txt(
