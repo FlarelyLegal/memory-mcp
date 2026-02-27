@@ -7,6 +7,7 @@
  */
 import type { Env } from "../types.js";
 import type { HttpMethod } from "./types.js";
+import { session, getBookmark } from "../db.js";
 import { matchRoute } from "./registry.js";
 import { authenticateIdentity, json, jsonError } from "./middleware.js";
 import { buildOpenApiSpec } from "./openapi.js";
@@ -24,6 +25,7 @@ import { registerConversationRoutes } from "./routes/conversations.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerSearchRoutes } from "./routes/search.js";
 import { registerAdminRoutes } from "./routes/admin.js";
+import { registerWorkflowRoutes } from "./routes/workflows.js";
 import { registerTokenRoutes } from "./routes/tokens.js";
 import { registerTokenCrudRoutes } from "./routes/token-crud.js";
 import { registerDemoRoutes } from "./routes/demo.js";
@@ -44,6 +46,7 @@ function ensureRegistered(): void {
   registerMessageRoutes();
   registerSearchRoutes();
   registerAdminRoutes();
+  registerWorkflowRoutes();
   registerTokenRoutes();
   registerTokenCrudRoutes();
   registerDemoRoutes();
@@ -62,12 +65,12 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   if (pathname === "/api/openapi.json" && request.method === "GET") {
     const serverUrl = `${url.protocol}//${url.host}`;
-    return json(buildOpenApiSpec(serverUrl));
+    return withCors(request, json(buildOpenApiSpec(serverUrl)));
   }
 
   if (pathname === "/api/docs" && request.method === "GET") {
     const specUrl = `${url.protocol}//${url.host}/api/openapi.json`;
-    return renderScalarDocs(specUrl);
+    return withCors(request, renderScalarDocs(specUrl));
   }
 
   // --- CORS preflight ---
@@ -80,10 +83,18 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   const matched = matchRoute(request.method as HttpMethod, pathname);
   if (!matched) {
-    return jsonError("Not found", 404);
+    return withCors(request, jsonError("Not found", 404));
   }
 
   const { route, params } = matched;
+
+  // --- D1 session ---
+  // Writes go to primary first; reads can hit any replica.
+  // If the client sends a bookmark, anchor the session there instead.
+  const bookmark = request.headers.get("X-D1-Bookmark");
+  const constraint: D1SessionConstraint =
+    request.method === "GET" ? "first-unconstrained" : "first-primary";
+  const db = session(env.DB, bookmark ?? constraint);
 
   // --- Auth (skip for explicitly public routes) ---
 
@@ -93,18 +104,28 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     });
     if (result instanceof Response) return withCors(request, result);
 
-    const ctx = { env, email: result.email ?? "", auth: result, params, query: url.searchParams };
-    return withCors(request, await route.handler(ctx, request));
+    const ctx = {
+      env,
+      db,
+      email: result.email ?? "",
+      auth: result,
+      params,
+      query: url.searchParams,
+    };
+    const response = await route.handler(ctx, request);
+    return withBookmark(db, withCors(request, response));
   }
 
   const ctx = {
     env,
+    db,
     email: "",
     auth: { type: "human", email: "" } as const,
     params,
     query: url.searchParams,
   };
-  return withCors(request, await route.handler(ctx, request));
+  const response = await route.handler(ctx, request);
+  return withBookmark(db, withCors(request, response));
 }
 
 function corsHeaders(): Record<string, string> {
@@ -112,7 +133,8 @@ function corsHeaders(): Record<string, string> {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, Cf-Access-Jwt-Assertion, cf-access-token, CF-Access-Client-Id",
+      "Content-Type, Authorization, Cf-Access-Jwt-Assertion, cf-access-token, CF-Access-Client-Id, X-D1-Bookmark",
+    "Access-Control-Expose-Headers": "X-D1-Bookmark",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -149,4 +171,17 @@ async function withCors(request: Request, response: Response): Promise<Response>
     patched.headers.set(k, v);
   }
   return maybeGzip(request, patched);
+}
+
+/** Attach the D1 session bookmark to the response for cross-request consistency. */
+async function withBookmark(
+  db: ReturnType<typeof session>,
+  responsePromise: Promise<Response>,
+): Promise<Response> {
+  const response = await responsePromise;
+  const bm = getBookmark(db);
+  if (bm) {
+    response.headers.set("X-D1-Bookmark", bm);
+  }
+  return response;
 }

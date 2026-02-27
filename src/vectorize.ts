@@ -6,8 +6,10 @@
  * 2. bge-reranker-base (cross-encoder, precise) re-scores and returns top N
  */
 import type { Env } from "./types.js";
+import type { DbHandle } from "./db.js";
 import { embed } from "./embeddings.js";
 import { rerank, hydrateTexts } from "./reranker.js";
+import { now } from "./utils.js";
 
 /** Over-fetch multiplier for the reranker candidate pool. */
 const RERANK_POOL_MULTIPLIER = 3;
@@ -25,6 +27,7 @@ export async function upsertEntityVector(
     name: string;
     type: string;
     summary: string | null;
+    created_at?: number;
   },
 ): Promise<void> {
   const textToEmbed = [opts.name, opts.type, opts.summary].filter(Boolean).join(" | ");
@@ -40,6 +43,7 @@ export async function upsertEntityVector(
         namespace_id: opts.namespace_id,
         name: opts.name,
         type: opts.type,
+        created_at: opts.created_at ?? now(),
       },
     },
   ]);
@@ -53,6 +57,7 @@ export async function upsertMemoryVector(
     namespace_id: string;
     content: string;
     type: string;
+    created_at?: number;
   },
 ): Promise<void> {
   const vector = await embed(env.AI, opts.content);
@@ -66,6 +71,7 @@ export async function upsertMemoryVector(
         memory_id: opts.memory_id,
         namespace_id: opts.namespace_id,
         type: opts.type,
+        created_at: opts.created_at ?? now(),
       },
     },
   ]);
@@ -80,6 +86,7 @@ export async function upsertMessageVector(
     namespace_id: string;
     content: string;
     role: string;
+    created_at?: number;
   },
 ): Promise<void> {
   const vector = await embed(env.AI, opts.content);
@@ -94,6 +101,7 @@ export async function upsertMessageVector(
         conversation_id: opts.conversation_id,
         namespace_id: opts.namespace_id,
         role: opts.role,
+        created_at: opts.created_at ?? now(),
       },
     },
   ]);
@@ -126,11 +134,16 @@ export interface SemanticSearchResult {
  */
 export async function semanticSearch(
   env: Env,
+  db: DbHandle,
   query: string,
   namespace_id: string,
   opts?: {
     kind?: "entity" | "memory" | "message";
     type?: string;
+    after?: number;
+    before?: number;
+    role?: string;
+    conversation_id?: string;
     limit?: number;
   },
 ): Promise<SemanticSearchResult[]> {
@@ -147,6 +160,19 @@ export async function semanticSearch(
   if (opts?.type) {
     filter.type = opts.type;
   }
+  if (opts?.role) {
+    filter.role = opts.role;
+  }
+  if (opts?.conversation_id) {
+    filter.conversation_id = opts.conversation_id;
+  }
+  // Time-bounded search via created_at range filters
+  if (opts?.after !== undefined || opts?.before !== undefined) {
+    const range: Record<string, number> = {};
+    if (opts?.after !== undefined) range["$gte"] = opts.after;
+    if (opts?.before !== undefined) range["$lt"] = opts.before;
+    filter.created_at = range;
+  }
 
   const results = await env.VECTORIZE.query(queryVector, {
     topK: fetchLimit,
@@ -158,7 +184,7 @@ export async function semanticSearch(
   if (candidates.length === 0) return [];
 
   // Stage 2: Rerank with cross-encoder
-  const texts = await hydrateTexts(env.DB, candidates);
+  const texts = await hydrateTexts(db, candidates);
   const reranked = await rerank(env.AI, query, texts);
 
   if (reranked) {

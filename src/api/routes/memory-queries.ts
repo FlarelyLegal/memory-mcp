@@ -21,7 +21,7 @@ export function registerMemoryQueryRoutes(): void {
     "/api/v1/namespaces/:namespace_id/memories",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const mode = ctx.query.get("mode") ?? "recall";
         const type = ctx.query.get("type") as MemoryType | undefined;
         const limit = queryLimit(ctx.query, 50);
@@ -47,7 +47,7 @@ export function registerMemoryQueryRoutes(): void {
         if (mode === "search") {
           const query = ctx.query.get("q");
           if (!query) return jsonError("q parameter required for search mode", 400);
-          const rows = await searchMemories(ctx.env.DB, ctx.params.namespace_id, {
+          const rows = await searchMemories(ctx.db, ctx.params.namespace_id, {
             query,
             type,
             limit: limit + 1,
@@ -60,7 +60,7 @@ export function registerMemoryQueryRoutes(): void {
           if (cursor) response.headers.set("X-Next-Cursor", cursor);
           return response;
         }
-        const rows = await recallMemories(ctx.env.DB, ctx.params.namespace_id, {
+        const rows = await recallMemories(ctx.db, ctx.params.namespace_id, {
           type,
           limit: limit + 1,
           offset,
@@ -124,7 +124,7 @@ export function registerMemoryQueryRoutes(): void {
     "/api/v1/entities/:id/memories",
     async (ctx) => {
       try {
-        await assertEntityAccess(ctx.env.DB, ctx.params.id, ctx.email);
+        await assertEntityAccess(ctx.db, ctx.params.id, ctx.email);
         const limit = queryLimit(ctx.query, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
@@ -144,7 +144,7 @@ export function registerMemoryQueryRoutes(): void {
           compact: ["id", "type", "importance"],
           full: allowed,
         });
-        const rows = await getMemoriesForEntity(ctx.env.DB, ctx.params.id, {
+        const rows = await getMemoriesForEntity(ctx.db, ctx.params.id, {
           limit: limit + 1,
           offset,
         });

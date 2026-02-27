@@ -18,13 +18,13 @@ Operational runbook (Access scope, CI targeting, A/B build parity, secrets matri
 
 ## Architecture
 
-| Component        | Cloudflare Service             | Purpose                                             |
-| ---------------- | ------------------------------ | --------------------------------------------------- |
-| MCP sessions     | **Durable Objects**            | Stateful per-session MCP agent                      |
-| Structured graph | **D1** (SQLite)                | Entities, relations, memories, conversations        |
-| Semantic search  | **Vectorize** + **Workers AI** | Embeddings via `@cf/baai/bge-large-en-v1.5` (1024d) |
-| Auth + tokens    | **KV**                         | OAuth state, service token → email bindings         |
-| Blob storage     | **R2**                         | Reserved for future use                             |
+| Component        | Cloudflare Service             | Purpose                                      |
+| ---------------- | ------------------------------ | -------------------------------------------- |
+| MCP sessions     | **Durable Objects**            | Stateful per-session MCP agent               |
+| Structured graph | **D1** (SQLite)                | Entities, relations, memories, conversations |
+| Semantic search  | **Vectorize** + **Workers AI** | Embeddings via `@cf/baai/bge-m3` (1024d)     |
+| Auth + tokens    | **KV**                         | OAuth state, service token → email bindings  |
+| Blob storage     | **R2**                         | Reserved for future use                      |
 
 ## Setup
 
@@ -39,7 +39,7 @@ Operational runbook (Access scope, CI targeting, A/B build parity, secrets matri
 npm install
 
 npx wrangler d1 create memory-graph-mcp-db
-npx wrangler vectorize create memory-graph-mcp-embeddings --preset=@cf/baai/bge-large-en-v1.5
+npx wrangler vectorize create memory-graph-mcp-embeddings --preset=@cf/baai/bge-m3
 npx wrangler kv namespace create CACHE
 npx wrangler kv namespace create OAUTH_KV
 npx wrangler r2 bucket create memory-graph-mcp-storage

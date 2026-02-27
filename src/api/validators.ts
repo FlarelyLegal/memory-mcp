@@ -67,6 +67,10 @@ export const semanticSearchSchema = z.object({
   mode: z.enum(["semantic", "context"]).optional(),
   kind: z.enum(["entity", "memory", "message"]).optional(),
   type: z.string().max(200).optional(),
+  after: z.coerce.number().int().optional(),
+  before: z.coerce.number().int().optional(),
+  role: messageRole.optional(),
+  conversation_id: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(20).optional(),
 });
 

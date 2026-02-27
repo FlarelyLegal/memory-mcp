@@ -21,7 +21,7 @@ export function registerEntityRoutes(): void {
     "/api/v1/namespaces/:namespace_id/entities",
     async (ctx) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const queryInput = entityListQuerySchema.safeParse({
           q: ctx.query.get("q") ?? undefined,
           type: ctx.query.get("type") ?? undefined,
@@ -48,7 +48,7 @@ export function registerEntityRoutes(): void {
           compact: ["id", "name", "type"],
           full: allowed,
         });
-        const rows = await searchEntities(ctx.env.DB, ctx.params.namespace_id, {
+        const rows = await searchEntities(ctx.db, ctx.params.namespace_id, {
           query,
           type,
           limit: limit + 1,
@@ -108,11 +108,11 @@ export function registerEntityRoutes(): void {
     "/api/v1/namespaces/:namespace_id/entities",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const body = await parseBodyWithSchema(request, entityCreateSchema);
         if (body instanceof Response) return body;
 
-        const id = await createEntity(ctx.env.DB, {
+        const id = await createEntity(ctx.db, {
           namespace_id: ctx.params.namespace_id,
           name: body.name,
           type: body.type,

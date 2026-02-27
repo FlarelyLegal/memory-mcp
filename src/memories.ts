@@ -2,10 +2,11 @@
  * Memory operations: standalone knowledge fragments with temporal decay.
  */
 import type { MemoryRow } from "./types.js";
+import { type DbHandle, withRetry, isReplayInsertConflict } from "./db.js";
 import { generateId, now, toJson, decayScore, ftsEscape } from "./utils.js";
 
 export async function createMemory(
-  db: D1Database,
+  db: DbHandle,
   opts: {
     namespace_id: string;
     content: string;
@@ -17,48 +18,56 @@ export async function createMemory(
   },
 ): Promise<string> {
   const id = generateId();
-  await db
-    .prepare(
-      `INSERT INTO memories (id, namespace_id, content, type, source, importance, metadata)
+  try {
+    await withRetry(() =>
+      db
+        .prepare(
+          `INSERT INTO memories (id, namespace_id, content, type, source, importance, metadata)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      id,
-      opts.namespace_id,
-      opts.content,
-      opts.type ?? "fact",
-      opts.source ?? null,
-      opts.importance ?? 0.5,
-      toJson(opts.metadata ?? null),
-    )
-    .run();
+        )
+        .bind(
+          id,
+          opts.namespace_id,
+          opts.content,
+          opts.type ?? "fact",
+          opts.source ?? null,
+          opts.importance ?? 0.5,
+          toJson(opts.metadata ?? null),
+        )
+        .run(),
+    );
+  } catch (err) {
+    if (!(await isReplayInsertConflict(db, "memories", id, err))) throw err;
+  }
 
   // Link to entities if specified
   if (opts.entity_ids?.length) {
     const stmt = db.prepare(
       `INSERT OR IGNORE INTO memory_entity_links (memory_id, entity_id) VALUES (?, ?)`,
     );
-    await db.batch(opts.entity_ids.map((eid) => stmt.bind(id, eid)));
+    await withRetry(() => db.batch(opts.entity_ids!.map((eid) => stmt.bind(id, eid))));
   }
 
   return id;
 }
 
-export async function getMemory(db: D1Database, id: string): Promise<MemoryRow | null> {
-  const [selectResult] = await db.batch([
-    db.prepare(`SELECT * FROM memories WHERE id = ?`).bind(id),
-    db
-      .prepare(
-        `UPDATE memories SET last_accessed_at = ?, access_count = access_count + 1 WHERE id = ?`,
-      )
-      .bind(now(), id),
-  ]);
+export async function getMemory(db: DbHandle, id: string): Promise<MemoryRow | null> {
+  const [selectResult] = await withRetry(() =>
+    db.batch([
+      db.prepare(`SELECT * FROM memories WHERE id = ?`).bind(id),
+      db
+        .prepare(
+          `UPDATE memories SET last_accessed_at = ?, access_count = access_count + 1 WHERE id = ?`,
+        )
+        .bind(now(), id),
+    ]),
+  );
   const rows = selectResult.results as unknown as MemoryRow[];
   return rows[0] ?? null;
 }
 
 export async function searchMemories(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   opts: { query?: string; type?: string; limit?: number; offset?: number },
 ): Promise<MemoryRow[]> {
@@ -117,7 +126,7 @@ export async function searchMemories(
  * Retrieve memories ranked by temporal decay + importance.
  */
 export async function recallMemories(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   opts?: { type?: string; limit?: number; halfLifeHours?: number; offset?: number },
 ): Promise<(MemoryRow & { relevance_score: number })[]> {
@@ -150,7 +159,7 @@ export async function recallMemories(
 }
 
 export async function getMemoriesForEntity(
-  db: D1Database,
+  db: DbHandle,
   entity_id: string,
   opts?: { limit?: number; offset?: number },
 ): Promise<MemoryRow[]> {
@@ -170,7 +179,7 @@ export async function getMemoriesForEntity(
 }
 
 export async function updateMemory(
-  db: D1Database,
+  db: DbHandle,
   id: string,
   updates: {
     content?: string;
@@ -200,12 +209,14 @@ export async function updateMemory(
   }
 
   params.push(id);
-  await db
-    .prepare(`UPDATE memories SET ${sets.join(", ")} WHERE id = ?`)
-    .bind(...params)
-    .run();
+  await withRetry(() =>
+    db
+      .prepare(`UPDATE memories SET ${sets.join(", ")} WHERE id = ?`)
+      .bind(...params)
+      .run(),
+  );
 }
 
-export async function deleteMemory(db: D1Database, id: string): Promise<void> {
-  await db.prepare(`DELETE FROM memories WHERE id = ?`).bind(id).run();
+export async function deleteMemory(db: DbHandle, id: string): Promise<void> {
+  await withRetry(() => db.prepare(`DELETE FROM memories WHERE id = ?`).bind(id).run());
 }

@@ -16,7 +16,7 @@ export function registerSearchRoutes(): void {
     "/api/v1/namespaces/:namespace_id/search",
     async (ctx, request) => {
       try {
-        await assertNamespaceAccess(ctx.env.DB, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceAccess(ctx.db, ctx.params.namespace_id, ctx.email);
         const rl = await enforceSearchRateLimit(ctx, "semantic-search");
         if (rl) return rl;
         const body = await parseBodyWithSchema(request, semanticSearchSchema);
@@ -30,12 +30,14 @@ export function registerSearchRoutes(): void {
         const mode = body.mode ?? "semantic";
         const limit = Math.min(body.limit ?? (mode === "context" ? 5 : 10), 20);
         const offset = parseCursor(ctx.query);
-        const kind = body.kind;
-        const type = body.type;
 
-        const matches = await semanticSearch(ctx.env, body.query, ctx.params.namespace_id, {
-          kind,
-          type,
+        const matches = await semanticSearch(ctx.env, ctx.db, body.query, ctx.params.namespace_id, {
+          kind: body.kind,
+          type: body.type,
+          after: body.after,
+          before: body.before,
+          role: body.role,
+          conversation_id: body.conversation_id,
           limit: limit + offset + 1,
         });
         const page = matches.slice(offset, offset + limit + 1);
@@ -58,12 +60,12 @@ export function registerSearchRoutes(): void {
         const entities = (
           await Promise.all(
             entityIds.map(async (eid) => {
-              const entity = await getEntity(ctx.env.DB, eid);
+              const entity = await getEntity(ctx.db, eid);
               if (!entity) return null;
               const [from, to, mems] = await Promise.all([
-                getRelationsFrom(ctx.env.DB, eid, { limit: 5 }),
-                getRelationsTo(ctx.env.DB, eid, { limit: 5 }),
-                getMemoriesForEntity(ctx.env.DB, eid, { limit: 5 }),
+                getRelationsFrom(ctx.db, eid, { limit: 5 }),
+                getRelationsTo(ctx.db, eid, { limit: 5 }),
+                getMemoriesForEntity(ctx.db, eid, { limit: 5 }),
               ]);
               return {
                 entity: parseEntityRow(entity),
@@ -74,7 +76,7 @@ export function registerSearchRoutes(): void {
           )
         ).filter(Boolean);
 
-        const topMemories = await recallMemories(ctx.env.DB, ctx.params.namespace_id, {
+        const topMemories = await recallMemories(ctx.db, ctx.params.namespace_id, {
           limit: Math.max(1, limit - entityIds.length),
         });
 
@@ -132,6 +134,24 @@ export function registerSearchRoutes(): void {
                   maxLength: 200,
                   description:
                     "Filter by entity type (person, concept, ...) or memory type (fact, observation, ...)",
+                },
+                after: {
+                  type: "integer",
+                  description: "Only results created after this epoch (seconds)",
+                },
+                before: {
+                  type: "integer",
+                  description: "Only results created before this epoch (seconds)",
+                },
+                role: {
+                  type: "string",
+                  enum: ["user", "assistant", "system", "tool"],
+                  description: "Filter messages by role",
+                },
+                conversation_id: {
+                  type: "string",
+                  format: "uuid",
+                  description: "Filter messages by conversation",
                 },
                 limit: {
                   type: "integer",

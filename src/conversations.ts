@@ -2,26 +2,35 @@
  * Conversation and message history operations.
  */
 import type { ConversationRow, MessageRow } from "./types.js";
+import { type DbHandle, withRetry, isReplayInsertConflict } from "./db.js";
 import { generateId, now, toJson, ftsEscape } from "./utils.js";
 
 export async function createConversation(
-  db: D1Database,
+  db: DbHandle,
   opts: { namespace_id: string; title?: string; metadata?: Record<string, unknown> },
 ): Promise<string> {
   const id = generateId();
-  await db
-    .prepare(`INSERT INTO conversations (id, namespace_id, title, metadata) VALUES (?, ?, ?, ?)`)
-    .bind(id, opts.namespace_id, opts.title ?? null, toJson(opts.metadata ?? null))
-    .run();
+  try {
+    await withRetry(() =>
+      db
+        .prepare(
+          `INSERT INTO conversations (id, namespace_id, title, metadata) VALUES (?, ?, ?, ?)`,
+        )
+        .bind(id, opts.namespace_id, opts.title ?? null, toJson(opts.metadata ?? null))
+        .run(),
+    );
+  } catch (err) {
+    if (!(await isReplayInsertConflict(db, "conversations", id, err))) throw err;
+  }
   return id;
 }
 
-export async function getConversation(db: D1Database, id: string): Promise<ConversationRow | null> {
+export async function getConversation(db: DbHandle, id: string): Promise<ConversationRow | null> {
   return db.prepare(`SELECT * FROM conversations WHERE id = ?`).bind(id).first<ConversationRow>();
 }
 
 export async function listConversations(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   opts?: { limit?: number; offset?: number },
 ): Promise<ConversationRow[]> {
@@ -37,7 +46,7 @@ export async function listConversations(
 }
 
 export async function addMessage(
-  db: D1Database,
+  db: DbHandle,
   opts: {
     conversation_id: string;
     role: "user" | "assistant" | "system" | "tool";
@@ -47,22 +56,35 @@ export async function addMessage(
 ): Promise<string> {
   const id = generateId();
   const ts = now();
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(id, opts.conversation_id, opts.role, opts.content, toJson(opts.metadata ?? null), ts),
-    db
-      .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
-      .bind(ts, opts.conversation_id),
-  ]);
+  try {
+    await withRetry(() =>
+      db.batch([
+        db
+          .prepare(
+            `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            id,
+            opts.conversation_id,
+            opts.role,
+            opts.content,
+            toJson(opts.metadata ?? null),
+            ts,
+          ),
+        db
+          .prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
+          .bind(ts, opts.conversation_id),
+      ]),
+    );
+  } catch (err) {
+    if (!(await isReplayInsertConflict(db, "messages", id, err))) throw err;
+  }
 
   return id;
 }
 
 export async function getMessages(
-  db: D1Database,
+  db: DbHandle,
   conversation_id: string,
   opts?: { limit?: number; before?: number; offset?: number },
 ): Promise<MessageRow[]> {
@@ -89,7 +111,7 @@ export async function getMessages(
 }
 
 export async function searchMessages(
-  db: D1Database,
+  db: DbHandle,
   namespace_id: string,
   query: string,
   opts?: { limit?: number; offset?: number },
@@ -132,6 +154,6 @@ export async function searchMessages(
   return result.results;
 }
 
-export async function deleteConversation(db: D1Database, id: string): Promise<void> {
-  await db.prepare(`DELETE FROM conversations WHERE id = ?`).bind(id).run();
+export async function deleteConversation(db: DbHandle, id: string): Promise<void> {
+  await withRetry(() => db.prepare(`DELETE FROM conversations WHERE id = ?`).bind(id).run());
 }

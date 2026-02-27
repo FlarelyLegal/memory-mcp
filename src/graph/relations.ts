@@ -1,9 +1,10 @@
 /** Relation CRUD operations against D1. */
 import type { RelationRow } from "../types.js";
+import { type DbHandle, withRetry, isReplayInsertConflict } from "../db.js";
 import { generateId, now, toJson } from "../utils.js";
 
 export async function createRelation(
-  db: D1Database,
+  db: DbHandle,
   opts: {
     namespace_id: string;
     source_id: string;
@@ -14,29 +15,35 @@ export async function createRelation(
   },
 ): Promise<string> {
   const id = generateId();
-  await db
-    .prepare(
-      `INSERT INTO relations (id, namespace_id, source_id, target_id, relation_type, weight, metadata)
+  try {
+    await withRetry(() =>
+      db
+        .prepare(
+          `INSERT INTO relations (id, namespace_id, source_id, target_id, relation_type, weight, metadata)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(namespace_id, source_id, target_id, relation_type) DO UPDATE SET
          weight = excluded.weight, metadata = excluded.metadata, updated_at = ?`,
-    )
-    .bind(
-      id,
-      opts.namespace_id,
-      opts.source_id,
-      opts.target_id,
-      opts.relation_type,
-      opts.weight ?? 1.0,
-      toJson(opts.metadata ?? null),
-      now(),
-    )
-    .run();
+        )
+        .bind(
+          id,
+          opts.namespace_id,
+          opts.source_id,
+          opts.target_id,
+          opts.relation_type,
+          opts.weight ?? 1.0,
+          toJson(opts.metadata ?? null),
+          now(),
+        )
+        .run(),
+    );
+  } catch (err) {
+    if (!(await isReplayInsertConflict(db, "relations", id, err))) throw err;
+  }
   return id;
 }
 
 export async function getRelationsFrom(
-  db: D1Database,
+  db: DbHandle,
   entity_id: string,
   opts?: { relation_type?: string; limit?: number },
 ): Promise<(RelationRow & { target_name: string; target_type: string })[]> {
@@ -66,7 +73,7 @@ export async function getRelationsFrom(
 }
 
 export async function getRelationsTo(
-  db: D1Database,
+  db: DbHandle,
   entity_id: string,
   opts?: { relation_type?: string; limit?: number },
 ): Promise<(RelationRow & { source_name: string; source_type: string })[]> {
@@ -95,6 +102,6 @@ export async function getRelationsTo(
   return result.results;
 }
 
-export async function deleteRelation(db: D1Database, id: string): Promise<void> {
-  await db.prepare(`DELETE FROM relations WHERE id = ?`).bind(id).run();
+export async function deleteRelation(db: DbHandle, id: string): Promise<void> {
+  await withRetry(() => db.prepare(`DELETE FROM relations WHERE id = ?`).bind(id).run());
 }

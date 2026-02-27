@@ -1,20 +1,40 @@
 /** Tool registration: manage_relation, get_relations */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { Env } from "../types.js";
+import type { Env, StateHandle } from "../types.js";
+import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import { assertNamespaceAccess, assertEntityAccess, assertRelationAccess } from "../auth.js";
 import { parseJson } from "../utils.js";
-import { txt, err, ok, cap, safeMeta, isMetaError, toolHandler } from "../response-helpers.js";
+import { track, resolveNamespace } from "../state.js";
+import {
+  txt,
+  err,
+  ok,
+  cap,
+  safeMeta,
+  isMetaError,
+  toolHandler,
+  confirm,
+} from "../response-helpers.js";
 
-export function registerRelationTools(server: McpServer, env: Env, email: string) {
+export function registerRelationTools(
+  server: McpServer,
+  env: Env,
+  email: string,
+  agent: StateHandle,
+) {
   server.tool(
     "manage_relation",
     "Create or delete a directed relation between entities.",
     {
       action: z.enum(["create", "delete"]),
       id: z.string().uuid().optional().describe("Required for delete"),
-      namespace_id: z.string().uuid().optional().describe("Required for create"),
+      namespace_id: z
+        .string()
+        .uuid()
+        .optional()
+        .describe("Required for create (defaults to last-used)"),
       source_id: z.string().uuid().optional().describe("From entity"),
       target_id: z.string().uuid().optional().describe("To entity"),
       relation_type: z
@@ -37,24 +57,26 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       async ({
         action,
         id,
-        namespace_id,
+        namespace_id: nsParam,
         source_id,
         target_id,
         relation_type,
         weight,
         metadata,
       }) => {
+        const db = session(env.DB, "first-primary");
         if (action === "create") {
+          const namespace_id = resolveNamespace(nsParam, agent);
           if (!namespace_id || !source_id || !target_id || !relation_type)
             return err("namespace_id, source_id, target_id, relation_type required");
-          await assertNamespaceAccess(env.DB, namespace_id, email);
-          const srcNs = await assertEntityAccess(env.DB, source_id, email);
-          const tgtNs = await assertEntityAccess(env.DB, target_id, email);
+          await assertNamespaceAccess(db, namespace_id, email);
+          const srcNs = await assertEntityAccess(db, source_id, email);
+          const tgtNs = await assertEntityAccess(db, target_id, email);
           if (srcNs !== namespace_id || tgtNs !== namespace_id)
             return err("source and target entities must belong to the specified namespace");
           const meta = safeMeta(metadata);
           if (isMetaError(meta)) return meta;
-          const rid = await graph.createRelation(env.DB, {
+          const rid = await graph.createRelation(db, {
             namespace_id,
             source_id,
             target_id,
@@ -62,11 +84,13 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
             weight,
             metadata: meta,
           });
+          track(agent, { namespace: namespace_id, entity: [source_id, target_id] });
           return txt({ id: rid, source_id, target_id, relation_type });
         }
         if (!id) return err("id required");
-        await assertRelationAccess(env.DB, id, email);
-        await graph.deleteRelation(env.DB, id);
+        await assertRelationAccess(db, id, email);
+        if (!(await confirm(server, `Delete relation ${id}?`))) return err("Cancelled");
+        await graph.deleteRelation(db, id);
         return ok(`Deleted ${id}`);
       },
     ),
@@ -88,7 +112,9 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
       openWorldHint: false,
     },
     toolHandler(async ({ entity_id, direction, relation_type, limit, compact }) => {
-      await assertEntityAccess(env.DB, entity_id, email);
+      const db = session(env.DB, "first-unconstrained");
+      await assertEntityAccess(db, entity_id, email);
+      track(agent, { entity: entity_id });
       const dir = direction ?? "both";
       const n = cap(limit, 50, 20);
       const isCompact = compact ?? true;
@@ -118,14 +144,14 @@ export function registerRelationTools(server: McpServer, env: Env, email: string
             };
       const results: unknown[] = [];
       if (dir === "from" || dir === "both") {
-        const rels = await graph.getRelationsFrom(env.DB, entity_id, {
+        const rels = await graph.getRelationsFrom(db, entity_id, {
           relation_type,
           limit: n,
         });
         results.push(...rels.map(mapRel));
       }
       if (dir === "to" || dir === "both") {
-        const rels = await graph.getRelationsTo(env.DB, entity_id, {
+        const rels = await graph.getRelationsTo(db, entity_id, {
           relation_type,
           limit: n,
         });

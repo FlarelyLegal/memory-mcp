@@ -24,6 +24,25 @@ export interface Env {
   COOKIE_ENCRYPTION_KEY: string;
   RATE_LIMIT_AUTH?: WorkerRateLimiter;
   RATE_LIMIT_SEARCH?: WorkerRateLimiter;
+  // Workflows
+  REINDEX_WORKFLOW: Workflow;
+  CONSOLIDATION_WORKFLOW: Workflow;
+}
+
+// Per-session state tracked across tool calls (persisted in DO SQLite)
+export interface SessionState {
+  /** Last-used namespace ID — defaults for tools when namespace_id is omitted. */
+  currentNamespace?: string;
+  /** Recently accessed entity IDs (most recent first, capped at 10). */
+  recentEntities: string[];
+  /** Last-used conversation ID — defaults for add_message/get_messages. */
+  currentConversation?: string;
+}
+
+/** Thin interface for tool handlers to read/write session state without importing McpAgent. */
+export interface StateHandle {
+  readonly state: SessionState;
+  setState(s: SessionState): void;
 }
 
 // Props passed through from the OAuth flow into McpAgent

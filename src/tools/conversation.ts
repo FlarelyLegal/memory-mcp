@@ -1,20 +1,27 @@
 /** Tool registration: manage_conversation, add_message, get_messages */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { Env } from "../types.js";
+import type { Env, StateHandle } from "../types.js";
+import { session } from "../db.js";
 import * as conversations from "../conversations.js";
 import * as vectorize from "../vectorize.js";
 import { assertNamespaceAccess, assertConversationAccess } from "../auth.js";
 import { toISO } from "../utils.js";
+import { track, resolveNamespace, resolveConversation } from "../state.js";
 import { txt, err, cap, trunc, safeMeta, isMetaError, toolHandler } from "../response-helpers.js";
 
-export function registerConversationTools(server: McpServer, env: Env, email: string) {
+export function registerConversationTools(
+  server: McpServer,
+  env: Env,
+  email: string,
+  agent: StateHandle,
+) {
   server.tool(
     "manage_conversation",
     "Create or list conversations in a namespace.",
     {
       action: z.enum(["create", "list"]),
-      namespace_id: z.string().uuid(),
+      namespace_id: z.string().uuid().optional().describe("Defaults to last-used namespace"),
       title: z.string().min(1).max(500).optional(),
       metadata: z.string().max(5000).optional(),
       limit: z.number().optional(),
@@ -27,20 +34,25 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       idempotentHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ action, namespace_id, title, metadata, limit, compact }) => {
-      await assertNamespaceAccess(env.DB, namespace_id, email);
+    toolHandler(async ({ action, namespace_id: nsParam, title, metadata, limit, compact }) => {
+      const namespace_id = resolveNamespace(nsParam, agent);
+      if (!namespace_id) return err("namespace_id required");
+      const db = session(env.DB, "first-primary");
+      await assertNamespaceAccess(db, namespace_id, email);
+      track(agent, { namespace: namespace_id });
       if (action === "create") {
         const meta = safeMeta(metadata);
         if (isMetaError(meta)) return meta;
-        const id = await conversations.createConversation(env.DB, {
+        const id = await conversations.createConversation(db, {
           namespace_id,
           title,
           metadata: meta,
         });
+        track(agent, { conversation: id });
         return txt({ id, title });
       }
       const isCompact = compact ?? true;
-      const rows = await conversations.listConversations(env.DB, namespace_id, {
+      const rows = await conversations.listConversations(db, namespace_id, {
         limit: cap(limit, 50, 20),
       });
       return txt(
@@ -63,7 +75,7 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
     "add_message",
     "Add a message to a conversation and embed it for search.",
     {
-      conversation_id: z.string().uuid(),
+      conversation_id: z.string().uuid().optional().describe("Defaults to last-used conversation"),
       role: z.enum(["user", "assistant", "system", "tool"]),
       content: z.string().min(1).max(50000),
       metadata: z.string().max(5000).optional(),
@@ -75,18 +87,22 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       idempotentHint: false,
       openWorldHint: false,
     },
-    toolHandler(async ({ conversation_id, role, content, metadata }) => {
-      await assertConversationAccess(env.DB, conversation_id, email);
+    toolHandler(async ({ conversation_id: cParam, role, content, metadata }) => {
+      const conversation_id = resolveConversation(cParam, agent);
+      if (!conversation_id) return err("conversation_id required");
+      const db = session(env.DB, "first-primary");
+      await assertConversationAccess(db, conversation_id, email);
+      track(agent, { conversation: conversation_id });
       const meta = safeMeta(metadata);
       if (isMetaError(meta)) return meta;
-      const id = await conversations.addMessage(env.DB, {
+      const id = await conversations.addMessage(db, {
         conversation_id,
         role,
         content,
         metadata: meta,
       });
       if (role === "user" || role === "assistant") {
-        const convo = await conversations.getConversation(env.DB, conversation_id);
+        const convo = await conversations.getConversation(db, conversation_id);
         if (convo)
           await vectorize.upsertMessageVector(env, {
             message_id: id,
@@ -129,37 +145,51 @@ export function registerConversationTools(server: McpServer, env: Env, email: st
       readOnlyHint: true,
       openWorldHint: false,
     },
-    toolHandler(async ({ conversation_id, namespace_id, query, limit, compact, verbose }) => {
-      const n = cap(limit, 100, 50);
-      const isCompact = compact ?? true;
-      const full = verbose ?? false;
-      const mapMsg = (m: {
-        id: string;
-        role: string;
-        content: string;
-        created_at: number;
-        conversation_title?: string | null;
-      }) =>
-        isCompact
-          ? { id: m.id, role: m.role }
-          : {
-              id: m.id,
-              role: m.role,
-              content: full ? m.content : trunc(m.content),
-              created_at: toISO(m.created_at),
-              ...(m.conversation_title !== undefined
-                ? { conversation_title: m.conversation_title }
-                : {}),
-            };
-      if (query && namespace_id) {
-        await assertNamespaceAccess(env.DB, namespace_id, email);
-        const rows = await conversations.searchMessages(env.DB, namespace_id, query, { limit: n });
+    toolHandler(
+      async ({
+        conversation_id: cParam,
+        namespace_id: nsParam,
+        query,
+        limit,
+        compact,
+        verbose,
+      }) => {
+        const db = session(env.DB, "first-unconstrained");
+        const n = cap(limit, 100, 50);
+        const isCompact = compact ?? true;
+        const full = verbose ?? false;
+        const mapMsg = (m: {
+          id: string;
+          role: string;
+          content: string;
+          created_at: number;
+          conversation_title?: string | null;
+        }) =>
+          isCompact
+            ? { id: m.id, role: m.role }
+            : {
+                id: m.id,
+                role: m.role,
+                content: full ? m.content : trunc(m.content),
+                created_at: toISO(m.created_at),
+                ...(m.conversation_title !== undefined
+                  ? { conversation_title: m.conversation_title }
+                  : {}),
+              };
+        const namespace_id = resolveNamespace(nsParam, agent);
+        if (query && namespace_id) {
+          await assertNamespaceAccess(db, namespace_id, email);
+          track(agent, { namespace: namespace_id });
+          const rows = await conversations.searchMessages(db, namespace_id, query, { limit: n });
+          return txt(rows.map(mapMsg));
+        }
+        const conversation_id = resolveConversation(cParam, agent);
+        if (!conversation_id) return err("conversation_id or namespace_id+query required");
+        await assertConversationAccess(db, conversation_id, email);
+        track(agent, { conversation: conversation_id });
+        const rows = await conversations.getMessages(db, conversation_id, { limit: n });
         return txt(rows.map(mapMsg));
-      }
-      if (!conversation_id) return err("conversation_id or namespace_id+query required");
-      await assertConversationAccess(env.DB, conversation_id, email);
-      const rows = await conversations.getMessages(env.DB, conversation_id, { limit: n });
-      return txt(rows.map(mapMsg));
-    }),
+      },
+    ),
   );
 }

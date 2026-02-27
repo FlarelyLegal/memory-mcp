@@ -7,6 +7,8 @@
  * candidate pool from the initial Vectorize ANN search.
  */
 
+import type { DbHandle } from "./db.js";
+
 const RERANKER_MODEL = "@cf/baai/bge-reranker-base";
 
 interface RerankerInput {
@@ -51,7 +53,7 @@ const MAX_PARAMS = 100;
  * we batch-fetch content from D1 (chunked at 100 for D1 param limit).
  */
 export async function hydrateTexts(
-  db: D1Database,
+  db: DbHandle,
   matches: VectorizeMatches["matches"],
 ): Promise<string[]> {
   // Pre-allocate with metadata-based text
@@ -87,7 +89,7 @@ export async function hydrateTexts(
 
 /** Fetch content from a table in chunks of MAX_PARAMS and fill `texts`. */
 async function batchHydrate(
-  db: D1Database,
+  db: DbHandle,
   table: string,
   entries: { idx: number; id: string }[],
   texts: string[],

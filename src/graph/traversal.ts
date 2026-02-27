@@ -1,5 +1,6 @@
 /** BFS graph traversal from a starting entity. */
 import type { EntityRow, RelationRow } from "../types.js";
+import type { DbHandle } from "../db.js";
 import { chunks } from "../utils.js";
 
 /** D1 max bound parameters per query. */
@@ -14,7 +15,7 @@ type RelWithNames = RelationRow & { target_name: string; target_type: string };
  * Returns all reachable entities and the relations connecting them.
  */
 export async function traverse(
-  db: D1Database,
+  db: DbHandle,
   startEntityId: string,
   opts?: { maxDepth?: number; relationTypes?: string[] },
 ): Promise<{ entities: EntityRow[]; relations: RelationRow[] }> {

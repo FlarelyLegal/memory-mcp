@@ -1,17 +1,18 @@
-/** Tool registration: admin tools (reindex_vectors, claim_namespaces) */
+/** Tool registration: admin tools (reindex, consolidate, workflow status, claim) */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { Env } from "../types.js";
+import type { Env, StateHandle } from "../types.js";
+import { session } from "../db.js";
 import { assertNamespaceAccess, isAdmin } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
-import { txt, err, ok, toolHandler } from "../response-helpers.js";
-import { REINDEX_BATCH_SIZE, chunks, reindexEntityChunk, reindexMemoryChunk } from "../reindex.js";
-import type { ReindexEntityItem, ReindexMemoryItem } from "../reindex.js";
+import { getNamespaceStats } from "../consolidation.js";
+import { track } from "../state.js";
+import { txt, err, ok, toolHandler, confirm } from "../response-helpers.js";
 
-export function registerAdminTools(server: McpServer, env: Env, email: string) {
+export function registerAdminTools(server: McpServer, env: Env, email: string, agent: StateHandle) {
   server.tool(
     "reindex_vectors",
-    "Re-embed all entities and memories into Vectorize. Use after model changes.",
+    "Re-embed all entities and memories into Vectorize via a durable Workflow. Returns instance ID for status tracking.",
     {
       namespace_id: z.string().max(100).describe("Namespace ID or 'all'"),
     },
@@ -23,50 +24,123 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       openWorldHint: false,
     },
     toolHandler(async ({ namespace_id }) => {
+      const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
       if (namespace_id !== "all") {
-        await assertNamespaceAccess(env.DB, namespace_id, email);
+        await assertNamespaceAccess(db, namespace_id, email);
+      }
+      if (namespace_id === "all") {
+        if (!(await confirm(server, "Re-embed ALL entities and memories across all namespaces?")))
+          return err("Cancelled");
+      } else {
+        track(agent, { namespace: namespace_id });
       }
 
-      let entityCount = 0;
-      let memoryCount = 0;
-      let errorCount = 0;
+      const instance = await env.REINDEX_WORKFLOW.create({
+        params: { namespace_id, email },
+      });
 
-      // --- Entities ---
-      const entityQuery =
-        namespace_id === "all"
-          ? "SELECT e.id, e.namespace_id, e.name, e.type, e.summary FROM entities e JOIN namespaces n ON n.id = e.namespace_id WHERE n.owner = ?"
-          : "SELECT id, namespace_id, name, type, summary FROM entities WHERE namespace_id = ?";
-      const entityResult = await env.DB.prepare(entityQuery)
-        .bind(namespace_id === "all" ? email : namespace_id)
-        .all<ReindexEntityItem>();
+      return txt({ instance_id: instance.id, status: "queued" });
+    }),
+  );
 
-      for (const chunk of chunks(entityResult.results, REINDEX_BATCH_SIZE)) {
-        try {
-          entityCount += await reindexEntityChunk(env, chunk);
-        } catch {
-          errorCount += chunk.length;
+  server.tool(
+    "consolidate_memory",
+    "Run memory consolidation: decay sweep, duplicate removal, entity summary refresh, and purge. Returns instance ID.",
+    {
+      namespace_id: z.string().uuid().describe("Namespace to consolidate"),
+      decay_threshold: z
+        .number()
+        .min(0)
+        .max(1)
+        .optional()
+        .describe("Relevance threshold for archival (default 0.15)"),
+      skip_summaries: z
+        .boolean()
+        .optional()
+        .describe("Skip AI entity summary refresh (default false)"),
+      purge_after_days: z
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .optional()
+        .describe("Days before archived memories are purged (default 30)"),
+    },
+    {
+      title: "Consolidate Memory",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    toolHandler(async ({ namespace_id, decay_threshold, skip_summaries, purge_after_days }) => {
+      const db = session(env.DB, "first-primary");
+      if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+      await assertNamespaceAccess(db, namespace_id, email);
+      track(agent, { namespace: namespace_id });
+      if (
+        !(await confirm(
+          server,
+          `Run consolidation on namespace ${namespace_id}? This archives low-relevance memories and purges old archived data.`,
+        ))
+      )
+        return err("Cancelled");
+
+      const instance = await env.CONSOLIDATION_WORKFLOW.create({
+        params: { namespace_id, email, decay_threshold, skip_summaries, purge_after_days },
+      });
+
+      return txt({ instance_id: instance.id, status: "queued" });
+    }),
+  );
+
+  server.tool(
+    "get_workflow_status",
+    "Check the status of a reindex or consolidation workflow instance.",
+    {
+      workflow: z.enum(["reindex", "consolidation"]),
+      instance_id: z.string().max(200).describe("Workflow instance ID"),
+    },
+    {
+      title: "Workflow Status",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    toolHandler(async ({ workflow, instance_id }) => {
+      if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+      const binding = workflow === "reindex" ? env.REINDEX_WORKFLOW : env.CONSOLIDATION_WORKFLOW;
+      try {
+        const instance = await binding.get(instance_id);
+        const status = await instance.status();
+        return txt(status);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.toLowerCase().includes("not found")) {
+          return err(`Workflow instance ${instance_id} not found`);
         }
+        throw e;
       }
+    }),
+  );
 
-      // --- Memories ---
-      const memoryQuery =
-        namespace_id === "all"
-          ? "SELECT m.id, m.namespace_id, m.content, m.type FROM memories m JOIN namespaces n ON n.id = m.namespace_id WHERE n.owner = ?"
-          : "SELECT id, namespace_id, content, type FROM memories WHERE namespace_id = ?";
-      const memoryResult = await env.DB.prepare(memoryQuery)
-        .bind(namespace_id === "all" ? email : namespace_id)
-        .all<ReindexMemoryItem>();
-
-      for (const chunk of chunks(memoryResult.results, REINDEX_BATCH_SIZE)) {
-        try {
-          memoryCount += await reindexMemoryChunk(env, chunk);
-        } catch {
-          errorCount += chunk.length;
-        }
-      }
-
-      return txt({ entities: entityCount, memories: memoryCount, errors: errorCount });
+  server.tool(
+    "namespace_stats",
+    "Get aggregate statistics for a namespace: entity/memory/relation counts, avg importance, archived count.",
+    {
+      namespace_id: z.string().uuid().describe("Namespace ID"),
+    },
+    {
+      title: "Namespace Stats",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    toolHandler(async ({ namespace_id }) => {
+      const db = session(env.DB, "first-unconstrained");
+      await assertNamespaceAccess(db, namespace_id, email);
+      track(agent, { namespace: namespace_id });
+      const stats = await getNamespaceStats(db, namespace_id);
+      return txt(stats);
     }),
   );
 
@@ -82,8 +156,11 @@ export function registerAdminTools(server: McpServer, env: Env, email: string) {
       openWorldHint: false,
     },
     toolHandler(async () => {
+      const db = session(env.DB, "first-primary");
       if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
-      const claimed = await claimUnownedNamespaces(env.DB, email);
+      if (!(await confirm(server, "Claim all unowned namespaces for your account?")))
+        return err("Cancelled");
+      const claimed = await claimUnownedNamespaces(db, email);
       if (claimed === 0) return ok("No unowned namespaces found.");
       return txt({ claimed, owner: email });
     }),

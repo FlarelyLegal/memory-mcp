@@ -7,6 +7,7 @@
  */
 
 import type { NamespaceRow } from "./types.js";
+import type { DbHandle } from "./db.js";
 
 const ADMIN_KEY = "admin:emails";
 
@@ -34,7 +35,7 @@ export class AccessDeniedError extends Error {
  * Unowned namespaces (owner IS NULL) are inaccessible — claim them first.
  */
 export async function assertNamespaceAccess(
-  db: D1Database,
+  db: DbHandle,
   namespaceId: string,
   email: string,
 ): Promise<NamespaceRow> {
@@ -59,7 +60,7 @@ export async function assertNamespaceAccess(
  * Returns the namespace_id on success.
  */
 async function assertResourceAccess(
-  db: D1Database,
+  db: DbHandle,
   table: string,
   resourceId: string,
   resourceLabel: string,
@@ -79,25 +80,21 @@ async function assertResourceAccess(
 }
 
 /** Look up which namespace an entity belongs to, then verify access. */
-export function assertEntityAccess(db: D1Database, id: string, email: string): Promise<string> {
+export function assertEntityAccess(db: DbHandle, id: string, email: string): Promise<string> {
   return assertResourceAccess(db, "entities", id, "Entity", email);
 }
 
 /** Look up which namespace a memory belongs to, then verify access. */
-export function assertMemoryAccess(db: D1Database, id: string, email: string): Promise<string> {
+export function assertMemoryAccess(db: DbHandle, id: string, email: string): Promise<string> {
   return assertResourceAccess(db, "memories", id, "Memory", email);
 }
 
 /** Look up which namespace a conversation belongs to, then verify access. */
-export function assertConversationAccess(
-  db: D1Database,
-  id: string,
-  email: string,
-): Promise<string> {
+export function assertConversationAccess(db: DbHandle, id: string, email: string): Promise<string> {
   return assertResourceAccess(db, "conversations", id, "Conversation", email);
 }
 
 /** Look up which namespace a relation belongs to, then verify access. */
-export function assertRelationAccess(db: D1Database, id: string, email: string): Promise<string> {
+export function assertRelationAccess(db: DbHandle, id: string, email: string): Promise<string> {
   return assertResourceAccess(db, "relations", id, "Relation", email);
 }

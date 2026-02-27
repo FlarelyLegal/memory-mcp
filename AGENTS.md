@@ -6,7 +6,7 @@
 
 Memory Graph MCP — a remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory (knowledge graphs, semantic search, conversation history, temporal decay). Single-package TypeScript project using npm.
 
-Built on: **D1** (graph + memories), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-large-en-v1.5`), **KV** (caching + OAuth state), **R2** (blob storage), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
+Built on: **D1** (graph + memories), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-m3`), **KV** (caching + OAuth state), **R2** (blob storage), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
 
 ### Key commands
 
@@ -51,14 +51,18 @@ See `package.json` scripts. Summary:
 - **`ACCESS_AUD_TAG` must match an Access application:** This secret must be the audience tag from the Cloudflare Access application protecting your Worker's domain. Mismatched audience tags cause `Invalid or expired token` errors on otherwise valid JWTs.
 - **OpenAPI spec is auto-generated:** Each route file registers both its handler and its OpenAPI `PathOperation`. The spec at `/api/openapi.json` is assembled dynamically — no separate spec file to maintain.
 - **CORS:** All `/api/*` responses include permissive CORS headers (`Access-Control-Allow-Origin: *`).
+- **D1 read replication:** All D1 queries go through `D1DatabaseSession` (via `src/db.ts`). Read-only operations use `"first-unconstrained"` (any replica), write operations use `"first-primary"` (primary first). API routes accept/return `X-D1-Bookmark` header for cross-request consistency. All data-layer functions accept `DbHandle` (union of `D1Database` and `D1DatabaseSession`) — never raw `D1Database`.
+- **D1 write retry:** All data-layer write operations are wrapped with `withRetry()` from `src/db.ts`. Retries up to 3 times with jitter backoff on transient D1 errors (`"Network connection lost"`, `"storage caused object to be reset"`, etc.). Workflow steps have their own retry mechanism and don't need `withRetry`.
+- **Elicitation (human-in-the-loop):** Destructive MCP tool operations (entity/relation/memory delete, consolidate, reindex-all, claim namespaces) prompt the user for confirmation via `server.server.elicitInput()`. The `confirm()` helper in `response-helpers.ts` checks `getClientCapabilities().elicitation.form` first ��� if the client doesn't support elicitation, operations proceed without confirmation (graceful degradation).
 
 ### File structure
 
 Code is organized into focused modules with a 250-line cap per file:
 
-- `src/index.ts` — MCP server entry point (McpAgent class + OAuthProvider export)
+- `src/index.ts` — MCP server entry point (McpAgent class + OAuthProvider export + Workflow class re-exports)
 - `src/version.ts` — Single source of truth for version, name, description, repo URL
-- `src/types.ts` — `Env` interface (all bindings), `AuthProps`, domain types + DB row types
+- `src/types.ts` — `Env` interface (all bindings), `AuthProps`, `SessionState`, `StateHandle`, domain types + DB row types
+- `src/db.ts` — D1 Sessions API helpers: `DbHandle` type, `session()`, `getBookmark()`, `withRetry()` (jitter backoff for transient D1 write errors)
 - `src/access-handler.ts` — OAuth route handler (`/authorize`, `/callback`, `/health`, `/`, `/api/*`)
 - `src/auth.ts` — Per-user authorization: `assertNamespaceAccess`, `assertEntityAccess`, `assertMemoryAccess`, `assertConversationAccess`, `assertRelationAccess`
 - `src/jwt.ts` — JWT verification (RSA signature + expiry + audience validation)
@@ -66,8 +70,12 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/memories.ts` — Memory CRUD + temporal-decay recall ranking
 - `src/conversations.ts` — Conversation and message history
 - `src/utils.ts` — `generateId`, `decayScore`, JSON helpers
-- `src/response-helpers.ts` — Shared MCP response helpers (`txt`, `ok`, `err`, `safeMeta`, `toolHandler`, `cap`, `trunc`)
-- `src/reindex.ts` — Shared batch-reindex logic (entity/memory chunk embedding + Vectorize upsert) used by both MCP tools and REST API
+- `src/response-helpers.ts` — Shared MCP response helpers (`txt`, `ok`, `err`, `safeMeta`, `toolHandler`, `cap`, `trunc`, `confirm`)
+- `src/state.ts` — Session state helpers: `track`, `untrack`, `resolveNamespace`, `resolveConversation`
+- `src/reindex.ts` — Shared batch-reindex logic (entity/memory chunk embedding + Vectorize upsert) used by workflows and REST API
+- `src/consolidation.ts` — Data-layer for consolidation: decay sweep, duplicate detection, archive purge, entity summary helpers, namespace stats
+- `src/workflows/reindex.ts` — `ReindexWorkflow` WorkflowEntrypoint: durable batch re-embedding with chunked steps and retries
+- `src/workflows/consolidation.ts` — `ConsolidationWorkflow` WorkflowEntrypoint: 4-step pipeline (decay sweep, dedup, entity summary refresh via Workers AI, archive purge)
 - `src/tools/` — One file per tool domain (namespace, entity, relation, traversal, memory, conversation, search, admin). Each exports a `register*Tools(server, env, email)` function.
 - `src/graph/` — D1 operations split by domain (namespaces, entities, relations, traversal) with barrel re-export via `index.ts`.
 - `src/api/` — REST API layer (OpenAPI 3.1 + Scalar docs):
@@ -80,11 +88,11 @@ Code is organized into focused modules with a 250-line cap per file:
   - `openapi.ts` — Assembles OpenAPI 3.1 spec dynamically from registered routes
   - `schemas.ts` — Shared OpenAPI schema fragments, parameter helpers, `queryLimit()`, enum helpers (`memoryTypeEnum`, `roleEnum`, `metadataSchema`)
   - `docs.ts` — Scalar API reference UI
-  - `routes/` — One file per domain (namespaces, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, tokens, token-crud, demo). Each registers routes + their OpenAPI path definitions.
+  - `routes/` — One file per domain (namespaces, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, workflows, tokens, token-crud, demo). Each registers routes + their OpenAPI path definitions.
 - `src/oauth/` — OAuth utilities split by concern (error, sanitize, csrf, state, approval) with barrel re-export via `index.ts`.
 - `schemas/schema.sql` — D1 schema (7 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links).
 
-### MCP tools (14 total)
+### MCP tools (17 total)
 
 | Tool                  | Domain       | Description                                                |
 | --------------------- | ------------ | ---------------------------------------------------------- |
@@ -100,5 +108,8 @@ Code is organized into focused modules with a 250-line cap per file:
 | `add_message`         | conversation | Add a message and embed for search                         |
 | `get_messages`        | conversation | Get or search messages                                     |
 | `search`              | search       | Semantic vector search; context mode enriches with graph   |
-| `reindex_vectors`     | admin        | Batch re-embed entities/memories (25 per batch)            |
+| `reindex_vectors`     | admin        | Trigger durable reindex workflow (returns instance ID)     |
+| `consolidate_memory`  | admin        | Trigger consolidation workflow (decay, dedup, summarize)   |
+| `get_workflow_status` | admin        | Check status of a running workflow instance                |
+| `namespace_stats`     | admin        | Entity/memory/relation/conversation counts for a namespace |
 | `claim_namespaces`    | admin        | Claim all unowned namespaces for current user              |
