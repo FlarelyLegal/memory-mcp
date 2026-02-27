@@ -2,7 +2,7 @@
  * Memory operations: standalone knowledge fragments with temporal decay.
  */
 import type { MemoryRow } from "./types.js";
-import { type DbHandle, withRetry } from "./db.js";
+import { type DbHandle, withRetry, isReplayInsertConflict } from "./db.js";
 import { generateId, now, toJson, decayScore, ftsEscape } from "./utils.js";
 
 export async function createMemory(
@@ -18,23 +18,27 @@ export async function createMemory(
   },
 ): Promise<string> {
   const id = generateId();
-  await withRetry(() =>
-    db
-      .prepare(
-        `INSERT INTO memories (id, namespace_id, content, type, source, importance, metadata)
+  try {
+    await withRetry(() =>
+      db
+        .prepare(
+          `INSERT INTO memories (id, namespace_id, content, type, source, importance, metadata)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        opts.namespace_id,
-        opts.content,
-        opts.type ?? "fact",
-        opts.source ?? null,
-        opts.importance ?? 0.5,
-        toJson(opts.metadata ?? null),
-      )
-      .run(),
-  );
+        )
+        .bind(
+          id,
+          opts.namespace_id,
+          opts.content,
+          opts.type ?? "fact",
+          opts.source ?? null,
+          opts.importance ?? 0.5,
+          toJson(opts.metadata ?? null),
+        )
+        .run(),
+    );
+  } catch (err) {
+    if (!(await isReplayInsertConflict(db, "memories", id, err))) throw err;
+  }
 
   // Link to entities if specified
   if (opts.entity_ids?.length) {

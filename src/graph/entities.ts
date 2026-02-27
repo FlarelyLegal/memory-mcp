@@ -1,6 +1,6 @@
 /** Entity CRUD operations against D1. */
 import type { EntityRow } from "../types.js";
-import { type DbHandle, withRetry } from "../db.js";
+import { type DbHandle, withRetry, isReplayInsertConflict } from "../db.js";
 import { generateId, now, toJson, ftsEscape } from "../utils.js";
 
 export async function createEntity(
@@ -14,22 +14,26 @@ export async function createEntity(
   },
 ): Promise<string> {
   const id = generateId();
-  await withRetry(() =>
-    db
-      .prepare(
-        `INSERT INTO entities (id, namespace_id, name, type, summary, metadata)
+  try {
+    await withRetry(() =>
+      db
+        .prepare(
+          `INSERT INTO entities (id, namespace_id, name, type, summary, metadata)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        opts.namespace_id,
-        opts.name,
-        opts.type,
-        opts.summary ?? null,
-        toJson(opts.metadata ?? null),
-      )
-      .run(),
-  );
+        )
+        .bind(
+          id,
+          opts.namespace_id,
+          opts.name,
+          opts.type,
+          opts.summary ?? null,
+          toJson(opts.metadata ?? null),
+        )
+        .run(),
+    );
+  } catch (err) {
+    if (!(await isReplayInsertConflict(db, "entities", id, err))) throw err;
+  }
   return id;
 }
 

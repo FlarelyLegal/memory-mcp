@@ -1,6 +1,6 @@
 /** Relation CRUD operations against D1. */
 import type { RelationRow } from "../types.js";
-import { type DbHandle, withRetry } from "../db.js";
+import { type DbHandle, withRetry, isReplayInsertConflict } from "../db.js";
 import { generateId, now, toJson } from "../utils.js";
 
 export async function createRelation(
@@ -15,26 +15,30 @@ export async function createRelation(
   },
 ): Promise<string> {
   const id = generateId();
-  await withRetry(() =>
-    db
-      .prepare(
-        `INSERT INTO relations (id, namespace_id, source_id, target_id, relation_type, weight, metadata)
+  try {
+    await withRetry(() =>
+      db
+        .prepare(
+          `INSERT INTO relations (id, namespace_id, source_id, target_id, relation_type, weight, metadata)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(namespace_id, source_id, target_id, relation_type) DO UPDATE SET
          weight = excluded.weight, metadata = excluded.metadata, updated_at = ?`,
-      )
-      .bind(
-        id,
-        opts.namespace_id,
-        opts.source_id,
-        opts.target_id,
-        opts.relation_type,
-        opts.weight ?? 1.0,
-        toJson(opts.metadata ?? null),
-        now(),
-      )
-      .run(),
-  );
+        )
+        .bind(
+          id,
+          opts.namespace_id,
+          opts.source_id,
+          opts.target_id,
+          opts.relation_type,
+          opts.weight ?? 1.0,
+          toJson(opts.metadata ?? null),
+          now(),
+        )
+        .run(),
+    );
+  } catch (err) {
+    if (!(await isReplayInsertConflict(db, "relations", id, err))) throw err;
+  }
   return id;
 }
 

@@ -1,6 +1,6 @@
 /** Namespace CRUD operations against D1. */
 import type { NamespaceRow } from "../types.js";
-import { type DbHandle, withRetry } from "../db.js";
+import { type DbHandle, withRetry, isReplayInsertConflict } from "../db.js";
 import { generateId, toJson } from "../utils.js";
 
 export async function createNamespace(
@@ -8,20 +8,24 @@ export async function createNamespace(
   opts: { name: string; description?: string; owner?: string; metadata?: Record<string, unknown> },
 ): Promise<string> {
   const id = generateId();
-  await withRetry(() =>
-    db
-      .prepare(
-        `INSERT INTO namespaces (id, name, description, owner, metadata) VALUES (?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        opts.name,
-        opts.description ?? null,
-        opts.owner ?? null,
-        toJson(opts.metadata ?? null),
-      )
-      .run(),
-  );
+  try {
+    await withRetry(() =>
+      db
+        .prepare(
+          `INSERT INTO namespaces (id, name, description, owner, metadata) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          id,
+          opts.name,
+          opts.description ?? null,
+          opts.owner ?? null,
+          toJson(opts.metadata ?? null),
+        )
+        .run(),
+    );
+  } catch (err) {
+    if (!(await isReplayInsertConflict(db, "namespaces", id, err))) throw err;
+  }
   return id;
 }
 

@@ -72,6 +72,16 @@ function jitterBackoff(attempt: number): number {
   return Math.floor(Math.random() * upper);
 }
 
+/** Detects duplicate-key style errors emitted by SQLite/D1 writes. */
+function isDuplicateKeyError(err: unknown): boolean {
+  const msg = String(err).toLowerCase();
+  return (
+    msg.includes("unique constraint failed") ||
+    msg.includes("primary key") ||
+    msg.includes("constraint failed")
+  );
+}
+
 /**
  * Retry a D1 write operation on transient errors.
  * Wraps a single `.run()` or `.batch()` call with exponential jitter backoff.
@@ -90,4 +100,25 @@ export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
       await new Promise((resolve) => setTimeout(resolve, jitterBackoff(attempt)));
     }
   }
+}
+
+/**
+ * Detect likely "write succeeded but retry replayed" conflicts.
+ *
+ * If a write operation throws a duplicate-key error after retries, we verify whether
+ * the row with the intended ID already exists. When it does, treat it as a replayed
+ * success instead of surfacing a false failure to callers.
+ */
+export async function isReplayInsertConflict(
+  db: DbHandle,
+  table: string,
+  id: string,
+  err: unknown,
+): Promise<boolean> {
+  if (!isDuplicateKeyError(err)) return false;
+  const row = await db
+    .prepare(`SELECT id FROM ${table} WHERE id = ? LIMIT 1`)
+    .bind(id)
+    .first<{ id: string }>();
+  return Boolean(row);
 }
