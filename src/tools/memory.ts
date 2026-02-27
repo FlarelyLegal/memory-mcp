@@ -18,8 +18,12 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
       content: z.string().max(10000).optional().describe("Required for create"),
       type: z.enum(["fact", "observation", "preference", "instruction"]).optional(),
       importance: z.number().optional().describe("0.0-1.0, higher decays slower"),
-      source: z.string().max(500).optional(),
-      entity_ids: z.array(z.string().max(100)).max(100).optional().describe("Link to entities"),
+      source: z.string().max(500).optional().describe("Create only: where this came from"),
+      entity_ids: z
+        .array(z.string().max(100))
+        .max(100)
+        .optional()
+        .describe("Create only: link to entities"),
       metadata: z.string().max(5000).optional(),
     },
     {
@@ -64,6 +68,8 @@ export function registerMemoryTools(server: McpServer, env: Env, email: string) 
         }
         case "update": {
           if (!id) return ok("Error: id required");
+          if (!content && !type && importance === undefined && !metadata)
+            return ok("Error: at least one field (content, type, importance, metadata) required");
           await assertMemoryAccess(env.DB, id, email);
           await memories.updateMemory(env.DB, id, { content, type, importance, metadata: meta });
           if (content) {

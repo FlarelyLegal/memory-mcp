@@ -66,6 +66,8 @@ export function registerEntityTools(server: McpServer, env: Env, email: string) 
         }
         case "update": {
           if (!id) return ok("Error: id required");
+          if (!name && !type && !summary && !metadata)
+            return ok("Error: at least one field (name, type, summary, metadata) required");
           await assertEntityAccess(env.DB, id, email);
           await graph.updateEntity(env.DB, id, { name, type, summary, metadata: meta });
           if (name || type || summary) {
