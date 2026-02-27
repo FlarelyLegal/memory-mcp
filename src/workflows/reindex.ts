@@ -1,5 +1,5 @@
 /**
- * Reindex Workflow — durable batch re-embedding of entities and memories.
+ * Reindex Workflow — durable batch re-embedding of entities, memories, and messages.
  *
  * Replaces the inline reindex logic that runs inside a single Worker request
  * (and risks CPU/duration limits). Each chunk is a separate durable step with
@@ -10,8 +10,14 @@
 import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 import type { Env } from "../types.js";
-import { REINDEX_BATCH_SIZE, chunks, reindexEntityChunk, reindexMemoryChunk } from "../reindex.js";
-import type { ReindexEntityItem, ReindexMemoryItem } from "../reindex.js";
+import {
+  REINDEX_BATCH_SIZE,
+  chunks,
+  reindexEntityChunk,
+  reindexMemoryChunk,
+  reindexMessageChunk,
+} from "../reindex.js";
+import type { ReindexEntityItem, ReindexMemoryItem, ReindexMessageItem } from "../reindex.js";
 
 export interface ReindexParams {
   /** Namespace ID, or "all" to reindex all namespaces owned by the email. */
@@ -23,6 +29,7 @@ export interface ReindexParams {
 export interface ReindexResult {
   entities: number;
   memories: number;
+  messages: number;
   errors: number;
 }
 
@@ -35,76 +42,71 @@ const STEP_RETRY = {
 export class ReindexWorkflow extends WorkflowEntrypoint<Env, ReindexParams> {
   async run(event: WorkflowEvent<ReindexParams>, step: WorkflowStep): Promise<ReindexResult> {
     const { namespace_id, email } = event.payload;
+    const bind = namespace_id === "all" ? email : namespace_id;
+    let errorCount = 0;
 
-    // Step 1: Fetch all entities to reindex
+    /** Embed + upsert items in chunked workflow steps. */
+    const embedChunks = async <T>(
+      label: string,
+      items: T[],
+      fn: (env: Env, chunk: T[]) => Promise<number>,
+    ): Promise<number> => {
+      let count = 0;
+      for (const [i, chunk] of chunks(items, REINDEX_BATCH_SIZE).entries()) {
+        const result = await step.do(`embed-${label}-${i}`, STEP_RETRY, async () => {
+          try {
+            return { count: await fn(this.env, chunk), errors: 0 };
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg.includes("model not found")) throw new NonRetryableError(msg);
+            throw e;
+          }
+        });
+        count += result.count;
+        errorCount += result.errors;
+      }
+      return count;
+    };
+
+    // Step 1: Fetch + embed entities
     const entityItems = await step.do("fetch-entities", STEP_RETRY, async () => {
-      const db = this.env.DB;
-      const query =
+      const q =
         namespace_id === "all"
           ? "SELECT e.id, e.namespace_id, e.name, e.type, e.summary, e.created_at FROM entities e JOIN namespaces n ON n.id = e.namespace_id WHERE n.owner = ?"
           : "SELECT id, namespace_id, name, type, summary, created_at FROM entities WHERE namespace_id = ?";
-      const result = await db
-        .prepare(query)
-        .bind(namespace_id === "all" ? email : namespace_id)
-        .all<ReindexEntityItem>();
-      return result.results;
+      return (await this.env.DB.prepare(q).bind(bind).all<ReindexEntityItem>()).results;
     });
+    const entityCount = await embedChunks("entities", entityItems, reindexEntityChunk);
 
-    // Step 2: Embed + upsert entity chunks
-    const entityChunks = chunks(entityItems, REINDEX_BATCH_SIZE);
-    let entityCount = 0;
-    let errorCount = 0;
-
-    for (let i = 0; i < entityChunks.length; i++) {
-      const chunk = entityChunks[i];
-      const result = await step.do(`embed-entities-${i}`, STEP_RETRY, async () => {
-        try {
-          const n = await reindexEntityChunk(this.env, chunk);
-          return { count: n, errors: 0 };
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          if (msg.includes("model not found")) throw new NonRetryableError(msg);
-          throw e;
-        }
-      });
-      entityCount += result.count;
-      errorCount += result.errors;
-    }
-
-    // Step 3: Fetch all memories to reindex
+    // Step 2: Fetch + embed memories
     const memoryItems = await step.do("fetch-memories", STEP_RETRY, async () => {
-      const db = this.env.DB;
-      const query =
+      const q =
         namespace_id === "all"
           ? "SELECT m.id, m.namespace_id, m.content, m.type, m.created_at FROM memories m JOIN namespaces n ON n.id = m.namespace_id WHERE n.owner = ?"
           : "SELECT id, namespace_id, content, type, created_at FROM memories WHERE namespace_id = ?";
-      const result = await db
-        .prepare(query)
-        .bind(namespace_id === "all" ? email : namespace_id)
-        .all<ReindexMemoryItem>();
-      return result.results;
+      return (await this.env.DB.prepare(q).bind(bind).all<ReindexMemoryItem>()).results;
     });
+    const memoryCount = await embedChunks("memories", memoryItems, reindexMemoryChunk);
 
-    // Step 4: Embed + upsert memory chunks
-    const memoryChunks = chunks(memoryItems, REINDEX_BATCH_SIZE);
-    let memoryCount = 0;
+    // Step 3: Fetch + embed messages (join through conversations for namespace)
+    const messageItems = await step.do("fetch-messages", STEP_RETRY, async () => {
+      const q =
+        namespace_id === "all"
+          ? `SELECT m.id, m.conversation_id, c.namespace_id, m.content, m.role, m.created_at
+             FROM messages m JOIN conversations c ON c.id = m.conversation_id
+             JOIN namespaces n ON n.id = c.namespace_id WHERE n.owner = ?`
+          : `SELECT m.id, m.conversation_id, c.namespace_id, m.content, m.role, m.created_at
+             FROM messages m JOIN conversations c ON c.id = m.conversation_id
+             WHERE c.namespace_id = ?`;
+      return (await this.env.DB.prepare(q).bind(bind).all<ReindexMessageItem>()).results;
+    });
+    const messageCount = await embedChunks("messages", messageItems, reindexMessageChunk);
 
-    for (let i = 0; i < memoryChunks.length; i++) {
-      const chunk = memoryChunks[i];
-      const result = await step.do(`embed-memories-${i}`, STEP_RETRY, async () => {
-        try {
-          const n = await reindexMemoryChunk(this.env, chunk);
-          return { count: n, errors: 0 };
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          if (msg.includes("model not found")) throw new NonRetryableError(msg);
-          throw e;
-        }
-      });
-      memoryCount += result.count;
-      errorCount += result.errors;
-    }
-
-    return { entities: entityCount, memories: memoryCount, errors: errorCount };
+    return {
+      entities: entityCount,
+      memories: memoryCount,
+      messages: messageCount,
+      errors: errorCount,
+    };
   }
 }

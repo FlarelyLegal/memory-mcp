@@ -10,6 +10,7 @@ import type { DbHandle } from "./db.js";
 import { withRetry } from "./db.js";
 import { embedBatch } from "./embeddings.js";
 import { generateId, now, toJson } from "./utils.js";
+import { aiRun } from "./ai.js";
 
 /** Minimum similarity (0–1) for two memories to be considered mergeable. */
 export const DEFAULT_SIMILARITY_THRESHOLD = 0.85;
@@ -141,7 +142,7 @@ ${memoryText}
 
 Merged memory:`;
 
-  const result = (await ai.run(MERGE_MODEL, {
+  const result = (await aiRun(ai, MERGE_MODEL, {
     messages: [{ role: "user", content: prompt }],
     max_tokens: 300,
   })) as { response?: string };

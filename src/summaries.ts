@@ -8,6 +8,7 @@ import type { MemoryRow, EntityRow } from "./types.js";
 import type { DbHandle } from "./db.js";
 import { withRetry } from "./db.js";
 import { now } from "./utils.js";
+import { aiRun } from "./ai.js";
 
 /** LLM model for entity summary generation (free tier, 128K context). */
 const SUMMARY_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8" as const;
@@ -76,7 +77,7 @@ ${memoryText}
 
 Write a concise, factual summary:`;
 
-  const result = (await ai.run(SUMMARY_MODEL, {
+  const result = (await aiRun(ai, SUMMARY_MODEL, {
     messages: [{ role: "user", content: prompt }],
     max_tokens: 150,
   })) as { response?: string };

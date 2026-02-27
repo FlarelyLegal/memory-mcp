@@ -23,9 +23,19 @@ export interface ReindexMemoryItem {
   created_at: number;
 }
 
+export interface ReindexMessageItem {
+  id: string;
+  conversation_id: string;
+  namespace_id: string;
+  content: string;
+  role: string;
+  created_at: number;
+}
+
 export interface ReindexResult {
   entities: number;
   memories: number;
+  messages: number;
   errors: number;
 }
 
@@ -68,6 +78,29 @@ export async function reindexMemoryChunk(env: Env, chunk: ReindexMemoryItem[]): 
       memory_id: m.id,
       namespace_id: m.namespace_id,
       type: m.type,
+      created_at: m.created_at ?? ts,
+    },
+  }));
+
+  await env.VECTORIZE.upsert(entries);
+  return chunk.length;
+}
+
+/** Batch-embed and upsert a chunk of messages into Vectorize. Returns count embedded. */
+export async function reindexMessageChunk(env: Env, chunk: ReindexMessageItem[]): Promise<number> {
+  const texts = chunk.map((m) => m.content);
+  const vectors = await embedBatch(env.AI, texts);
+
+  const ts = now();
+  const entries: VectorizeVector[] = chunk.map((m, i) => ({
+    id: `message:${m.id}`,
+    values: vectors[i],
+    metadata: {
+      kind: "message",
+      message_id: m.id,
+      conversation_id: m.conversation_id,
+      namespace_id: m.namespace_id,
+      role: m.role,
       created_at: m.created_at ?? ts,
     },
   }));

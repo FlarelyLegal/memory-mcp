@@ -8,6 +8,7 @@
  */
 
 import type { DbHandle } from "./db.js";
+import { aiRun } from "./ai.js";
 
 const RERANKER_MODEL = "@cf/baai/bge-reranker-base";
 
@@ -36,7 +37,7 @@ export async function rerank(
       query,
       contexts: texts.map((text) => ({ text })),
     };
-    const result = (await ai.run(RERANKER_MODEL, input)) as RerankerOutput;
+    const result = (await aiRun(ai, RERANKER_MODEL, input)) as RerankerOutput;
     return result.response;
   } catch {
     // AI binding unavailable (local dev) — skip reranking

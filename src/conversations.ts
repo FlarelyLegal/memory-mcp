@@ -3,7 +3,7 @@
  */
 import type { ConversationRow, MessageRow } from "./types.js";
 import { type DbHandle, withRetry, isReplayInsertConflict } from "./db.js";
-import { generateId, now, toJson, ftsEscape } from "./utils.js";
+import { generateId, now, toJson, ftsEscape, handleFtsError } from "./utils.js";
 
 export async function createConversation(
   db: DbHandle,
@@ -135,8 +135,8 @@ export async function searchMessages(
       .bind(namespace_id, ftsQuery, limit, offset)
       .all<MessageRow & { conversation_title: string | null }>();
     if (result.results.length > 0 || result.success) return result.results;
-  } catch {
-    // FTS table doesn't exist yet — fall through to LIKE
+  } catch (err) {
+    handleFtsError(err);
   }
 
   // Fallback: LIKE-based search

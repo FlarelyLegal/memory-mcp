@@ -39,7 +39,15 @@ export async function createRelation(
   } catch (err) {
     if (!(await isReplayInsertConflict(db, "relations", id, err))) throw err;
   }
-  return id;
+  // On upsert conflict, D1 keeps the original row's ID — query for the actual ID.
+  const row = await db
+    .prepare(
+      `SELECT id FROM relations
+       WHERE namespace_id = ? AND source_id = ? AND target_id = ? AND relation_type = ?`,
+    )
+    .bind(opts.namespace_id, opts.source_id, opts.target_id, opts.relation_type)
+    .first<{ id: string }>();
+  return row?.id ?? id;
 }
 
 export async function getRelationsFrom(
