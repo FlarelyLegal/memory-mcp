@@ -17,6 +17,7 @@ import { trackEvent } from "../analytics.js";
 
 // Import route modules — side effect: registers routes in the registry.
 import { registerNamespaceRoutes } from "./routes/namespaces.js";
+import { registerNamespaceCrudRoutes } from "./routes/namespace-crud.js";
 import { registerEntityRoutes } from "./routes/entities.js";
 import { registerEntityCrudRoutes } from "./routes/entity-crud.js";
 import { registerRelationRoutes } from "./routes/relations.js";
@@ -38,6 +39,7 @@ function ensureRegistered(): void {
   if (registered) return;
   registered = true;
   registerNamespaceRoutes();
+  registerNamespaceCrudRoutes();
   registerEntityRoutes();
   registerEntityCrudRoutes();
   registerRelationRoutes();
