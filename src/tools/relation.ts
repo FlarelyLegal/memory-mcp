@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   relationType,
   relationWeight,
-  metadataJsonStr,
+  metadataObject,
   RELATION_DIRECTIONS,
 } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
@@ -20,16 +20,7 @@ import {
 import { parseJson } from "../utils.js";
 import { track, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
-import {
-  txt,
-  err,
-  ok,
-  cap,
-  safeMeta,
-  isMetaError,
-  trackTools,
-  confirm,
-} from "../response-helpers.js";
+import { txt, err, ok, cap, trackTools, confirm } from "../response-helpers.js";
 
 export function registerRelationTools(
   server: McpServer,
@@ -53,7 +44,7 @@ export function registerRelationTools(
       target_id: z.string().uuid().optional().describe("To entity"),
       relation_type: relationType.optional().describe("knows, uses, depends_on, part_of, etc."),
       weight: relationWeight.optional(),
-      metadata: metadataJsonStr.optional(),
+      metadata: metadataObject.optional(),
     },
     {
       title: "Manage Relation",
@@ -85,15 +76,13 @@ export function registerRelationTools(
           const tgtNs = await assertEntityAccess(db, target_id, email, admin);
           if (srcNs !== namespace_id || tgtNs !== namespace_id)
             return err("source and target entities must belong to the specified namespace");
-          const meta = safeMeta(metadata);
-          if (isMetaError(meta)) return meta;
           const rid = await graph.createRelation(db, {
             namespace_id,
             source_id,
             target_id,
             relation_type,
             weight,
-            metadata: meta,
+            metadata,
           });
           track(agent, { namespace: namespace_id, entity: [source_id, target_id] });
           await audit(db, env.STORAGE, {

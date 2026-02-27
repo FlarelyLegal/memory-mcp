@@ -7,7 +7,7 @@ import {
   importance,
   sourceField,
   entityIds,
-  metadataJsonStr,
+  metadataObject,
 } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
@@ -21,16 +21,7 @@ import {
 } from "../auth.js";
 import { track, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
-import {
-  txt,
-  err,
-  ok,
-  trunc,
-  safeMeta,
-  isMetaError,
-  trackTools,
-  confirm,
-} from "../response-helpers.js";
+import { txt, err, ok, trunc, trackTools, confirm } from "../response-helpers.js";
 
 export function registerMemoryTools(
   server: McpServer,
@@ -55,7 +46,7 @@ export function registerMemoryTools(
       importance: importance.optional().describe("0.0-1.0, higher decays slower"),
       source: sourceField.optional().describe("Create only: where this came from"),
       entity_ids: entityIds.optional().describe("Create only: link to entities"),
-      metadata: metadataJsonStr.optional(),
+      metadata: metadataObject.optional(),
     },
     {
       title: "Manage Memory",
@@ -78,8 +69,6 @@ export function registerMemoryTools(
         metadata,
       }) => {
         const db = session(env.DB, "first-primary");
-        const meta = safeMeta(metadata);
-        if (isMetaError(meta)) return meta;
         const admin = await isAdmin(env.CACHE, email);
         switch (action) {
           case "get": {
@@ -100,7 +89,7 @@ export function registerMemoryTools(
               importance,
               source,
               entity_ids,
-              metadata: meta,
+              metadata,
             });
             await vectorize.upsertMemoryVector(env, {
               memory_id: mid,
@@ -124,7 +113,7 @@ export function registerMemoryTools(
             if (!content && !type && importance === undefined && !metadata)
               return err("at least one field (content, type, importance, metadata) required");
             await assertMemoryAccess(db, id, email, admin);
-            await memories.updateMemory(db, id, { content, type, importance, metadata: meta });
+            await memories.updateMemory(db, id, { content, type, importance, metadata });
             if (content) {
               const m = await memories.getMemory(db, id);
               if (m)

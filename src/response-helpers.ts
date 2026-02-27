@@ -26,21 +26,6 @@ export function err(msg: string): ToolResult {
   return { content: [{ type: "text" as const, text: msg }], isError: true };
 }
 
-/** Safely parse a JSON metadata string. Returns err() result on bad input. */
-export function safeMeta(raw: string | undefined): Record<string, unknown> | ToolResult {
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return err("Invalid JSON in metadata field");
-  }
-}
-
-/** Check if safeMeta returned an error. */
-export function isMetaError(v: Record<string, unknown> | ToolResult): v is ToolResult {
-  return "isError" in v && v.isError === true;
-}
-
 /** Analytics context for MCP tool tracking. */
 export interface ToolAnalytics {
   env: Env;

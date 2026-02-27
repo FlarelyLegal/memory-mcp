@@ -33,7 +33,6 @@ export const typeField = z.string().min(1).max(200);
 export const typeFilter = z.string().max(200);
 export const summaryField = z.string().max(10_000);
 export const descriptionField = z.string().max(2000);
-export const metadataJsonStr = z.string().max(5000);
 export const metadataObject = z.record(z.string(), z.unknown());
 export const memoryContent = z.string().min(1).max(10_000);
 export const messageContent = z.string().min(1).max(50_000);

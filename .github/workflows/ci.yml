@@ -29,6 +29,7 @@ jobs:
               - 'tsconfig.json'
               - 'wrangler*.jsonc'
               - 'playwright.config.ts'
+              - 'vitest.config.ts'
 
   lint:
     name: Lint
@@ -37,6 +38,11 @@ jobs:
   typecheck:
     name: TypeCheck
     uses: ./.github/workflows/typecheck.yml
+
+  unit-test:
+    name: Unit Tests
+    needs: [lint, typecheck]
+    uses: ./.github/workflows/unit-test.yml
 
   build:
     name: Build

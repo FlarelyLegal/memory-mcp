@@ -1,7 +1,7 @@
 /** Tool registration: manage_conversation */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { titleField, metadataJsonStr } from "../tool-schemas.js";
+import { titleField, metadataObject } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as conversations from "../conversations.js";
@@ -15,16 +15,7 @@ import {
 import { toISO } from "../utils.js";
 import { track, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
-import {
-  txt,
-  err,
-  ok,
-  cap,
-  confirm,
-  safeMeta,
-  isMetaError,
-  trackTools,
-} from "../response-helpers.js";
+import { txt, err, ok, cap, confirm, trackTools } from "../response-helpers.js";
 
 export function registerConversationTools(
   server: McpServer,
@@ -41,7 +32,7 @@ export function registerConversationTools(
       namespace_id: z.string().uuid().optional().describe("Defaults to last-used namespace"),
       id: z.string().uuid().optional().describe("Required for delete"),
       title: titleField.optional(),
-      metadata: metadataJsonStr.optional(),
+      metadata: metadataObject.optional(),
       limit: z.number().optional(),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
     },
@@ -83,12 +74,10 @@ export function registerConversationTools(
           const admin = await isAdmin(env.CACHE, email);
           await assertNamespaceWriteAccess(db, namespace_id, email, admin);
           track(agent, { namespace: namespace_id });
-          const meta = safeMeta(metadata);
-          if (isMetaError(meta)) return meta;
           const cid = await conversations.createConversation(db, {
             namespace_id,
             title,
-            metadata: meta,
+            metadata,
           });
           track(agent, { conversation: cid });
           await audit(db, env.STORAGE, {
