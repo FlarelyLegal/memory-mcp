@@ -11,6 +11,7 @@ import {
   metadataSchema,
 } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
+import { parseConversationRow } from "../row-parsers.js";
 
 export function registerConversationRoutes(): void {
   defineRoute(
@@ -38,7 +39,7 @@ export function registerConversationRoutes(): void {
           offset,
         });
         const hasMore = rows.length > limit;
-        const data = projectRows(rows.slice(0, limit), fields);
+        const data = projectRows(rows.slice(0, limit).map(parseConversationRow), fields);
         const response = json(data);
         const cursor = nextCursor(offset, limit, hasMore);
         if (cursor) response.headers.set("X-Next-Cursor", cursor);

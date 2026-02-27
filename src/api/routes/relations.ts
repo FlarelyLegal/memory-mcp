@@ -19,6 +19,7 @@ import {
   metadataSchema,
 } from "../schemas.js";
 import { relationCreateSchema } from "../validators.js";
+import { parseRelationRow } from "../row-parsers.js";
 
 export function registerRelationRoutes(): void {
   defineRoute(
@@ -140,7 +141,7 @@ export function registerRelationRoutes(): void {
         if (direction === "to" || direction === "both") {
           results.push(...(await getRelationsTo(ctx.env.DB, ctx.params.id, opts)));
         }
-        return json(results);
+        return json((results as import("../../types.js").RelationRow[]).map(parseRelationRow));
       } catch (e) {
         return handleError(e);
       }

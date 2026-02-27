@@ -1,6 +1,13 @@
 /** Shared row-parsing helpers for converting DB rows to API responses. */
 import { parseJson, toISO } from "../utils.js";
-import type { EntityRow, MemoryRow, RelationRow, ConversationRow, MessageRow } from "../types.js";
+import type {
+  EntityRow,
+  MemoryRow,
+  RelationRow,
+  ConversationRow,
+  MessageRow,
+  NamespaceRow,
+} from "../types.js";
 
 /** Parse an entity row: JSON metadata + ISO 8601 timestamps. */
 export function parseEntityRow(row: EntityRow) {
@@ -50,5 +57,15 @@ export function parseMessageRow(row: MessageRow) {
     ...row,
     metadata: row.metadata ? parseJson(row.metadata) : null,
     created_at: toISO(row.created_at),
+  };
+}
+
+/** Parse a namespace row: JSON metadata + ISO 8601 timestamps. */
+export function parseNamespaceRow(row: NamespaceRow) {
+  return {
+    ...row,
+    metadata: row.metadata ? parseJson(row.metadata) : null,
+    created_at: toISO(row.created_at),
+    updated_at: toISO(row.updated_at),
   };
 }

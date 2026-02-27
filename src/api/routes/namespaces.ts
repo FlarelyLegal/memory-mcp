@@ -4,6 +4,7 @@ import { json, jsonError, parseBody, handleError } from "../middleware.js";
 import { createNamespace, listNamespaces } from "../../graph/index.js";
 import { namespaceSchema } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
+import { parseNamespaceRow } from "../row-parsers.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
@@ -28,7 +29,7 @@ export function registerNamespaceRoutes(): void {
         const offset = parseCursor(ctx.query);
         const rows = await listNamespaces(ctx.env.DB, ctx.email, { limit: limit + 1, offset });
         const hasMore = rows.length > limit;
-        const data = projectRows(rows.slice(0, limit), fields);
+        const data = projectRows(rows.slice(0, limit).map(parseNamespaceRow), fields);
         const response = json(data);
         const cursor = nextCursor(offset, limit, hasMore);
         if (cursor) response.headers.set("X-Next-Cursor", cursor);
