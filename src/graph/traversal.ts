@@ -36,8 +36,9 @@ export async function traverse(
       const clauses = [`r.source_id IN (${ph})`];
       const params: unknown[] = [...chunk];
       if (opts?.relationTypes?.length) {
-        clauses.push("r.relation_type = ?");
-        params.push(opts.relationTypes[0]);
+        const rph = opts.relationTypes.map(() => "?").join(",");
+        clauses.push(`r.relation_type IN (${rph})`);
+        params.push(...opts.relationTypes);
       }
       const result = await db
         .prepare(
