@@ -6,9 +6,10 @@ import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import { deleteVectorBatch } from "../vectorize.js";
-import { assertNamespaceWriteAccess, isAdmin } from "../auth.js";
+import { assertNamespaceWriteAccess, assertNamespaceReadAccess, isAdmin } from "../auth.js";
 import { track } from "../state.js";
 import { audit } from "../audit.js";
+import { toISO } from "../utils.js";
 import { txt, err, ok, confirm, trackTools } from "../response-helpers.js";
 
 export function registerNamespaceTools(
@@ -20,11 +21,11 @@ export function registerNamespaceTools(
   const tracked = trackTools(env, email);
   server.tool(
     "manage_namespace",
-    "Create, list, delete, or set visibility on memory namespaces.",
+    "Create, list, get, update, delete, or set visibility on memory namespaces.",
     {
-      action: z.enum(["create", "list", "delete", "set_visibility"]),
-      id: z.string().uuid().optional().describe("Required for delete and set_visibility"),
-      name: nameField.optional().describe("Required for create"),
+      action: z.enum(["create", "list", "get", "update", "delete", "set_visibility"]),
+      id: z.string().uuid().optional().describe("Required for get, update, delete, set_visibility"),
+      name: nameField.optional().describe("Required for create; optional for update"),
       description: descriptionField.optional(),
       visibility: visibility.optional().describe("Required for set_visibility (admin only)"),
       compact: z.boolean().optional().describe("Default true: return minimal fields"),
@@ -37,14 +38,42 @@ export function registerNamespaceTools(
       openWorldHint: false,
     },
     tracked("manage_namespace", async ({ action, id, name, description, visibility, compact }) => {
+      if (action === "get") {
+        if (!id) return err("id required");
+        const db = session(env.DB, "first-unconstrained");
+        const ns = await assertNamespaceReadAccess(db, id, email);
+        track(agent, { namespace: id });
+        return txt({
+          id: ns.id,
+          name: ns.name,
+          description: ns.description,
+          owner: ns.owner,
+          visibility: ns.visibility,
+          created_at: toISO(ns.created_at),
+          updated_at: toISO(ns.updated_at),
+        });
+      }
+      if (action === "update") {
+        if (!id) return err("id required");
+        if (!name && description === undefined) return err("name or description required");
+        const db = session(env.DB, "first-primary");
+        const admin = await isAdmin(env.CACHE, email);
+        await assertNamespaceWriteAccess(db, id, email, admin);
+        await graph.updateNamespace(db, id, { name, description });
+        await audit(db, env.STORAGE, {
+          action: "namespace.update",
+          email,
+          namespace_id: id,
+          resource_type: "namespace",
+          resource_id: id,
+          detail: { name, description },
+        });
+        return ok("Namespace updated");
+      }
       if (action === "create") {
         const db = session(env.DB, "first-primary");
         if (!name) return err("name required");
-        const nsId = await graph.createNamespace(db, {
-          name,
-          description,
-          owner: email,
-        });
+        const nsId = await graph.createNamespace(db, { name, description, owner: email });
         track(agent, { namespace: nsId });
         await audit(db, env.STORAGE, {
           action: "namespace.create",

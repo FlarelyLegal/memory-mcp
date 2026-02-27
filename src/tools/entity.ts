@@ -1,21 +1,13 @@
-/** Tool registration: manage_entity, find_entities */
+/** Tool registration: manage_entity */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-  nameField,
-  typeField,
-  typeFilter,
-  summaryField,
-  metadataJsonStr,
-  queryField,
-} from "../tool-schemas.js";
+import { nameField, typeField, summaryField, metadataJsonStr } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import * as graph from "../graph/index.js";
 import * as vectorize from "../vectorize.js";
 import {
   assertNamespaceWriteAccess,
-  assertNamespaceReadAccess,
   assertEntityAccess,
   assertEntityReadAccess,
   isAdmin,
@@ -23,17 +15,7 @@ import {
 import { parseJson, toISO } from "../utils.js";
 import { track, untrack, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
-import {
-  txt,
-  err,
-  ok,
-  cap,
-  trunc,
-  safeMeta,
-  isMetaError,
-  trackTools,
-  confirm,
-} from "../response-helpers.js";
+import { txt, err, ok, safeMeta, isMetaError, trackTools, confirm } from "../response-helpers.js";
 
 export function registerEntityTools(
   server: McpServer,
@@ -175,54 +157,6 @@ export function registerEntityTools(
             return ok(`Deleted ${id}`);
           }
         }
-      },
-    ),
-  );
-
-  server.tool(
-    "find_entities",
-    "Search entities by name/type/keyword in a namespace.",
-    {
-      namespace_id: z.string().uuid().optional().describe("Defaults to last-used namespace"),
-      query: queryField.optional(),
-      type: typeFilter.optional(),
-      limit: z.number().optional(),
-      compact: z.boolean().optional().describe("Default true: return minimal fields"),
-      verbose: z.boolean().optional().describe("Default false: disable text truncation"),
-    },
-    {
-      title: "Find Entities",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    tracked(
-      "find_entities",
-      async ({ namespace_id: nsParam, query, type, limit, compact, verbose }) => {
-        const namespace_id = resolveNamespace(nsParam, agent);
-        if (!namespace_id) return err("namespace_id required");
-        const db = session(env.DB, "first-unconstrained");
-        await assertNamespaceReadAccess(db, namespace_id, email);
-        track(agent, { namespace: namespace_id });
-        const results = await graph.searchEntities(db, namespace_id, {
-          query,
-          type,
-          limit: cap(limit, 50, 20),
-        });
-        const isCompact = compact ?? true;
-        const full = verbose ?? false;
-        return txt(
-          results.map((r) =>
-            isCompact
-              ? { id: r.id, name: r.name, type: r.type }
-              : {
-                  id: r.id,
-                  name: r.name,
-                  type: r.type,
-                  summary: full ? r.summary : trunc(r.summary),
-                  metadata: parseJson(r.metadata),
-                },
-          ),
-        );
       },
     ),
   );

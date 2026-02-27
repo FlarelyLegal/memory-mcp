@@ -21,10 +21,13 @@ import { handleAccessRequest } from "./access-handler.js";
 // Tool registration modules
 import { registerNamespaceTools } from "./tools/namespace.js";
 import { registerEntityTools } from "./tools/entity.js";
+import { registerEntitySearchTools } from "./tools/entity-search.js";
 import { registerRelationTools } from "./tools/relation.js";
 import { registerTraversalTools } from "./tools/traversal.js";
 import { registerMemoryTools } from "./tools/memory.js";
+import { registerMemoryQueryTools } from "./tools/memory-queries.js";
 import { registerConversationTools } from "./tools/conversation.js";
+import { registerMessageTools } from "./tools/message.js";
 import { registerSearchTools } from "./tools/search.js";
 import { registerAdminTools } from "./tools/admin.js";
 
@@ -80,10 +83,13 @@ export class MemoryGraphMCP extends McpAgent<Env, SessionState, AuthProps> {
   async init() {
     registerNamespaceTools(this.server, this.env, this.email, this);
     registerEntityTools(this.server, this.env, this.email, this);
+    registerEntitySearchTools(this.server, this.env, this.email, this);
     registerRelationTools(this.server, this.env, this.email, this);
     registerTraversalTools(this.server, this.env, this.email, this);
     registerMemoryTools(this.server, this.env, this.email, this);
+    registerMemoryQueryTools(this.server, this.env, this.email, this);
     registerConversationTools(this.server, this.env, this.email, this);
+    registerMessageTools(this.server, this.env, this.email, this);
     registerSearchTools(this.server, this.env, this.email, this);
     registerAdminTools(this.server, this.env, this.email, this);
   }

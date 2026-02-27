@@ -66,6 +66,34 @@ export async function listNamespaces(
  * Claim all unowned namespaces (owner IS NULL) for the given owner.
  * Returns the number of namespaces claimed.
  */
+/** Update a namespace's name and/or description. */
+export async function updateNamespace(
+  db: DbHandle,
+  id: string,
+  opts: { name?: string; description?: string },
+): Promise<void> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (opts.name !== undefined) {
+    sets.push("name = ?");
+    params.push(opts.name);
+  }
+  if (opts.description !== undefined) {
+    sets.push("description = ?");
+    params.push(opts.description);
+  }
+  if (sets.length === 0) return;
+  sets.push("updated_at = ?");
+  params.push(Math.floor(Date.now() / 1000));
+  params.push(id);
+  await withRetry(() =>
+    db
+      .prepare(`UPDATE namespaces SET ${sets.join(", ")} WHERE id = ?`)
+      .bind(...params)
+      .run(),
+  );
+}
+
 export async function updateNamespaceVisibility(
   db: DbHandle,
   id: string,

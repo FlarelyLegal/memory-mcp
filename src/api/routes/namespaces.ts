@@ -1,22 +1,13 @@
-/** Namespace REST endpoints + OpenAPI definitions. */
+/** Namespace collection REST endpoints (list + create). */
 import { z } from "zod";
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
-import {
-  createNamespace,
-  listNamespaces,
-  updateNamespaceVisibility,
-  collectNamespaceVectorIds,
-  deleteNamespace,
-} from "../../graph/index.js";
-import { deleteVectorBatch } from "../../vectorize.js";
-import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
-import { nameField, descriptionField, visibility } from "../../tool-schemas.js";
-import { namespaceSchema, okSchema, zodSchema } from "../schemas.js";
+import { createNamespace, listNamespaces } from "../../graph/index.js";
+import { nameField, descriptionField } from "../../tool-schemas.js";
+import { namespaceSchema, zodSchema } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
-import type { NamespaceVisibility } from "../../types.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
@@ -134,109 +125,6 @@ export function registerNamespaceRoutes(): void {
               },
             },
           },
-        },
-      },
-    },
-  );
-
-  defineRoute(
-    "PATCH",
-    "/api/v1/namespaces/:id",
-    async (ctx, request) => {
-      try {
-        if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
-          return jsonError("Admin access required", 403);
-        await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.email, true);
-        const body = await parseBody<{ visibility?: string }>(request);
-        if (body instanceof Response) return body;
-        const v = body.visibility;
-        if (!v || (v !== "private" && v !== "public"))
-          return jsonError("visibility must be 'private' or 'public'", 400);
-        await updateNamespaceVisibility(ctx.db, ctx.params.id, v as NamespaceVisibility);
-        await audit(ctx.db, ctx.env.STORAGE, {
-          action: "namespace.set_visibility",
-          email: ctx.email,
-          namespace_id: ctx.params.id,
-          resource_type: "namespace",
-          resource_id: ctx.params.id,
-          detail: { visibility: v },
-        });
-        return json({ ok: true, visibility: v });
-      } catch (e) {
-        return handleError(e);
-      }
-    },
-    {
-      summary: "Update namespace visibility",
-      description: "Set namespace visibility to public or private. Admin only.",
-      tags: ["Namespaces"],
-      operationId: "updateNamespaceVisibility",
-      parameters: [
-        {
-          name: "id",
-          in: "path",
-          required: true,
-          description: "Namespace ID",
-          schema: { type: "string", format: "uuid" },
-        },
-      ],
-      requestBody: {
-        required: true,
-        content: {
-          "application/json": { schema: zodSchema(z.object({ visibility })) },
-        },
-      },
-      responses: {
-        "200": {
-          description: "Updated",
-          content: { "application/json": { schema: okSchema() } },
-        },
-      },
-    },
-  );
-
-  defineRoute(
-    "DELETE",
-    "/api/v1/namespaces/:id",
-    async (ctx) => {
-      try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
-        const ns = await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.email, admin);
-        const vectorIds = await collectNamespaceVectorIds(ctx.db, ctx.params.id);
-        await deleteNamespace(ctx.db, ctx.params.id);
-        await deleteVectorBatch(ctx.env, vectorIds);
-        await audit(ctx.db, ctx.env.STORAGE, {
-          action: "namespace.delete",
-          email: ctx.email,
-          namespace_id: ctx.params.id,
-          resource_type: "namespace",
-          resource_id: ctx.params.id,
-          detail: { name: ns.name, vectors_deleted: vectorIds.length },
-        });
-        return json({ ok: true });
-      } catch (e) {
-        return handleError(e);
-      }
-    },
-    {
-      summary: "Delete namespace",
-      description:
-        "Delete a namespace and all its contents (entities, relations, memories, conversations, messages). Vectors are removed from Vectorize. Owner or admin required.",
-      tags: ["Namespaces"],
-      operationId: "deleteNamespace",
-      parameters: [
-        {
-          name: "id",
-          in: "path",
-          required: true,
-          description: "Namespace ID",
-          schema: { type: "string", format: "uuid" },
-        },
-      ],
-      responses: {
-        "200": {
-          description: "Deleted",
-          content: { "application/json": { schema: okSchema() } },
         },
       },
     },
