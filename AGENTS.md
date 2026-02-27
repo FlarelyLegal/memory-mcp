@@ -6,7 +6,7 @@
 
 Memory Graph MCP — a remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory (knowledge graphs, semantic search, conversation history, temporal decay). Single-package TypeScript project using npm.
 
-Built on: **D1** (graph + memories), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-m3`), **KV** (caching + OAuth state), **R2** (blob storage), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
+Built on: **D1** (graph + memories + audit logs), **Vectorize** (semantic search), **Workers AI** (embeddings via `@cf/baai/bge-m3`), **KV** (caching + OAuth state), **R2** (audit log archive), **Durable Objects** (stateful MCP sessions), and **Cloudflare Access** (per-user auth via full OAuth/OIDC flow).
 
 ### Key commands
 
@@ -53,6 +53,7 @@ See `package.json` scripts. Summary:
 - **CORS:** All `/api/*` responses include permissive CORS headers (`Access-Control-Allow-Origin: *`).
 - **D1 read replication:** All D1 queries go through `D1DatabaseSession` (via `src/db.ts`). Read-only operations use `"first-unconstrained"` (any replica), write operations use `"first-primary"` (primary first). API routes accept/return `X-D1-Bookmark` header for cross-request consistency. All data-layer functions accept `DbHandle` (union of `D1Database` and `D1DatabaseSession`) — never raw `D1Database`.
 - **D1 write retry:** All data-layer write operations are wrapped with `withRetry()` from `src/db.ts`. Retries up to 3 times with jitter backoff on transient D1 errors (`"Network connection lost"`, `"storage caused object to be reset"`, etc.). Workflow steps have their own retry mechanism and don't need `withRetry`.
+- **Audit logging:** All write operations (MCP tools + REST API) are audit-logged via `audit()` from `src/audit.ts`. Each call writes to D1 `audit_logs` (queryable hot window) and appends NDJSON to R2 at `audit/{YYYY-MM-DD}.ndjson` (Loki-compatible cold archive). Both writes are best-effort — failures never break the request flow. The consolidation workflow purges D1 audit logs older than 90 days; R2 archive is retained indefinitely.
 - **Elicitation (human-in-the-loop):** Destructive MCP tool operations (entity/relation/memory delete, consolidate, reindex-all, claim namespaces) prompt the user for confirmation via `server.server.elicitInput()`. The `confirm()` helper in `response-helpers.ts` checks `getClientCapabilities().elicitation.form` first ��� if the client doesn't support elicitation, operations proceed without confirmation (graceful degradation).
 
 ### File structure
@@ -73,9 +74,10 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/response-helpers.ts` — Shared MCP response helpers (`txt`, `ok`, `err`, `safeMeta`, `toolHandler`, `cap`, `trunc`, `confirm`)
 - `src/state.ts` — Session state helpers: `track`, `untrack`, `resolveNamespace`, `resolveConversation`
 - `src/reindex.ts` — Shared batch-reindex logic (entity/memory chunk embedding + Vectorize upsert) used by workflows and REST API
+- `src/audit.ts` — Audit logging: D1 hot window + R2 NDJSON cold archive (Loki-compatible), `audit()`, `queryAuditLogs()`, `purgeAuditLogs()`
 - `src/consolidation.ts` — Data-layer for consolidation: decay sweep, duplicate detection, archive purge, entity summary helpers, namespace stats
 - `src/workflows/reindex.ts` — `ReindexWorkflow` WorkflowEntrypoint: durable batch re-embedding with chunked steps and retries
-- `src/workflows/consolidation.ts` — `ConsolidationWorkflow` WorkflowEntrypoint: 4-step pipeline (decay sweep, dedup, entity summary refresh via Workers AI, archive purge)
+- `src/workflows/consolidation.ts` — `ConsolidationWorkflow` WorkflowEntrypoint: 5-step pipeline (decay sweep, dedup, entity summary refresh via Workers AI, archive purge, audit log purge)
 - `src/tools/` — One file per tool domain (namespace, entity, relation, traversal, memory, conversation, search, admin). Each exports a `register*Tools(server, env, email)` function.
 - `src/graph/` — D1 operations split by domain (namespaces, entities, relations, traversal) with barrel re-export via `index.ts`.
 - `src/api/` — REST API layer (OpenAPI 3.1 + Scalar docs):
@@ -90,7 +92,7 @@ Code is organized into focused modules with a 250-line cap per file:
   - `docs.ts` — Scalar API reference UI
   - `routes/` — One file per domain (namespaces, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, workflows, tokens, token-crud, demo). Each registers routes + their OpenAPI path definitions.
 - `src/oauth/` — OAuth utilities split by concern (error, sanitize, csrf, state, approval) with barrel re-export via `index.ts`.
-- `schemas/schema.sql` — D1 schema (7 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links).
+- `schemas/schema.sql` — D1 schema (8 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, audit_logs).
 
 ### MCP tools (17 total)
 

@@ -31,6 +31,7 @@ import {
   updateEntitySummary,
   DEFAULT_DECAY_THRESHOLD,
 } from "../consolidation.js";
+import { purgeAuditLogs } from "../audit.js";
 import { deleteVector } from "../vectorize.js";
 import { upsertEntityVector } from "../vectorize.js";
 
@@ -50,6 +51,7 @@ export interface ConsolidationResult {
   duplicates_removed: number;
   summaries_refreshed: number;
   purged: number;
+  audit_purged: number;
 }
 
 const STEP_RETRY = {
@@ -181,11 +183,19 @@ Write a concise, factual summary:`;
       return result.deleted;
     });
 
+    // Step 5: Purge old audit logs from D1 (R2 archive is retained)
+    const auditPurged = await step.do("purge-audit-logs", STEP_RETRY, async () => {
+      const db = this.env.DB;
+      const cutoff = now() - 90 * 86400; // 90 days
+      return purgeAuditLogs(db, cutoff);
+    });
+
     return {
       archived,
       duplicates_removed: duplicatesRemoved,
       summaries_refreshed: summariesRefreshed,
       purged,
+      audit_purged: auditPurged,
     };
   }
 }
