@@ -61,6 +61,11 @@ You need a [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/
 4. If you plan to use service tokens for programmatic access, add a **Service Auth** policy (`non_identity`, include `any_valid_service_token` or specific token)
 5. Note the following values from the application configuration:
 
+Recommended path scope for the self-hosted Access app:
+
+- Protect only `/api/v1` paths
+- Leave `/api/docs` and `/api/openapi.json` outside Access so API docs/spec stay public
+
 | Value                          | Where to find it                                           | Used as           |
 | ------------------------------ | ---------------------------------------------------------- | ----------------- |
 | Application Audience (AUD) tag | Application overview page                                  | `ACCESS_AUD_TAG`  |
@@ -199,7 +204,8 @@ The Worker resolves the service token to your email via KV. All operations run w
 
 - **OpenAPI spec:** `GET /api/openapi.json`
 - **Interactive docs:** `GET /api/docs` (Scalar UI)
-- Both endpoints are unauthenticated.
+- Live docs URL: `https://memory.flarelylegal.com/api/docs`
+- Both endpoints are unauthenticated in Worker code; keep them outside Access path protection.
 
 ### API response shaping
 
