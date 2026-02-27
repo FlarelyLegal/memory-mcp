@@ -49,6 +49,14 @@ export function handleFtsError(err: unknown): void {
 }
 
 /**
+ * Escape SQL LIKE wildcards in user input.
+ * Uses backslash as the escape character — pair with `ESCAPE '\'` in the query.
+ */
+export function escapeLike(input: string): string {
+  return input.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+}
+
+/**
  * Escape FTS5 special characters and add prefix matching for each term.
  * Produces an FTS5 query like `"term1"* "term2"*` (implicit AND, prefix match).
  */

@@ -109,9 +109,18 @@ export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
  * the row with the intended ID already exists. When it does, treat it as a replayed
  * success instead of surfacing a false failure to callers.
  */
+/** Tables that use generateId() and may encounter replay insert conflicts. */
+type InsertTable =
+  | "namespaces"
+  | "entities"
+  | "relations"
+  | "memories"
+  | "conversations"
+  | "messages";
+
 export async function isReplayInsertConflict(
   db: DbHandle,
-  table: string,
+  table: InsertTable,
   id: string,
   err: unknown,
 ): Promise<boolean> {

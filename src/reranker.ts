@@ -91,7 +91,7 @@ export async function hydrateTexts(
 /** Fetch content from a table in chunks of MAX_PARAMS and fill `texts`. */
 async function batchHydrate(
   db: DbHandle,
-  table: string,
+  table: "memories" | "messages",
   entries: { idx: number; id: string }[],
   texts: string[],
 ): Promise<void> {

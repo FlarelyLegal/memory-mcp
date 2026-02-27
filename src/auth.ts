@@ -105,9 +105,11 @@ export async function assertNamespaceAccess(
 
 type NsJoinRow = { namespace_id: string; owner: string | null; visibility: string };
 
+type ResourceTable = "entities" | "memories" | "conversations" | "relations";
+
 async function fetchResourceNs(
   db: DbHandle,
-  table: string,
+  table: ResourceTable,
   resourceId: string,
   label: string,
 ): Promise<NsJoinRow> {
@@ -125,7 +127,7 @@ async function fetchResourceNs(
 /** Assert read access to a resource's namespace. */
 export async function assertResourceReadAccess(
   db: DbHandle,
-  table: string,
+  table: ResourceTable,
   id: string,
   label: string,
   email: string,
@@ -140,7 +142,7 @@ export async function assertResourceReadAccess(
 /** Assert write access to a resource's namespace. */
 async function assertResourceWriteAccess(
   db: DbHandle,
-  table: string,
+  table: ResourceTable,
   id: string,
   label: string,
   email: string,
