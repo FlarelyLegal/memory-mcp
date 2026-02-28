@@ -29,6 +29,8 @@ commit_preprocessors = [
     { pattern = "\n.*", replace = "" },
 ]
 commit_parsers = [
+    { message = "^Merge pull request", skip = true },
+    { message = "^Merge branch", skip = true },
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Bug Fixes" },
     { message = "^doc", group = "Documentation" },

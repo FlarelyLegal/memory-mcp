@@ -118,6 +118,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
+      - name: Validate changelog does not include merge lines
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          CHANGELOG='${{ steps.changelog.outputs.content }}'
+          if echo "$CHANGELOG" | grep -Eq '^- Merge pull request|^- Merge branch'; then
+            echo "Release changelog still contains merge commit lines."
+            exit 1
+          fi
+
       - name: Create release
         if: steps.check.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
