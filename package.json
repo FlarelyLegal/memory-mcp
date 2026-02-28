@@ -1,6 +1,6 @@
 {
   "name": "memory-graph-mcp",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "FlarelyLegal Memory MCP Server",
   "author": "Timothy Schneider <tim@taslabs.net>",
   "license": "AGPL-3.0-only",
