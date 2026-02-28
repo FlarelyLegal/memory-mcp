@@ -142,6 +142,19 @@ export async function updateNamespaceVisibility(
   );
 }
 
+export async function transferNamespaceOwner(
+  db: DbHandle,
+  id: string,
+  owner: string,
+): Promise<void> {
+  await withRetry(() =>
+    db
+      .prepare(`UPDATE namespaces SET owner = ?, updated_at = ? WHERE id = ?`)
+      .bind(owner, Math.floor(Date.now() / 1000), id)
+      .run(),
+  );
+}
+
 /**
  * Collect all vector IDs for a namespace (entities, memories, messages).
  * Must be called BEFORE deleting the namespace since cascade removes the rows.

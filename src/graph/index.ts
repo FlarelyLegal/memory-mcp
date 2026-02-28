@@ -5,6 +5,7 @@ export {
   listNamespaces,
   updateNamespace,
   updateNamespaceVisibility,
+  transferNamespaceOwner,
   collectNamespaceVectorIds,
   deleteNamespace,
   claimUnownedNamespaces,
