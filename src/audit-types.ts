@@ -7,6 +7,7 @@ export type AuditAction =
   | "namespace.transfer"
   | "namespace_grant.create"
   | "namespace_grant.revoke"
+  | "namespace_grant.expire"
   | "entity.create"
   | "entity.update"
   | "entity.delete"
@@ -32,7 +33,8 @@ export type AuditAction =
   | "group.delete"
   | "group_member.add"
   | "group_member.remove"
-  | "group_member.update_role";
+  | "group_member.update_role"
+  | "group_member.expire";
 
 export type ResourceType =
   | "namespace"
@@ -44,7 +46,8 @@ export type ResourceType =
   | "service_token"
   | "workflow"
   | "group"
-  | "group_member";
+  | "group_member"
+  | "namespace_grant";
 
 export interface AuditEntry {
   action: AuditAction;

@@ -1,5 +1,5 @@
-import type { DbHandle } from "../db.js";
-import { withRetry } from "../db.js";
+import { type DbHandle, withRetry } from "../db.js";
+import { NOT_EXPIRED } from "../sql.js";
 import type { GroupMemberRow, GroupPrivacy, GroupRole, GroupRow, MemberStatus } from "../types.js";
 import { generateId, now, toJson } from "../utils.js";
 export { generateSlug } from "./group-slug.js";
@@ -208,7 +208,9 @@ export async function getGroupMembership(
 
 export async function getUserGroupIds(db: DbHandle, email: string): Promise<string[]> {
   const result = await db
-    .prepare(`SELECT group_id FROM group_members WHERE email = ? AND status = 'active'`)
+    .prepare(
+      `SELECT group_id FROM group_members WHERE email = ? AND status = 'active' AND ${NOT_EXPIRED}`,
+    )
     .bind(email)
     .all<{ group_id: string }>();
   return result.results.map((r) => r.group_id);
@@ -217,7 +219,8 @@ export async function getUserGroupIds(db: DbHandle, email: string): Promise<stri
 export async function countGroupOwners(db: DbHandle, groupId: string): Promise<number> {
   const row = await db
     .prepare(
-      `SELECT COUNT(*) AS count FROM group_members WHERE group_id = ? AND role = 'owner' AND status = 'active'`,
+      `SELECT COUNT(*) AS count FROM group_members
+       WHERE group_id = ? AND role = 'owner' AND status = 'active' AND ${NOT_EXPIRED}`,
     )
     .bind(groupId)
     .first<{ count: number }>();

@@ -1,5 +1,6 @@
 import type { DbHandle } from "./db.js";
 import { listNamespaceGrants, walkDescendants } from "./graph/index.js";
+import { NOT_EXPIRED } from "./sql.js";
 
 export async function bustIdentityCache(usersKv: KVNamespace, email: string): Promise<void> {
   await usersKv.delete(email);
@@ -16,7 +17,9 @@ export async function bustIdentityCacheForGroup(
   groupId: string,
 ): Promise<void> {
   const rows = await db
-    .prepare(`SELECT email FROM group_members WHERE group_id = ? AND status = 'active'`)
+    .prepare(
+      `SELECT email FROM group_members WHERE group_id = ? AND status = 'active' AND ${NOT_EXPIRED}`,
+    )
     .bind(groupId)
     .all<{ email: string }>();
   const members = rows.results as { email: string }[];
