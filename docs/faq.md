@@ -2,12 +2,12 @@
 
 [< Back to docs](README.md) | [< Back to main README](../README.md)
 
-Frequently asked questions about Memory Graph MCP.
+Frequently asked questions about FlarelyLegal Memory MCP.
 
 ## General
 
 **What is this?**
-A remote MCP server on Cloudflare Workers that gives LLMs persistent structured memory — knowledge graphs, semantic search, conversation history, and temporally-decayed recall.
+FlarelyLegal Memory MCP is a remote MCP server on Cloudflare Workers that gives LLMs collaborative, persistent structured memory — shared knowledge graphs with RBAC, semantic search, conversation history, and temporally-decayed recall.
 
 **Can I try it?**
 The public demo runs at `memory.flarelylegal.com`. Access is gated by Cloudflare Access — open an issue or reach out to request a test account.
@@ -54,4 +54,4 @@ D1 for the graph, memories, conversations, and audit logs. Vectorize for semanti
 See [Contributing](contributing.md) for setup, coding standards (250-line file cap, shared Zod schemas, audit logging requirements), and the branch workflow.
 
 **How do I add a new MCP tool?**
-Add the tool in `src/tools/`, add the matching REST route in `src/api/routes/`, use shared schemas from `src/tool-schemas.ts`, and audit-log writes. Step-by-step in [Contributing](contributing.md#adding-an-mcp-tool).
+Add the tool in `src/tools/`, use shared schemas from `src/tool-schemas.ts`, and audit-log writes. For RBAC/user/group administration, prefer REST routes in `src/api/routes/` to keep MCP tool context lean. Step-by-step in [Contributing](contributing.md#adding-an-mcp-tool).

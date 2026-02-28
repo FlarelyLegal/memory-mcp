@@ -1,24 +1,39 @@
 /** Namespace CRUD operations against D1. */
-import type { NamespaceRow, NamespaceVisibility } from "../types.js";
+import type { NamespaceRow, NamespaceVisibility, UserIdentity } from "../types.js";
 import { type DbHandle, withRetry, isReplayInsertConflict } from "../db.js";
 import { generateId, toJson } from "../utils.js";
 
+export const DEFAULT_NAMESPACE_SHARD = "core";
+
+export function selectNamespaceShard(_namespaceId: string): string {
+  return DEFAULT_NAMESPACE_SHARD;
+}
+
 export async function createNamespace(
   db: DbHandle,
-  opts: { name: string; description?: string; owner?: string; metadata?: Record<string, unknown> },
+  opts: {
+    name: string;
+    description?: string;
+    owner?: string;
+    metadata?: Record<string, unknown>;
+    shard_id?: string;
+  },
 ): Promise<string> {
   const id = generateId();
+  const shardId = opts.shard_id ?? selectNamespaceShard(id);
   try {
     await withRetry(() =>
       db
         .prepare(
-          `INSERT INTO namespaces (id, name, description, owner, metadata) VALUES (?, ?, ?, ?, ?)`,
+          `INSERT INTO namespaces (id, name, description, owner, shard_id, metadata)
+           VALUES (?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
           opts.name,
           opts.description ?? null,
           opts.owner ?? null,
+          shardId,
           toJson(opts.metadata ?? null),
         )
         .run(),
@@ -40,24 +55,62 @@ export async function getNamespace(db: DbHandle, id: string): Promise<NamespaceR
  */
 export async function listNamespaces(
   db: DbHandle,
-  owner?: string,
+  ownerOrIdentity?: string | UserIdentity,
   opts?: { limit?: number; offset?: number },
 ): Promise<NamespaceRow[]> {
   const limit = opts?.limit ?? 100;
   const offset = opts?.offset ?? 0;
-  if (owner) {
+  if (!ownerOrIdentity) {
+    const result = await db
+      .prepare(`SELECT * FROM namespaces ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+      .bind(limit, offset)
+      .all<NamespaceRow>();
+    return result.results;
+  }
+
+  if (typeof ownerOrIdentity === "string") {
     const result = await db
       .prepare(
         `SELECT * FROM namespaces WHERE owner = ? OR visibility = 'public'
          ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       )
-      .bind(owner, limit, offset)
+      .bind(ownerOrIdentity, limit, offset)
       .all<NamespaceRow>();
     return result.results;
   }
+
+  if (ownerOrIdentity.isAdmin) {
+    const result = await db
+      .prepare(`SELECT * FROM namespaces ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+      .bind(limit, offset)
+      .all<NamespaceRow>();
+    return result.results;
+  }
+
+  const namespaceIds = new Set<string>([
+    ...ownerOrIdentity.ownedNamespaces,
+    ...Object.keys(ownerOrIdentity.directGrants),
+    ...Object.keys(ownerOrIdentity.groupGrants),
+  ]);
+  if (namespaceIds.size === 0) {
+    const result = await db
+      .prepare(
+        `SELECT * FROM namespaces WHERE visibility = 'public' ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      )
+      .bind(limit, offset)
+      .all<NamespaceRow>();
+    return result.results;
+  }
+  const placeholders = Array.from(namespaceIds)
+    .map(() => "?")
+    .join(", ");
   const result = await db
-    .prepare(`SELECT * FROM namespaces ORDER BY created_at DESC LIMIT ? OFFSET ?`)
-    .bind(limit, offset)
+    .prepare(
+      `SELECT * FROM namespaces
+       WHERE visibility = 'public' OR id IN (${placeholders})
+       ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    )
+    .bind(...namespaceIds, limit, offset)
     .all<NamespaceRow>();
   return result.results;
 }
@@ -101,6 +154,19 @@ export async function updateNamespaceVisibility(
 ): Promise<void> {
   await withRetry(() =>
     db.prepare(`UPDATE namespaces SET visibility = ? WHERE id = ?`).bind(visibility, id).run(),
+  );
+}
+
+export async function transferNamespaceOwner(
+  db: DbHandle,
+  id: string,
+  owner: string,
+): Promise<void> {
+  await withRetry(() =>
+    db
+      .prepare(`UPDATE namespaces SET owner = ?, updated_at = ? WHERE id = ?`)
+      .bind(owner, Math.floor(Date.now() / 1000), id)
+      .run(),
   );
 }
 

@@ -6,7 +6,6 @@ import {
   assertNamespaceReadAccess,
   assertConversationAccess,
   assertConversationReadAccess,
-  isAdmin,
 } from "../../auth.js";
 import { upsertMessageVector } from "../../vectorize.js";
 import {
@@ -29,7 +28,7 @@ export function registerMessageRoutes(): void {
     "/api/v1/conversations/:id/messages",
     async (ctx) => {
       try {
-        await assertConversationReadAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertConversationReadAccess(ctx.db, ctx.params.id, ctx.identity);
         const limit = queryLimit(ctx.query, 100, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
@@ -95,8 +94,7 @@ export function registerMessageRoutes(): void {
     "/api/v1/conversations/:id/messages",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
-        await assertConversationAccess(ctx.db, ctx.params.id, ctx.email, admin);
+        await assertConversationAccess(ctx.db, ctx.params.id, ctx.identity);
         const body = await parseBodyWithSchema(request, messageCreateSchema);
         if (body instanceof Response) return body;
 
@@ -162,7 +160,7 @@ export function registerMessageRoutes(): void {
     "/api/v1/namespaces/:namespace_id/messages",
     async (ctx) => {
       try {
-        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.identity);
         const rl = await enforceSearchRateLimit(ctx, "message-search");
         if (rl) return rl;
         const queryInput = searchMessagesQuerySchema.safeParse({

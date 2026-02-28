@@ -4,14 +4,10 @@ import { z } from "zod";
 import { nameField, typeField, summaryField, metadataObject } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
+import { loadIdentity } from "../identity.js";
 import * as graph from "../graph/index.js";
 import * as vectorize from "../vectorize.js";
-import {
-  assertNamespaceWriteAccess,
-  assertEntityAccess,
-  assertEntityReadAccess,
-  isAdmin,
-} from "../auth.js";
+import { assertNamespaceWriteAccess, assertEntityAccess, assertEntityReadAccess } from "../auth.js";
 import { parseJson, toISO } from "../utils.js";
 import { track, untrack, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
@@ -52,12 +48,12 @@ export function registerEntityTools(
       "manage_entity",
       async ({ action, id, namespace_id: nsParam, name, type, summary, metadata, compact }) => {
         const db = session(env.DB, "first-primary");
-        const admin = action !== "get" ? await isAdmin(env.CACHE, email) : false;
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
         switch (action) {
           case "create": {
             const namespace_id = resolveNamespace(nsParam, agent);
             if (!namespace_id || !name || !type) return err("namespace_id, name, type required");
-            await assertNamespaceWriteAccess(db, namespace_id, email, admin);
+            await assertNamespaceWriteAccess(db, namespace_id, identity);
             const eid = await graph.createEntity(db, {
               namespace_id,
               name,
@@ -85,7 +81,7 @@ export function registerEntityTools(
           }
           case "get": {
             if (!id) return err("id required");
-            await assertEntityReadAccess(db, id, email);
+            await assertEntityReadAccess(db, id, identity);
             const e = await graph.getEntity(db, id);
             if (!e) return err("Not found");
             track(agent, { namespace: e.namespace_id, entity: id });
@@ -111,7 +107,7 @@ export function registerEntityTools(
             if (!id) return err("id required");
             if (!name && !type && !summary && !metadata)
               return err("at least one field (name, type, summary, metadata) required");
-            await assertEntityAccess(db, id, email, admin);
+            await assertEntityAccess(db, id, identity);
             await graph.updateEntity(db, id, { name, type, summary, metadata });
             if (name || type || summary) {
               const e = await graph.getEntity(db, id);
@@ -136,7 +132,7 @@ export function registerEntityTools(
           }
           case "delete": {
             if (!id) return err("id required");
-            await assertEntityAccess(db, id, email, admin);
+            await assertEntityAccess(db, id, identity);
             const entity = await graph.getEntity(db, id);
             const label = entity ? `entity "${entity.name}" (${entity.type})` : `entity ${id}`;
             if (!(await confirm(server, `Delete ${label} and all its relations?`)))

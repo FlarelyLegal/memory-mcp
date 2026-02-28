@@ -8,6 +8,7 @@ import { namespaceSchema, zodSchema } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
+import { bustIdentityCache } from "../../cache-bust.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
@@ -20,6 +21,7 @@ export function registerNamespaceRoutes(): void {
           "name",
           "description",
           "owner",
+          "shard_id",
           "visibility",
           "metadata",
           "created_at",
@@ -31,7 +33,7 @@ export function registerNamespaceRoutes(): void {
         });
         const limit = 50;
         const offset = parseCursor(ctx.query);
-        const rows = await listNamespaces(ctx.db, ctx.email, { limit: limit + 1, offset });
+        const rows = await listNamespaces(ctx.db, ctx.identity, { limit: limit + 1, offset });
         const hasMore = rows.length > limit;
         const data = projectRows(rows.slice(0, limit).map(parseNamespaceRow), fields);
         const response = json(data);
@@ -94,6 +96,7 @@ export function registerNamespaceRoutes(): void {
           resource_id: id,
           detail: { name: body.name },
         });
+        await bustIdentityCache(ctx.env.USERS, ctx.email);
         return json({ id, name: body.name }, 201);
       } catch (e) {
         return handleError(e);

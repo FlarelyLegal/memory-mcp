@@ -9,6 +9,8 @@ export interface Env {
   DB: D1Database;
   VECTORIZE: VectorizeIndex;
   AI: Ai;
+  USERS: KVNamespace;
+  FLAGS: KVNamespace;
   CACHE: KVNamespace;
   STORAGE: R2Bucket;
   // OAuth / Cloudflare Access
@@ -70,6 +72,7 @@ export interface Namespace {
   name: string;
   description: string | null;
   owner: string | null;
+  shard_id: string;
   visibility: NamespaceVisibility;
   metadata: Record<string, unknown> | null;
   created_at: number;
@@ -197,6 +200,7 @@ export interface NamespaceRow {
   name: string;
   description: string | null;
   owner: string | null;
+  shard_id: string;
   visibility: NamespaceVisibility;
   metadata: string | null;
   created_at: number;
@@ -213,3 +217,5 @@ export interface AuditLogRow {
   detail: string | null;
   created_at: number;
 }
+
+export * from "./rbac-types.js";

@@ -2,6 +2,13 @@
 import { z } from "zod";
 import {
   nameField,
+  groupNameField,
+  groupDescriptionField,
+  slugField,
+  groupPrivacy,
+  groupRole,
+  memberStatus,
+  namespaceRole,
   typeField,
   typeFilter,
   summaryField,
@@ -101,3 +108,36 @@ export const serviceTokenBindSelfSchema = z.object({
 export const serviceTokenLabelSchema = z.object({
   label: z.string().min(1).max(200),
 });
+
+export const groupCreateSchema = z.object({
+  name: groupNameField,
+  slug: slugField.optional(),
+  description: groupDescriptionField.optional(),
+  privacy: groupPrivacy.optional(),
+});
+
+export const groupUpdateSchema = z
+  .object({
+    name: groupNameField.optional(),
+    slug: slugField.optional(),
+    description: groupDescriptionField.optional(),
+    privacy: groupPrivacy.optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, "At least one field is required");
+
+export const groupMemberAddSchema = z.object({
+  email: z.string().email().max(320),
+  role: groupRole.optional(),
+  status: memberStatus.optional(),
+});
+
+export const groupMemberRoleSchema = z.object({ role: groupRole });
+
+export const namespaceGrantCreateSchema = z
+  .object({
+    email: z.string().email().max(320).optional(),
+    group_id: z.string().uuid().optional(),
+    role: namespaceRole,
+    expires_at: z.number().int().optional(),
+  })
+  .refine((v) => !!v.email !== !!v.group_id, "Set exactly one of email or group_id");

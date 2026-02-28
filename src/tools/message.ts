@@ -4,13 +4,13 @@ import { z } from "zod";
 import { messageRole, messageContent, metadataObject, queryField } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
+import { loadIdentity } from "../identity.js";
 import * as conversations from "../conversations.js";
 import * as vectorize from "../vectorize.js";
 import {
   assertConversationAccess,
   assertConversationReadAccess,
   assertNamespaceReadAccess,
-  isAdmin,
 } from "../auth.js";
 import { toISO } from "../utils.js";
 import { track, resolveNamespace, resolveConversation } from "../state.js";
@@ -44,8 +44,8 @@ export function registerMessageTools(
       const conversation_id = resolveConversation(cParam, agent);
       if (!conversation_id) return err("conversation_id required");
       const db = session(env.DB, "first-primary");
-      const admin = await isAdmin(env.CACHE, email);
-      await assertConversationAccess(db, conversation_id, email, admin);
+      const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+      await assertConversationAccess(db, conversation_id, identity);
       track(agent, { conversation: conversation_id });
       const id = await conversations.addMessage(db, {
         conversation_id,
@@ -110,6 +110,7 @@ export function registerMessageTools(
         verbose,
       }) => {
         const db = session(env.DB, "first-unconstrained");
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
         const n = cap(limit, 100, 50);
         const isCompact = compact ?? true;
         const full = verbose ?? false;
@@ -133,14 +134,14 @@ export function registerMessageTools(
               };
         const namespace_id = resolveNamespace(nsParam, agent);
         if (query && namespace_id) {
-          await assertNamespaceReadAccess(db, namespace_id, email);
+          await assertNamespaceReadAccess(db, namespace_id, identity);
           track(agent, { namespace: namespace_id });
           const rows = await conversations.searchMessages(db, namespace_id, query, { limit: n });
           return txt(rows.map(mapMsg));
         }
         const conversation_id = resolveConversation(cParam, agent);
         if (!conversation_id) return err("conversation_id or namespace_id+query required");
-        await assertConversationReadAccess(db, conversation_id, email);
+        await assertConversationReadAccess(db, conversation_id, identity);
         track(agent, { conversation: conversation_id });
         const rows = await conversations.getMessages(db, conversation_id, { limit: n });
         return txt(rows.map(mapMsg));

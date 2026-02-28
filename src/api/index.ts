@@ -6,10 +6,12 @@
  * dispatches to the handler.
  */
 import type { Env } from "../types.js";
+import type { DbHandle } from "../db.js";
 import type { HttpMethod } from "./types.js";
-import { session, getBookmark } from "../db.js";
+import { getBookmark } from "../db.js";
+import { getControlPlaneDb } from "../db-router.js";
 import { matchRoute } from "./registry.js";
-import { authenticateIdentity, json, jsonError } from "./middleware.js";
+import { authenticateRequestIdentity, json, jsonError } from "./middleware.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { renderScalarDocs } from "./docs.js";
 import { preflightResponse, applyCors } from "./cors.js";
@@ -27,6 +29,9 @@ import { registerMemoryQueryRoutes } from "./routes/memory-queries.js";
 import { registerConversationRoutes } from "./routes/conversations.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerSearchRoutes } from "./routes/search.js";
+import { registerGroupRoutes } from "./routes/groups.js";
+import { registerGroupMemberRoutes } from "./routes/group-members.js";
+import { registerGrantRoutes } from "./routes/grants.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerWorkflowRoutes } from "./routes/workflows.js";
 import { registerTokenRoutes } from "./routes/tokens.js";
@@ -49,6 +54,9 @@ function ensureRegistered(): void {
   registerConversationRoutes();
   registerMessageRoutes();
   registerSearchRoutes();
+  registerGroupRoutes();
+  registerGroupMemberRoutes();
+  registerGrantRoutes();
   registerAdminRoutes();
   registerWorkflowRoutes();
   registerTokenRoutes();
@@ -96,9 +104,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   // Writes go to primary first; reads can hit any replica.
   // If the client sends a bookmark, anchor the session there instead.
   const bookmark = request.headers.get("X-D1-Bookmark");
-  const constraint: D1SessionConstraint =
-    request.method === "GET" ? "first-unconstrained" : "first-primary";
-  const db = session(env.DB, bookmark ?? constraint);
+  const db = getControlPlaneDb(env, {
+    mode: request.method === "GET" ? "read" : "write",
+    bookmark,
+  });
 
   // --- Auth (skip for explicitly public routes) ---
 
@@ -106,13 +115,21 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   let email = "";
 
   if (!route.public) {
-    const result = await authenticateIdentity(request, env, {
+    const result = await authenticateRequestIdentity(request, env, db, {
       allowUnboundServiceToken: route.allowUnboundServiceToken,
     });
     if (result instanceof Response) return applyCors(request, result);
-    email = result.email ?? "";
+    email = result.email;
 
-    const ctx = { env, db, email, auth: result, params, query: url.searchParams };
+    const ctx = {
+      env,
+      db,
+      email,
+      auth: result.auth,
+      identity: result.identity,
+      params,
+      query: url.searchParams,
+    };
     const response = await route.handler(ctx, request);
     trackApi(env, request.method, route.pattern, email, start, response);
     return withBookmark(db, applyCors(request, response));
@@ -123,6 +140,13 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     db,
     email: "",
     auth: { type: "human", email: "" } as const,
+    identity: {
+      groups: [],
+      isAdmin: false,
+      ownedNamespaces: [],
+      directGrants: {},
+      groupGrants: {},
+    },
     params,
     query: url.searchParams,
   };
@@ -154,10 +178,7 @@ function trackApi(
 }
 
 /** Attach the D1 session bookmark to the response for cross-request consistency. */
-async function withBookmark(
-  db: ReturnType<typeof session>,
-  responsePromise: Promise<Response>,
-): Promise<Response> {
+async function withBookmark(db: DbHandle, responsePromise: Promise<Response>): Promise<Response> {
   const response = await responsePromise;
   const bm = getBookmark(db);
   if (bm) {

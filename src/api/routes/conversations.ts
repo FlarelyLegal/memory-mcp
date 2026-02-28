@@ -14,7 +14,6 @@ import {
   assertNamespaceWriteAccess,
   assertNamespaceReadAccess,
   assertConversationAccess,
-  isAdmin,
 } from "../../auth.js";
 import {
   nsPathParam,
@@ -36,7 +35,7 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx) => {
       try {
-        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.identity);
         const limit = queryLimit(ctx.query, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
@@ -101,8 +100,7 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
-        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.identity);
         const body = await parseBody<{ title?: string; metadata?: Record<string, unknown> }>(
           request,
         );
@@ -161,8 +159,7 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations/:id",
     async (ctx) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
-        await assertConversationAccess(ctx.db, ctx.params.id, ctx.email, admin);
+        await assertConversationAccess(ctx.db, ctx.params.id, ctx.identity);
         const convo = await getConversation(ctx.db, ctx.params.id);
         const vectorIds = await collectConversationVectorIds(ctx.db, ctx.params.id);
         await deleteConversation(ctx.db, ctx.params.id);

@@ -9,11 +9,12 @@ import {
   deleteNamespace,
 } from "../../graph/index.js";
 import { deleteVectorBatch } from "../../vectorize.js";
-import { assertNamespaceReadAccess, assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
+import { assertNamespaceReadAccess, assertNamespaceWriteAccess } from "../../auth.js";
 import { nameField, descriptionField, visibility } from "../../tool-schemas.js";
 import { namespaceSchema, okSchema, zodSchema } from "../schemas.js";
 import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
+import { bustIdentityCacheForNamespace } from "../../cache-bust.js";
 import type { NamespaceVisibility } from "../../types.js";
 
 const idParam = {
@@ -30,7 +31,7 @@ export function registerNamespaceCrudRoutes(): void {
     "/api/v1/namespaces/:id",
     async (ctx) => {
       try {
-        const ns = await assertNamespaceReadAccess(ctx.db, ctx.params.id, ctx.email);
+        const ns = await assertNamespaceReadAccess(ctx.db, ctx.params.id, ctx.identity);
         return json(parseNamespaceRow(ns));
       } catch (e) {
         return handleError(e);
@@ -56,8 +57,7 @@ export function registerNamespaceCrudRoutes(): void {
     "/api/v1/namespaces/:id",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
-        await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.email, admin);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.identity);
         const body = await parseBody<{
           name?: string;
           description?: string;
@@ -67,7 +67,8 @@ export function registerNamespaceCrudRoutes(): void {
         if (!body.name && body.description === undefined && !body.visibility)
           return jsonError("At least one of name, description, or visibility required", 400);
         if (body.visibility) {
-          if (!admin) return jsonError("Admin access required for visibility changes", 403);
+          if (!ctx.identity.isAdmin)
+            return jsonError("Admin access required for visibility changes", 403);
           if (body.visibility !== "private" && body.visibility !== "public")
             return jsonError("visibility must be 'private' or 'public'", 400);
           await updateNamespaceVisibility(
@@ -129,9 +130,12 @@ export function registerNamespaceCrudRoutes(): void {
     "/api/v1/namespaces/:id",
     async (ctx) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
-        const ns = await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.email, admin);
+        const ns = await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.identity);
         const vectorIds = await collectNamespaceVectorIds(ctx.db, ctx.params.id);
+        await bustIdentityCacheForNamespace(ctx.db, ctx.env.USERS, ctx.params.id, [
+          ctx.email,
+          ns.owner ?? "",
+        ]);
         await deleteNamespace(ctx.db, ctx.params.id);
         await deleteVectorBatch(ctx.env, vectorIds);
         await audit(ctx.db, ctx.env.STORAGE, {

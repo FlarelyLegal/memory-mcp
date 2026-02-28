@@ -19,10 +19,18 @@ export const SEARCH_KINDS = ["entity", "memory", "message"] as const;
 export const QUERY_MODES = ["recall", "search", "entity"] as const;
 export const WORKFLOW_TYPES = ["reindex", "consolidation"] as const;
 export const RELATION_DIRECTIONS = ["from", "to", "both"] as const;
+export const GROUP_ROLES = ["owner", "admin", "member"] as const;
+export const NAMESPACE_ROLES = ["owner", "editor", "viewer"] as const;
+export const GROUP_PRIVACY = ["visible", "hidden"] as const;
+export const MEMBER_STATUS = ["pending", "active", "suspended"] as const;
 
 export const memoryType = z.enum(MEMORY_TYPES);
 export const messageRole = z.enum(MESSAGE_ROLES);
 export const visibility = z.enum(VISIBILITY_OPTIONS);
+export const groupRole = z.enum(GROUP_ROLES);
+export const namespaceRole = z.enum(NAMESPACE_ROLES);
+export const groupPrivacy = z.enum(GROUP_PRIVACY);
+export const memberStatus = z.enum(MEMBER_STATUS);
 
 // ---------------------------------------------------------------------------
 // Shared field schemas
@@ -33,6 +41,13 @@ export const typeField = z.string().min(1).max(200);
 export const typeFilter = z.string().max(200);
 export const summaryField = z.string().max(10_000);
 export const descriptionField = z.string().max(2000);
+export const groupNameField = z.string().min(1).max(200);
+export const groupDescriptionField = z.string().max(2000);
+export const slugField = z
+  .string()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 export const metadataObject = z.record(z.string(), z.unknown());
 export const memoryContent = z.string().min(1).max(10_000);
 export const messageContent = z.string().min(1).max(50_000);

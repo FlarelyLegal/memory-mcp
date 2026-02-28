@@ -1,5 +1,5 @@
 /** Shared types for the REST API layer. */
-import type { Env } from "../types.js";
+import type { Env, UserIdentity } from "../types.js";
 import type { DbHandle } from "../db.js";
 
 export type AuthIdentity =
@@ -13,6 +13,7 @@ export interface ApiContext {
   db: DbHandle;
   email: string;
   auth: AuthIdentity;
+  identity: UserIdentity;
   params: Record<string, string>;
   query: URLSearchParams;
 }

@@ -36,6 +36,7 @@
       "binding": "DB",
       "database_name": "memory-graph-mcp-db",
       "database_id": "080fbc1c-3431-4ea6-9a8e-427244e21e05",
+      "migrations_dir": "migrations",
     },
   ],
 
@@ -64,6 +65,14 @@
   ],
 
   "kv_namespaces": [
+    {
+      "binding": "USERS",
+      "id": "573d93681db2491b8560864c04c6d970",
+    },
+    {
+      "binding": "FLAGS",
+      "id": "c815cb3d6c304614a5eb81fc4b167878",
+    },
     {
       "binding": "CACHE",
       "id": "94ae719d3fd842ec93f0728ad6771030",

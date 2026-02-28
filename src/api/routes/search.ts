@@ -17,7 +17,7 @@ export function registerSearchRoutes(): void {
     "/api/v1/namespaces/:namespace_id/search",
     async (ctx, request) => {
       try {
-        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.identity);
         const rl = await enforceSearchRateLimit(ctx, "semantic-search");
         if (rl) return rl;
         const body = await parseBodyWithSchema(request, semanticSearchSchema);
