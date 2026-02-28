@@ -4,13 +4,13 @@ import { z } from "zod";
 import { titleField, metadataObject } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
+import { loadIdentity } from "../identity.js";
 import * as conversations from "../conversations.js";
 import * as vectorize from "../vectorize.js";
 import {
   assertNamespaceWriteAccess,
   assertNamespaceReadAccess,
   assertConversationAccess,
-  isAdmin,
 } from "../auth.js";
 import { toISO } from "../utils.js";
 import { track, resolveNamespace } from "../state.js";
@@ -49,8 +49,8 @@ export function registerConversationTools(
         if (action === "delete") {
           if (!id) return err("id required");
           const db = session(env.DB, "first-primary");
-          const admin = await isAdmin(env.FLAGS, email);
-          const nsId = await assertConversationAccess(db, id, email, admin);
+          const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+          const nsId = await assertConversationAccess(db, id, identity);
           const convo = await conversations.getConversation(db, id);
           if (!(await confirm(server, `Delete conversation "${convo?.title ?? id}"?`)))
             return ok("Cancelled");
@@ -71,8 +71,8 @@ export function registerConversationTools(
         if (!namespace_id) return err("namespace_id required");
         if (action === "create") {
           const db = session(env.DB, "first-primary");
-          const admin = await isAdmin(env.FLAGS, email);
-          await assertNamespaceWriteAccess(db, namespace_id, email, admin);
+          const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+          await assertNamespaceWriteAccess(db, namespace_id, identity);
           track(agent, { namespace: namespace_id });
           const cid = await conversations.createConversation(db, {
             namespace_id,
@@ -91,7 +91,8 @@ export function registerConversationTools(
           return txt({ id: cid, title });
         }
         const db = session(env.DB, "first-unconstrained");
-        await assertNamespaceReadAccess(db, namespace_id, email);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+        await assertNamespaceReadAccess(db, namespace_id, identity);
         track(agent, { namespace: namespace_id });
         const isCompact = compact ?? true;
         const rows = await conversations.listConversations(db, namespace_id, {

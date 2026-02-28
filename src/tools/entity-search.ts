@@ -4,6 +4,7 @@ import { z } from "zod";
 import { typeFilter, queryField } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
+import { loadIdentity } from "../identity.js";
 import * as graph from "../graph/index.js";
 import { assertNamespaceReadAccess } from "../auth.js";
 import { parseJson } from "../utils.js";
@@ -39,7 +40,8 @@ export function registerEntitySearchTools(
         const namespace_id = resolveNamespace(nsParam, agent);
         if (!namespace_id) return err("namespace_id required");
         const db = session(env.DB, "first-unconstrained");
-        await assertNamespaceReadAccess(db, namespace_id, email);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+        await assertNamespaceReadAccess(db, namespace_id, identity);
         track(agent, { namespace: namespace_id });
         const results = await graph.searchEntities(db, namespace_id, {
           query,

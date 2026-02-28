@@ -10,6 +10,7 @@ import {
 } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
+import { loadIdentity } from "../identity.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
 import { hydrateEntityContext } from "../context.js";
@@ -67,7 +68,8 @@ export function registerSearchTools(
         const namespace_id = resolveNamespace(nsParam, agent);
         if (!namespace_id) return err("namespace_id required");
         const db = session(env.DB, "first-unconstrained");
-        await assertNamespaceReadAccess(db, namespace_id, email);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+        await assertNamespaceReadAccess(db, namespace_id, identity);
         track(agent, { namespace: namespace_id });
         const n = cap(limit, 20, mode === "context" ? 5 : 10);
         const isCompact = compact ?? true;

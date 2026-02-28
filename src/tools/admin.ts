@@ -4,7 +4,8 @@ import { z } from "zod";
 import { consolidateFields, WORKFLOW_TYPES } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
-import { assertNamespaceWriteAccess, isAdmin } from "../auth.js";
+import { loadIdentity } from "../identity.js";
+import { assertNamespaceWriteAccess } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { getNamespaceStats } from "../stats.js";
 import { track } from "../state.js";
@@ -28,9 +29,10 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
     },
     tracked("reindex_vectors", async ({ namespace_id }) => {
       const db = session(env.DB, "first-primary");
-      if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
+      const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+      if (!identity.isAdmin) return err("admin access required");
       if (namespace_id !== "all") {
-        await assertNamespaceWriteAccess(db, namespace_id, email, true);
+        await assertNamespaceWriteAccess(db, namespace_id, identity);
       }
       if (namespace_id === "all") {
         if (!(await confirm(server, "Re-embed ALL entities and memories across all namespaces?")))
@@ -79,8 +81,9 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
         purge_after_days,
       }) => {
         const db = session(env.DB, "first-primary");
-        if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
-        await assertNamespaceWriteAccess(db, namespace_id, email, true);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+        if (!identity.isAdmin) return err("admin access required");
+        await assertNamespaceWriteAccess(db, namespace_id, identity);
         track(agent, { namespace: namespace_id });
         if (
           !(await confirm(
@@ -134,7 +137,9 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       openWorldHint: false,
     },
     tracked("get_workflow_status", async ({ workflow, instance_id }) => {
-      if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
+      const db = session(env.DB, "first-unconstrained");
+      const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+      if (!identity.isAdmin) return err("admin access required");
       const binding = workflow === "reindex" ? env.REINDEX_WORKFLOW : env.CONSOLIDATION_WORKFLOW;
       try {
         const instance = await binding.get(instance_id);
@@ -163,7 +168,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
     },
     tracked("namespace_stats", async ({ namespace_id }) => {
       const db = session(env.DB, "first-unconstrained");
-      await assertNamespaceWriteAccess(db, namespace_id, email, true);
+      const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+      await assertNamespaceWriteAccess(db, namespace_id, identity);
       track(agent, { namespace: namespace_id });
       const stats = await getNamespaceStats(db, namespace_id);
       return txt(stats);
@@ -183,7 +189,8 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
     },
     tracked("claim_namespaces", async () => {
       const db = session(env.DB, "first-primary");
-      if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
+      const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+      if (!identity.isAdmin) return err("admin access required");
       if (!(await confirm(server, "Claim all unowned namespaces for your account?")))
         return err("Cancelled");
       const claimed = await claimUnownedNamespaces(db, email);

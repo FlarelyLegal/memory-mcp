@@ -4,9 +4,10 @@ import { z } from "zod";
 import { nameField, descriptionField, visibility } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
+import { loadIdentity } from "../identity.js";
 import * as graph from "../graph/index.js";
 import { deleteVectorBatch } from "../vectorize.js";
-import { assertNamespaceWriteAccess, assertNamespaceReadAccess, isAdmin } from "../auth.js";
+import { assertNamespaceWriteAccess, assertNamespaceReadAccess } from "../auth.js";
 import { track } from "../state.js";
 import { audit } from "../audit.js";
 import { toISO } from "../utils.js";
@@ -41,7 +42,8 @@ export function registerNamespaceTools(
       if (action === "get") {
         if (!id) return err("id required");
         const db = session(env.DB, "first-unconstrained");
-        const ns = await assertNamespaceReadAccess(db, id, email);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+        const ns = await assertNamespaceReadAccess(db, id, identity);
         track(agent, { namespace: id });
         return txt({
           id: ns.id,
@@ -57,8 +59,8 @@ export function registerNamespaceTools(
         if (!id) return err("id required");
         if (!name && description === undefined) return err("name or description required");
         const db = session(env.DB, "first-primary");
-        const admin = await isAdmin(env.FLAGS, email);
-        await assertNamespaceWriteAccess(db, id, email, admin);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+        await assertNamespaceWriteAccess(db, id, identity);
         await graph.updateNamespace(db, id, { name, description });
         await audit(db, env.STORAGE, {
           action: "namespace.update",
@@ -88,8 +90,8 @@ export function registerNamespaceTools(
       if (action === "delete") {
         if (!id) return err("id required");
         const db = session(env.DB, "first-primary");
-        const admin = await isAdmin(env.FLAGS, email);
-        const ns = await assertNamespaceWriteAccess(db, id, email, admin);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+        const ns = await assertNamespaceWriteAccess(db, id, identity);
         if (!(await confirm(server, `Delete namespace "${ns.name}" and ALL its contents?`)))
           return ok("Cancelled");
         const vectorIds = await graph.collectNamespaceVectorIds(db, id);
@@ -107,9 +109,10 @@ export function registerNamespaceTools(
       }
       if (action === "set_visibility") {
         if (!id || !visibility) return err("id and visibility required");
-        if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
         const db = session(env.DB, "first-primary");
-        await assertNamespaceWriteAccess(db, id, email, true);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
+        if (!identity.isAdmin) return err("admin access required");
+        await assertNamespaceWriteAccess(db, id, identity);
         await graph.updateNamespaceVisibility(db, id, visibility);
         await audit(db, env.STORAGE, {
           action: "namespace.set_visibility",
@@ -122,8 +125,9 @@ export function registerNamespaceTools(
         return ok(`Visibility set to ${visibility}`);
       }
       const db = session(env.DB, "first-unconstrained");
+      const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
       const isCompact = compact ?? true;
-      const rows = await graph.listNamespaces(db, email);
+      const rows = await graph.listNamespaces(db, identity);
       return txt(
         rows.map((r) =>
           isCompact

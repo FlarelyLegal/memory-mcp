@@ -11,14 +11,10 @@ import {
 } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
+import { loadIdentity } from "../identity.js";
 import * as memories from "../memories.js";
 import * as vectorize from "../vectorize.js";
-import {
-  assertNamespaceWriteAccess,
-  assertMemoryAccess,
-  assertMemoryReadAccess,
-  isAdmin,
-} from "../auth.js";
+import { assertNamespaceWriteAccess, assertMemoryAccess, assertMemoryReadAccess } from "../auth.js";
 import { track, resolveNamespace } from "../state.js";
 import { audit } from "../audit.js";
 import { txt, err, ok, trunc, trackTools, confirm } from "../response-helpers.js";
@@ -69,11 +65,11 @@ export function registerMemoryTools(
         metadata,
       }) => {
         const db = session(env.DB, "first-primary");
-        const admin = await isAdmin(env.FLAGS, email);
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
         switch (action) {
           case "get": {
             if (!id) return err("id required");
-            await assertMemoryReadAccess(db, id, email);
+            await assertMemoryReadAccess(db, id, identity);
             const m = await memories.getMemory(db, id);
             if (!m) return err("Memory not found");
             return txt(m);
@@ -81,7 +77,7 @@ export function registerMemoryTools(
           case "create": {
             const namespace_id = resolveNamespace(nsParam, agent);
             if (!namespace_id || !content) return err("namespace_id, content required");
-            await assertNamespaceWriteAccess(db, namespace_id, email, admin);
+            await assertNamespaceWriteAccess(db, namespace_id, identity);
             const mid = await memories.createMemory(db, {
               namespace_id,
               content,
@@ -112,7 +108,7 @@ export function registerMemoryTools(
             if (!id) return err("id required");
             if (!content && !type && importance === undefined && !metadata)
               return err("at least one field (content, type, importance, metadata) required");
-            await assertMemoryAccess(db, id, email, admin);
+            await assertMemoryAccess(db, id, identity);
             await memories.updateMemory(db, id, { content, type, importance, metadata });
             if (content) {
               const m = await memories.getMemory(db, id);
@@ -135,7 +131,7 @@ export function registerMemoryTools(
           }
           case "delete": {
             if (!id) return err("id required");
-            await assertMemoryAccess(db, id, email, admin);
+            await assertMemoryAccess(db, id, identity);
             const m = await memories.getMemory(db, id);
             const label = m ? `memory (${m.type}): "${trunc(m.content, 60)}"` : `memory ${id}`;
             if (!(await confirm(server, `Delete ${label}?`))) return err("Cancelled");

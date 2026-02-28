@@ -4,6 +4,7 @@ import { z } from "zod";
 import { memoryType, queryField } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
+import { loadIdentity } from "../identity.js";
 import * as memories from "../memories.js";
 import { assertNamespaceReadAccess, assertEntityReadAccess } from "../auth.js";
 import { track, resolveNamespace } from "../state.js";
@@ -42,6 +43,7 @@ export function registerMemoryQueryTools(
       "query_memories",
       async ({ mode, namespace_id: nsParam, entity_id, query, type, limit, compact, verbose }) => {
         const db = session(env.DB, "first-unconstrained");
+        const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
         const n = cap(limit, 50, 20);
         const isCompact = compact ?? true;
         const full = verbose ?? false;
@@ -65,7 +67,7 @@ export function registerMemoryQueryTools(
           case "recall": {
             const namespace_id = resolveNamespace(nsParam, agent);
             if (!namespace_id) return err("namespace_id required");
-            await assertNamespaceReadAccess(db, namespace_id, email);
+            await assertNamespaceReadAccess(db, namespace_id, identity);
             track(agent, { namespace: namespace_id });
             const rows = await memories.recallMemories(db, namespace_id, { type, limit: n });
             return txt(rows.map(mapMemory));
@@ -73,7 +75,7 @@ export function registerMemoryQueryTools(
           case "search": {
             const namespace_id = resolveNamespace(nsParam, agent);
             if (!namespace_id || !query) return err("namespace_id, query required");
-            await assertNamespaceReadAccess(db, namespace_id, email);
+            await assertNamespaceReadAccess(db, namespace_id, identity);
             track(agent, { namespace: namespace_id });
             const rows = await memories.searchMemories(db, namespace_id, {
               query,
@@ -84,7 +86,7 @@ export function registerMemoryQueryTools(
           }
           case "entity": {
             if (!entity_id) return err("entity_id required");
-            await assertEntityReadAccess(db, entity_id, email);
+            await assertEntityReadAccess(db, entity_id, identity);
             track(agent, { entity: entity_id });
             const rows = await memories.getMemoriesForEntity(db, entity_id, { limit: n });
             return txt(rows.map(mapMemory));
