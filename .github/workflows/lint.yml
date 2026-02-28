@@ -9,7 +9,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup
         uses: ./.github/actions/setup
@@ -50,7 +50,7 @@ jobs:
 
       - name: Upload JUnit results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: eslint-junit
           path: test-results/eslint-junit.xml
@@ -58,7 +58,7 @@ jobs:
 
       - name: Publish lint results
         if: always()
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@bdab7eb6dfb6be17ac3d72352f67e559a72c8db1 # v2.5.0
         with:
           name: ESLint Results
           path: test-results/eslint-junit.xml

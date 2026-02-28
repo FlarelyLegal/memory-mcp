@@ -35,7 +35,7 @@ jobs:
 
       - name: Open issue if unhealthy
         if: steps.a.outcome == 'failure' || steps.b.outcome == 'failure'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const siteA = '${{ steps.a.outputs.status }}';
@@ -78,7 +78,7 @@ jobs:
 
       - name: Close issue if healthy
         if: steps.a.outcome == 'success' && steps.b.outcome == 'success'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const existing = await github.rest.issues.listForRepo({
