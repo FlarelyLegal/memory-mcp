@@ -6,6 +6,7 @@
  * at read time -- no materialized rows.
  */
 import type { DbHandle } from "../db.js";
+import { NOT_EXPIRED } from "../sql.js";
 import type { NamespaceRole } from "../types.js";
 import { MAX_GROUP_DEPTH } from "./group-hierarchy.js";
 
@@ -64,7 +65,7 @@ export async function resolveInheritedGrants(
     .prepare(
       `SELECT namespace_id, group_id, role
        FROM namespace_grants
-       WHERE status = 'active'
+       WHERE status = 'active' AND ${NOT_EXPIRED}
          AND group_id IN (${placeholders})`,
     )
     .bind(...ancestorIds)

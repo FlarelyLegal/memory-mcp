@@ -1,4 +1,5 @@
 import { type DbHandle, withRetry } from "../db.js";
+import { NOT_EXPIRED } from "../sql.js";
 import { generateId, now, toJson } from "../utils.js";
 import type { NamespaceGrantRow, NamespaceRole } from "../types.js";
 
@@ -24,7 +25,7 @@ export async function grantAccess(db: DbHandle, input: GrantInput): Promise<stri
   const existing = await db
     .prepare(
       `SELECT id FROM namespace_grants
-       WHERE namespace_id = ? AND ${principal.sql} AND status = 'active'
+       WHERE namespace_id = ? AND ${principal.sql} AND status = 'active' AND ${NOT_EXPIRED}
        LIMIT 1`,
     )
     .bind(input.namespace_id, principal.value)
@@ -110,7 +111,7 @@ export async function revokeAccessByPrincipal(
       .prepare(
         `UPDATE namespace_grants
          SET status = 'revoked', revoked_by = ?, revoked_at = ?, updated_at = ?
-         WHERE namespace_id = ? AND ${p.sql} AND status = 'active'`,
+         WHERE namespace_id = ? AND ${p.sql} AND status = 'active' AND ${NOT_EXPIRED}`,
       )
       .bind(revokedBy, ts, ts, namespaceId, p.value)
       .run(),
@@ -124,7 +125,7 @@ export async function listNamespaceGrants(
   const result = await db
     .prepare(
       `SELECT * FROM namespace_grants
-       WHERE namespace_id = ? AND status = 'active'
+       WHERE namespace_id = ? AND status = 'active' AND ${NOT_EXPIRED}
        ORDER BY created_at DESC`,
     )
     .bind(namespaceId)

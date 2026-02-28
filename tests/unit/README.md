@@ -39,6 +39,8 @@ npm run test:watch    # watch mode
 | `schema-validators.test.ts` | Zod input validation for MCP tools                                    |
 | `graph-grants.test.ts`      | Namespace grant CRUD (D1 mocked)                                      |
 | `graph-groups.test.ts`      | Group CRUD and slug generation (D1 mocked)                            |
+| `grant-expiry.test.ts`      | Grant/member expiry transitions, idempotency, email collection        |
+| `sql-predicates.test.ts`    | Shared SQL predicates (`NOT_EXPIRED`)                                 |
 | `parity.test.ts`            | MCP tool / REST API parity checks                                     |
 
 ## Conventions

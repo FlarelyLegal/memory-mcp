@@ -1,4 +1,5 @@
 import type { DbHandle } from "./db.js";
+import { NOT_EXPIRED } from "./sql.js";
 import { resolveInheritedGrants } from "./graph/index.js";
 import type { NamespaceRole, UserIdentity } from "./types.js";
 import { decodeAdminEmails, decodeIdentity, encodeIdentity } from "./kv.js";
@@ -76,17 +77,21 @@ export async function loadIdentity(
 
   const [groupsResult, grantsResult, ownedResult] = await db.batch([
     db
-      .prepare(`SELECT group_id FROM group_members WHERE email = ? AND status = 'active'`)
+      .prepare(
+        `SELECT group_id FROM group_members
+         WHERE email = ? AND status = 'active' AND ${NOT_EXPIRED}`,
+      )
       .bind(email),
     db
       .prepare(
         `SELECT namespace_id, email, group_id, role
          FROM namespace_grants
-         WHERE status = 'active'
+         WHERE status = 'active' AND ${NOT_EXPIRED}
            AND (
              email = ? OR
              group_id IN (
-               SELECT group_id FROM group_members WHERE email = ? AND status = 'active'
+               SELECT group_id FROM group_members
+               WHERE email = ? AND status = 'active' AND ${NOT_EXPIRED}
              )
            )`,
       )
