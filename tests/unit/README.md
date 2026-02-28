@@ -21,6 +21,7 @@ npm run test:watch    # watch mode
 | `kv-identity.test.ts`       | `USERS` identity cache encode/decode                                     |
 | `kv-service-token.test.ts`  | `CACHE` service token mapping encode/decode                              |
 | `kv-bind-challenge.test.ts` | `CACHE` bind challenge encode/decode                                     |
+| `bind-ui.test.ts`           | Bind UI HTML renderer and landing page renderer                          |
 | `utils.test.ts`             | ID generation, decay scoring, JSON parsing, FTS helpers                  |
 | `state.test.ts`             | Session state tracking (namespace, entity, conversation)                 |
 | `response-helpers.test.ts`  | MCP response formatting, tool handler wrappers                           |
