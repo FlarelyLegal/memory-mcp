@@ -28,7 +28,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
     },
     tracked("reindex_vectors", async ({ namespace_id }) => {
       const db = session(env.DB, "first-primary");
-      if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+      if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
       if (namespace_id !== "all") {
         await assertNamespaceWriteAccess(db, namespace_id, email, true);
       }
@@ -79,7 +79,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
         purge_after_days,
       }) => {
         const db = session(env.DB, "first-primary");
-        if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+        if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
         await assertNamespaceWriteAccess(db, namespace_id, email, true);
         track(agent, { namespace: namespace_id });
         if (
@@ -134,7 +134,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
       openWorldHint: false,
     },
     tracked("get_workflow_status", async ({ workflow, instance_id }) => {
-      if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+      if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
       const binding = workflow === "reindex" ? env.REINDEX_WORKFLOW : env.CONSOLIDATION_WORKFLOW;
       try {
         const instance = await binding.get(instance_id);
@@ -183,7 +183,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
     },
     tracked("claim_namespaces", async () => {
       const db = session(env.DB, "first-primary");
-      if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+      if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
       if (!(await confirm(server, "Claim all unowned namespaces for your account?")))
         return err("Cancelled");
       const claimed = await claimUnownedNamespaces(db, email);

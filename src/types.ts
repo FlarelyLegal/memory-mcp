@@ -9,6 +9,8 @@ export interface Env {
   DB: D1Database;
   VECTORIZE: VectorizeIndex;
   AI: Ai;
+  USERS: KVNamespace;
+  FLAGS: KVNamespace;
   CACHE: KVNamespace;
   STORAGE: R2Bucket;
   // OAuth / Cloudflare Access

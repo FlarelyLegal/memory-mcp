@@ -44,7 +44,7 @@ export function registerEntityCrudRoutes(): void {
     "/api/v1/entities/:id",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertEntityAccess(ctx.db, ctx.params.id, ctx.email, admin);
         const body = await parseBodyWithSchema(request, entityUpdateSchema);
         if (body instanceof Response) return body;
@@ -92,7 +92,7 @@ export function registerEntityCrudRoutes(): void {
     "/api/v1/entities/:id",
     async (ctx) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertEntityAccess(ctx.db, ctx.params.id, ctx.email, admin);
         await deleteEntity(ctx.db, ctx.params.id);
         await deleteVector(ctx.env, "entity", ctx.params.id);

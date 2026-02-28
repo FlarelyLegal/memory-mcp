@@ -52,7 +52,7 @@ export function registerEntityTools(
       "manage_entity",
       async ({ action, id, namespace_id: nsParam, name, type, summary, metadata, compact }) => {
         const db = session(env.DB, "first-primary");
-        const admin = action !== "get" ? await isAdmin(env.CACHE, email) : false;
+        const admin = action !== "get" ? await isAdmin(env.FLAGS, email) : false;
         switch (action) {
           case "create": {
             const namespace_id = resolveNamespace(nsParam, agent);

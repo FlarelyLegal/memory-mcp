@@ -62,6 +62,14 @@
 
   "kv_namespaces": [
     {
+      "binding": "USERS",
+      "id": "46d7d2128cd746aab5fe07f3ebe5e158",
+    },
+    {
+      "binding": "FLAGS",
+      "id": "665493612d2a4a78a8b6a5d40f52c961",
+    },
+    {
       "binding": "CACHE",
       "id": "627f376cff62453b97fff5035ed17f09",
     },

@@ -49,7 +49,7 @@ export function registerConversationTools(
         if (action === "delete") {
           if (!id) return err("id required");
           const db = session(env.DB, "first-primary");
-          const admin = await isAdmin(env.CACHE, email);
+          const admin = await isAdmin(env.FLAGS, email);
           const nsId = await assertConversationAccess(db, id, email, admin);
           const convo = await conversations.getConversation(db, id);
           if (!(await confirm(server, `Delete conversation "${convo?.title ?? id}"?`)))
@@ -71,7 +71,7 @@ export function registerConversationTools(
         if (!namespace_id) return err("namespace_id required");
         if (action === "create") {
           const db = session(env.DB, "first-primary");
-          const admin = await isAdmin(env.CACHE, email);
+          const admin = await isAdmin(env.FLAGS, email);
           await assertNamespaceWriteAccess(db, namespace_id, email, admin);
           track(agent, { namespace: namespace_id });
           const cid = await conversations.createConversation(db, {

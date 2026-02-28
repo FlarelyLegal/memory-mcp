@@ -56,7 +56,7 @@ export function registerNamespaceCrudRoutes(): void {
     "/api/v1/namespaces/:id",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.email, admin);
         const body = await parseBody<{
           name?: string;
@@ -129,7 +129,7 @@ export function registerNamespaceCrudRoutes(): void {
     "/api/v1/namespaces/:id",
     async (ctx) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         const ns = await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.email, admin);
         const vectorIds = await collectNamespaceVectorIds(ctx.db, ctx.params.id);
         await deleteNamespace(ctx.db, ctx.params.id);

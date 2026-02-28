@@ -69,7 +69,7 @@ export function registerMemoryTools(
         metadata,
       }) => {
         const db = session(env.DB, "first-primary");
-        const admin = await isAdmin(env.CACHE, email);
+        const admin = await isAdmin(env.FLAGS, email);
         switch (action) {
           case "get": {
             if (!id) return err("id required");

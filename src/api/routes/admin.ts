@@ -65,7 +65,7 @@ export function registerAdminRoutes(): void {
     "/api/v1/admin/claim-namespaces",
     async (ctx) => {
       try {
-        if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
+        if (!(await isAdmin(ctx.env.FLAGS, ctx.email)))
           return jsonError("Admin access required", 403);
         const claimed = await claimUnownedNamespaces(ctx.db, ctx.email);
         if (claimed > 0) {

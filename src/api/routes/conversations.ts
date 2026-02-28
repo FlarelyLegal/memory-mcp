@@ -101,7 +101,7 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
         const body = await parseBody<{ title?: string; metadata?: Record<string, unknown> }>(
           request,
@@ -161,7 +161,7 @@ export function registerConversationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/conversations/:id",
     async (ctx) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertConversationAccess(ctx.db, ctx.params.id, ctx.email, admin);
         const convo = await getConversation(ctx.db, ctx.params.id);
         const vectorIds = await collectConversationVectorIds(ctx.db, ctx.params.id);

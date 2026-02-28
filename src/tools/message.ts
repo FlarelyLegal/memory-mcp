@@ -44,7 +44,7 @@ export function registerMessageTools(
       const conversation_id = resolveConversation(cParam, agent);
       if (!conversation_id) return err("conversation_id required");
       const db = session(env.DB, "first-primary");
-      const admin = await isAdmin(env.CACHE, email);
+      const admin = await isAdmin(env.FLAGS, email);
       await assertConversationAccess(db, conversation_id, email, admin);
       track(agent, { conversation: conversation_id });
       const id = await conversations.addMessage(db, {

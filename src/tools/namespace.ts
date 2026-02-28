@@ -57,7 +57,7 @@ export function registerNamespaceTools(
         if (!id) return err("id required");
         if (!name && description === undefined) return err("name or description required");
         const db = session(env.DB, "first-primary");
-        const admin = await isAdmin(env.CACHE, email);
+        const admin = await isAdmin(env.FLAGS, email);
         await assertNamespaceWriteAccess(db, id, email, admin);
         await graph.updateNamespace(db, id, { name, description });
         await audit(db, env.STORAGE, {
@@ -88,7 +88,7 @@ export function registerNamespaceTools(
       if (action === "delete") {
         if (!id) return err("id required");
         const db = session(env.DB, "first-primary");
-        const admin = await isAdmin(env.CACHE, email);
+        const admin = await isAdmin(env.FLAGS, email);
         const ns = await assertNamespaceWriteAccess(db, id, email, admin);
         if (!(await confirm(server, `Delete namespace "${ns.name}" and ALL its contents?`)))
           return ok("Cancelled");
@@ -107,7 +107,7 @@ export function registerNamespaceTools(
       }
       if (action === "set_visibility") {
         if (!id || !visibility) return err("id and visibility required");
-        if (!(await isAdmin(env.CACHE, email))) return err("admin access required");
+        if (!(await isAdmin(env.FLAGS, email))) return err("admin access required");
         const db = session(env.DB, "first-primary");
         await assertNamespaceWriteAccess(db, id, email, true);
         await graph.updateNamespaceVisibility(db, id, visibility);

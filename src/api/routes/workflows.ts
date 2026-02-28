@@ -29,7 +29,7 @@ export function registerWorkflowRoutes(): void {
     "/api/v1/admin/reindex",
     async (ctx, request) => {
       try {
-        if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
+        if (!(await isAdmin(ctx.env.FLAGS, ctx.email)))
           return jsonError("Admin access required", 403);
         const body = await parseBody<{ namespace_id?: string }>(request);
         if (body instanceof Response) return body;
@@ -89,7 +89,7 @@ export function registerWorkflowRoutes(): void {
     "/api/v1/admin/consolidate",
     async (ctx, request) => {
       try {
-        if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
+        if (!(await isAdmin(ctx.env.FLAGS, ctx.email)))
           return jsonError("Admin access required", 403);
         const body = await parseBody<{
           namespace_id?: string;
@@ -155,7 +155,7 @@ export function registerWorkflowRoutes(): void {
     "/api/v1/admin/workflows/:workflow/:instance_id",
     async (ctx) => {
       try {
-        if (!(await isAdmin(ctx.env.CACHE, ctx.email)))
+        if (!(await isAdmin(ctx.env.FLAGS, ctx.email)))
           return jsonError("Admin access required", 403);
         const { workflow, instance_id } = ctx.params;
         const binding =

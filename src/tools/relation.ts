@@ -66,7 +66,7 @@ export function registerRelationTools(
         metadata,
       }) => {
         const db = session(env.DB, "first-primary");
-        const admin = await isAdmin(env.CACHE, email);
+        const admin = await isAdmin(env.FLAGS, email);
         if (action === "create") {
           const namespace_id = resolveNamespace(nsParam, agent);
           if (!namespace_id || !source_id || !target_id || !relation_type)

@@ -95,7 +95,7 @@ export function registerMessageRoutes(): void {
     "/api/v1/conversations/:id/messages",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertConversationAccess(ctx.db, ctx.params.id, ctx.email, admin);
         const body = await parseBodyWithSchema(request, messageCreateSchema);
         if (body instanceof Response) return body;

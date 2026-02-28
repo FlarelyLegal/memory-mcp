@@ -34,7 +34,7 @@ export function registerRelationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/relations",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
         const body = await parseBody(request);
         if (body instanceof Response) return body;
@@ -179,7 +179,7 @@ export function registerRelationRoutes(): void {
     "/api/v1/relations/:id",
     async (ctx) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertRelationAccess(ctx.db, ctx.params.id, ctx.email, admin);
         await deleteRelation(ctx.db, ctx.params.id);
         await audit(ctx.db, ctx.env.STORAGE, {

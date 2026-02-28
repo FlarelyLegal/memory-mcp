@@ -14,7 +14,7 @@ import type { DbHandle } from "./db.js";
 const ADMIN_KEY = "admin:emails";
 
 /**
- * Check if an email is in the admin allowlist stored in KV.
+ * Check if an email is in the admin allowlist stored in FLAGS KV.
  * Key: `admin:emails`, value: comma-separated emails.
  * Returns false when the key is missing (fail-closed).
  */

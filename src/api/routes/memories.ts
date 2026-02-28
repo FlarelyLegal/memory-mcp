@@ -21,7 +21,7 @@ export function registerMemoryRoutes(): void {
     "/api/v1/namespaces/:namespace_id/memories",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
         const body = await parseBodyWithSchema(request, memoryCreateSchema);
         if (body instanceof Response) return body;
@@ -114,7 +114,7 @@ export function registerMemoryRoutes(): void {
     "/api/v1/memories/:id",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertMemoryAccess(ctx.db, ctx.params.id, ctx.email, admin);
         const body = await parseBodyWithSchema(request, memoryUpdateSchema);
         if (body instanceof Response) return body;
@@ -166,7 +166,7 @@ export function registerMemoryRoutes(): void {
     "/api/v1/memories/:id",
     async (ctx) => {
       try {
-        const admin = await isAdmin(ctx.env.CACHE, ctx.email);
+        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
         await assertMemoryAccess(ctx.db, ctx.params.id, ctx.email, admin);
         await deleteMemory(ctx.db, ctx.params.id);
         await deleteVector(ctx.env, "memory", ctx.params.id);
