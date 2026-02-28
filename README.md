@@ -15,6 +15,18 @@
 
 Remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory — knowledge graphs, semantic search, and temporally-decayed recall.
 
+## Why FlarelyLegal Memory MCP?
+
+Most MCP memory servers give you a personal scratchpad. Memory Graph MCP is built for **collaborative memory** — shared knowledge graphs that teams and organizations use together with real access control.
+
+- **Works solo** — every user gets their own private namespaces out of the box
+- **Works for teams** — grant group or individual access to namespaces with role-based permissions (owner / editor / viewer)
+- **Works at the edge** — runs on Cloudflare Workers with D1, Vectorize, and KV, so latency is low everywhere
+- **Authenticated by default** — Cloudflare Access handles identity; the server enforces per-namespace RBAC with audit logging on every write
+- **Semantic + structural** — vector search finds relevant context, the knowledge graph preserves relationships, and temporal decay surfaces what matters now
+
+This is the MCP memory layer for organizations, not just individuals.
+
 ## Architecture
 
 | Component       | Service                | Purpose                                                  |
@@ -81,10 +93,11 @@ Full docs at [docs/](docs/README.md) — deployment, configuration, architecture
 
 ## Roadmap
 
-Security and feature items not yet implemented:
+Active and planned work:
 
+- [ ] **Groups + RBAC** _(in progress)_ — team-based namespace sharing with role-based access control (owner / editor / viewer), group management, and coalesced identity caching
+- [ ] **D1 migration system** _(in progress)_ — `wrangler d1 migrations` for schema versioning
 - [ ] **Rate limiting** — `RATE_LIMIT_AUTH` and `RATE_LIMIT_SEARCH` bindings exist in types but are not wired up
+- [ ] **DPoP-bound delegated tokens** — proof-of-possession tokens for third-party integrations
 - [ ] **Field-level encryption** — entity content, memory text, and conversation messages are plaintext in D1 (Cloudflare encrypts at rest at the storage layer, but dashboard/D1 console access exposes data)
-- [ ] **Namespace groups** — shared access across multiple users within a namespace (currently single-owner only)
-- [ ] **Health check config validation** — `/health` could verify KV key (`admin:emails`) and report misconfiguration
 - [ ] **Audit query MCP tool + REST API routes** — `queryAuditLogs` exists in code but has no MCP tool or REST endpoint yet
