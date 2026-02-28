@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 const target = (process.env.API_TARGET ?? "a").toLowerCase();
 const isB = target === "b";
@@ -28,11 +28,29 @@ export default defineConfig({
     ["html", { open: "never", outputFolder: "playwright-report" }],
     ["junit", { outputFile: "test-results/junit.xml" }],
   ],
-  use: {
-    baseURL,
-    extraHTTPHeaders: {
-      "CF-Access-Client-Id": clientId,
-      "CF-Access-Client-Secret": clientSecret,
+  projects: [
+    {
+      name: "api",
+      testMatch: "api.spec.ts",
+      use: {
+        baseURL,
+        extraHTTPHeaders: {
+          "CF-Access-Client-Id": clientId,
+          "CF-Access-Client-Secret": clientSecret,
+        },
+      },
     },
-  },
+    {
+      name: "browser",
+      testMatch: "pages.spec.ts",
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL,
+        extraHTTPHeaders: {
+          "CF-Access-Client-Id": clientId,
+          "CF-Access-Client-Secret": clientSecret,
+        },
+      },
+    },
+  ],
 });

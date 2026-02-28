@@ -12,3 +12,4 @@ dist/
 test-results/
 playwright-report/
 blob-report/
+tests/e2e/screenshots/

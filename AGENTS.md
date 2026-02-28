@@ -23,7 +23,8 @@ Local dev setup (local flag, AI/Vectorize limitations, D1 init) is covered in [d
 
 - **OAuth flow requires secrets:** The full OAuth login flow needs seven secrets in `.dev.vars` (see `.dev.vars.example`): `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET`, `ACCESS_TOKEN_URL`, `ACCESS_AUTHORIZATION_URL`, `ACCESS_JWKS_URL`, `ACCESS_AUD_TAG`, and `COOKIE_ENCRYPTION_KEY`. Without these, `/health` and `/register` still work, but the `/authorize` → `/callback` flow and authenticated MCP tool calls will not.
 - **JWT audience validation:** `ACCESS_AUD_TAG` is the Cloudflare Access Application Audience tag (not the OAuth client ID). It validates the `aud` claim in ID tokens to prevent cross-application token reuse.
-- **Root URL:** `GET /` returns a plain-text landing page with version, description, and repo link. All other unknown paths return 404.
+- **Root URL:** `GET /` returns an HTML landing page with health status pill, about section, and quick links. All other unknown paths return 404.
+- **Service token bind UI:** `GET /api/v1/admin/service-tokens/bind` serves a self-service HTML page. The `POST` combined endpoint validates credentials via subrequest to `/health` (Access processes the service token headers at the edge) and writes the KV binding in one step. The browser's cookie proves human identity; the subrequest proves token possession.
 - **Health endpoint:** `GET /health` returns `{"status":"ok","server":"memory-graph-mcp","version":"<version>"}` -- no auth required.
 - **Security headers:** All responses from the access handler include `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Strict-Transport-Security`.
 - **Input validation:** All MCP tool inputs have Zod `.max()` bounds on strings and arrays to prevent oversized payloads to D1/Workers AI.
@@ -50,6 +51,7 @@ Code is organized into focused modules with a 250-line cap per file:
 - `src/types.ts` -- `Env` interface (all bindings), `AuthProps`, `SessionState`, `StateHandle`, domain types + DB row types
 - `src/db.ts` -- D1 Sessions API helpers: `DbHandle` type, `session()`, `getBookmark()`, `withRetry()` (jitter backoff for transient D1 write errors)
 - `src/access-handler.ts` -- OAuth route handler (`/authorize`, `/callback`, `/health`, `/`, `/api/*`)
+- `src/landing.ts` -- HTML landing page renderer for `GET /` (health pill, about, quick links)
 - `src/auth.ts` -- Per-user authorization: read/write access checks with namespace visibility support (`assertNamespaceReadAccess`, `assertNamespaceWriteAccess`, `assertEntityReadAccess`, `assertEntityAccess`, etc.), `isAdmin()` KV lookup, `AccessDeniedError`
 - `src/jwt.ts` -- JWT verification (RSA signature + expiry + audience validation)
 - `src/ai.ts` -- AI Gateway wrapper: `aiRun()` injects gateway routing into all `env.AI.run()` calls
@@ -81,7 +83,9 @@ Code is organized into focused modules with a 250-line cap per file:
   - `openapi.ts` -- Assembles OpenAPI 3.1 spec dynamically from registered routes
   - `schemas.ts` -- OpenAPI response schemas, parameter helpers, `queryLimit()`, `zodSchema()` (Zod → OpenAPI converter)
   - `docs.ts` -- Scalar API reference UI
-  - `routes/` -- One file per domain (namespaces, namespace-crud, grants, groups, group-members, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, workflows, tokens, token-crud, demo). Each registers routes + their OpenAPI path definitions.
+  - `routes/` -- One file per domain (namespaces, namespace-crud, grants, groups, group-members, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, workflows, tokens, token-crud, bind-ui, demo). Each registers routes + their OpenAPI path definitions.
+  - `routes/bind-ui.ts` -- Service token bind UI: `GET` serves HTML page, `POST` does combined bind (validates credentials via subrequest, writes KV binding)
+  - `routes/bind-ui-html.ts` -- HTML renderer for the bind UI page (Inter font, card layout, CSP nonce)
 - `src/oauth/` -- OAuth utilities split by concern (error, sanitize, csrf, state, approval) with barrel re-export via `index.ts`.
 - `schemas/schema.sql` -- D1 schema (11 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, audit_logs, groups, group_members, namespace_grants).
 
