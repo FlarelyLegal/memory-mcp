@@ -93,6 +93,8 @@ See [Deployment](docs/deployment.md) for full setup with Cloudflare resources.
 
 ## Connect an MCP client
 
+### Interactive (browser login)
+
 ```json
 {
   "mcpServers": {
@@ -103,7 +105,19 @@ See [Deployment](docs/deployment.md) for full setup with Cloudflare resources.
 }
 ```
 
-Works with Claude Desktop, Cursor, OpenCode, or any MCP-compatible client.
+Works with Claude Desktop, Cursor, OpenCode, or any MCP-compatible client. Your client opens a Cloudflare Access login page on first connect.
+
+### Headless / CI
+
+The MCP endpoint requires an interactive OAuth flow -- it cannot be used with service tokens alone. For CI pipelines, scripts, and headless agents, use the [REST API](docs/rest-api.md) with Cloudflare Access service tokens:
+
+```bash
+curl https://memory.flarelylegal.com/api/v1/namespaces \
+  -H "CF-Access-Client-Id: <client-id>" \
+  -H "CF-Access-Client-Secret: <client-secret>"
+```
+
+The REST API has full MCP-parity for all data operations. See [Service tokens](#service-tokens-cicd-and-automation) below for setup.
 
 > [!NOTE]
 > Access is gated by Cloudflare Access. To request a test account, open an issue or reach out.

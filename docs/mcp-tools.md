@@ -18,10 +18,14 @@ For Claude Desktop, Cursor, OpenCode, or any MCP-compatible client:
 }
 ```
 
-Your client opens the Cloudflare Access login page. All data is scoped to your authenticated identity.
+Your client opens the Cloudflare Access login page on first connect. All data is scoped to your authenticated identity.
 
 > [!NOTE]
 > Access is gated by Cloudflare Access. To request a test account, open an issue or reach out.
+
+### Headless / CI
+
+The MCP endpoint uses an OAuth 2.1 flow that requires an interactive browser login. Service tokens cannot complete this handshake. For CI pipelines, scripts, and headless agents, use the [REST API](rest-api.md) with Cloudflare Access service tokens instead -- it has full MCP-parity for all data operations. See [REST API -- service tokens](rest-api.md#service-tokens) for setup and [Troubleshooting](troubleshooting.md#mcp-client-cant-connect-headlessci) for common issues.
 
 ## Access control
 
