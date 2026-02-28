@@ -14,9 +14,6 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
       - name: Preflight API availability
         run: curl -fsS "${API_BASE_URL_B}/health"
         env:

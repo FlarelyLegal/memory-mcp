@@ -1,15 +1,9 @@
 name: Setup
-description: Setup Node.js and project dependencies
+description: Install project dependencies (Node.js is pre-installed on self-hosted runner)
 
 runs:
   using: composite
   steps:
-    - name: Setup Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: "24"
-        cache: "npm"
-
     - name: Install dependencies
       shell: bash
       run: npm ci
