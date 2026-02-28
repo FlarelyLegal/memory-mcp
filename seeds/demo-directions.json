@@ -1,21 +1,21 @@
 {
   "namespace": {
     "name": "demo",
-    "description": "Capability showcase — the Memory Graph MCP server modeled as its own knowledge graph."
+    "description": "Capability showcase -- the Memory Graph MCP server modeled as its own knowledge graph."
   },
   "entities": [
     {
       "key": "memory_graph_mcp",
       "name": "Memory Graph MCP",
       "type": "project",
-      "summary": "Remote MCP server on Cloudflare Workers providing LLMs with persistent structured memory — knowledge graphs, semantic search, and temporally-decayed recall.",
+      "summary": "Remote MCP server on Cloudflare Workers providing LLMs with persistent shared memory -- knowledge graphs, semantic search, RBAC namespace sharing, and temporally-decayed recall.",
       "metadata": { "repo": "https://github.com/FlarelyLegal/memory-mcp", "license": "MIT" }
     },
     {
       "key": "d1_database",
       "name": "D1 (SQLite)",
       "type": "tool",
-      "summary": "Cloudflare D1 stores the structured graph across 8 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, and audit_logs. Read replication via Sessions API routes reads to nearest replica.",
+      "summary": "Cloudflare D1 stores the structured graph across 11 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, audit_logs, groups, group_members, and namespace_grants. Read replication via Sessions API routes reads to nearest replica.",
       "metadata": { "docs": "https://developers.cloudflare.com/d1/" }
     },
     {
@@ -47,7 +47,7 @@
       "key": "kv_store",
       "name": "Workers KV",
       "type": "tool",
-      "summary": "Key-value store used for OAuth state management, JWKS caching, service-token-to-email bindings, admin allowlist, and CORS origin configuration."
+      "summary": "Key-value store across 4 namespaces: USERS (identity cache), FLAGS (admin allowlist), CACHE (service token bindings, bind challenges, JWKS), OAUTH_KV (OAuth state). USERS, FLAGS, and CACHE payloads use versioned JSON (v: 1.0) with typed encode/decode helpers."
     },
     {
       "key": "cloudflare_access",
@@ -140,7 +140,7 @@
       "key": "elicitation",
       "name": "Elicitation",
       "type": "concept",
-      "summary": "Destructive MCP operations prompt the user for confirmation via the MCP elicitation protocol. Gracefully degrades if the client doesn't support it — operations proceed without confirmation."
+      "summary": "Destructive MCP operations prompt the user for confirmation via the MCP elicitation protocol. Gracefully degrades if the client doesn't support it -- operations proceed without confirmation."
     },
     {
       "key": "session_state",
@@ -158,7 +158,57 @@
       "key": "namespace_visibility",
       "name": "Namespace Visibility",
       "type": "concept",
-      "summary": "Namespaces have private or public visibility. Public namespaces appear in every user's list and allow read access for any authenticated user. Write access requires ownership or admin role."
+      "summary": "Namespaces have private or public visibility. Public namespaces appear in every user's list and allow read access for any authenticated user. Write access requires editor or owner role via direct or group grants."
+    },
+    {
+      "key": "ai_gateway",
+      "name": "AI Gateway",
+      "type": "tool",
+      "summary": "Cloudflare AI Gateway routes all Workers AI calls for analytics, caching, rate limiting, and logging. Uses the native binding approach -- no extra packages or API tokens needed.",
+      "metadata": { "docs": "https://developers.cloudflare.com/ai-gateway/" }
+    },
+    {
+      "key": "analytics_engine",
+      "name": "Analytics Engine",
+      "type": "tool",
+      "summary": "Cloudflare Analytics Engine tracks per-request metrics for both REST API and MCP tool calls. Data points include channel, operation, status, latency, and response size. Fire-and-forget -- never blocks the request.",
+      "metadata": { "docs": "https://developers.cloudflare.com/analytics/analytics-engine/" }
+    },
+    {
+      "key": "rbac_system",
+      "name": "RBAC System",
+      "type": "concept",
+      "summary": "Role-based access control with three namespace roles (viewer, editor, owner), group-based grants, and direct user grants. Identity loaded from D1, cached in USERS KV with 5-minute TTL. Access checks use the highest role from ownership, direct grants, and group grants."
+    },
+    {
+      "key": "structured_logging",
+      "name": "Structured Logging",
+      "type": "concept",
+      "summary": "JSON-formatted console output parseable by wrangler tail. logError and logWarn helpers tag each line with source context (tool, api, oauth, db, fts, audit). PII-free -- email excluded from all console output; use audit correlation ID for lookup."
+    },
+    {
+      "key": "rate_limiting",
+      "name": "Rate Limiting",
+      "type": "concept",
+      "summary": "Two Worker rate limiter bindings protect API routes: RATE_LIMIT_AUTH for auth-sensitive operations and RATE_LIMIT_SEARCH for semantic search. Keys scoped per-user or per-service-token. Gracefully no-ops when bindings are absent."
+    },
+    {
+      "key": "kv_payload_versioning",
+      "name": "KV Payload Versioning",
+      "type": "concept",
+      "summary": "All KV JSON payloads include a version field (v: 1.0) for safe future migrations. Typed encode/decode helpers for each payload type: AdminEmails, Identity, ServiceToken, BindChallenge. Decode returns null on malformed data (fail-closed)."
+    },
+    {
+      "key": "identity_system",
+      "name": "Identity Resolution",
+      "type": "concept",
+      "summary": "Loads a user's full identity (groups, owned namespaces, direct grants, group grants, admin flag) from D1 in a single batched query. Cached in USERS KV with 5-minute TTL. Cache busted on grant, group, or namespace ownership changes."
+    },
+    {
+      "key": "db_router",
+      "name": "DB Router",
+      "type": "concept",
+      "summary": "Control plane / data plane DB routing scaffold. Separates control plane queries (groups, grants, admin) from data plane queries (entities, memories, relations). Currently returns centralized DB -- future sharding will route by namespace.shard_id."
     }
   ],
   "relations": [
@@ -365,12 +415,102 @@
       "target_key": "namespace_visibility",
       "relation_type": "uses",
       "weight": 0.7
+    },
+    {
+      "source_key": "workers_ai",
+      "target_key": "ai_gateway",
+      "relation_type": "routed_through",
+      "weight": 1.0
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "analytics_engine",
+      "relation_type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "rbac_system",
+      "relation_type": "uses",
+      "weight": 0.9
+    },
+    {
+      "source_key": "rbac_system",
+      "target_key": "namespace_visibility",
+      "relation_type": "uses",
+      "weight": 0.8
+    },
+    {
+      "source_key": "rbac_system",
+      "target_key": "d1_database",
+      "relation_type": "depends_on",
+      "weight": 0.9
+    },
+    {
+      "source_key": "rbac_system",
+      "target_key": "kv_store",
+      "relation_type": "uses",
+      "weight": 0.8
+    },
+    {
+      "source_key": "identity_system",
+      "target_key": "rbac_system",
+      "relation_type": "part_of",
+      "weight": 0.9
+    },
+    {
+      "source_key": "kv_payload_versioning",
+      "target_key": "kv_store",
+      "relation_type": "part_of",
+      "weight": 0.9
+    },
+    {
+      "source_key": "rest_api",
+      "target_key": "rate_limiting",
+      "relation_type": "uses",
+      "weight": 0.7
+    },
+    {
+      "source_key": "rest_api",
+      "target_key": "analytics_engine",
+      "relation_type": "uses",
+      "weight": 0.7
+    },
+    {
+      "source_key": "mcp_protocol",
+      "target_key": "analytics_engine",
+      "relation_type": "uses",
+      "weight": 0.7
+    },
+    {
+      "source_key": "memory_graph_mcp",
+      "target_key": "structured_logging",
+      "relation_type": "uses",
+      "weight": 0.6
+    },
+    {
+      "source_key": "cloudflare_access",
+      "target_key": "rbac_system",
+      "relation_type": "provides",
+      "weight": 0.8
+    },
+    {
+      "source_key": "d1_database",
+      "target_key": "db_router",
+      "relation_type": "uses",
+      "weight": 0.6
+    },
+    {
+      "source_key": "structured_logging",
+      "target_key": "audit_logging",
+      "relation_type": "enhances",
+      "weight": 0.7
     }
   ],
   "memories": [
     {
       "type": "fact",
-      "content": "The structured graph is stored in D1 across 8 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, and audit_logs. Three FTS5 virtual tables provide BM25-ranked keyword search. Vectors live in Vectorize.",
+      "content": "The structured graph is stored in D1 across 11 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, audit_logs, groups, group_members, and namespace_grants. Three FTS5 virtual tables provide BM25-ranked keyword search. Vectors live in Vectorize.",
       "importance": 0.9,
       "source": "schemas/schema.sql",
       "entity_keys": ["d1_database", "vectorize", "fts5_search"]
@@ -396,7 +536,7 @@
     },
     {
       "type": "fact",
-      "content": "The OpenAPI 3.1 spec is assembled dynamically from route registrations in the registry �� there is no separate spec file to maintain. Schemas are derived from shared Zod definitions via toJSONSchema(). Interactive docs use Scalar UI at /api/docs.",
+      "content": "The OpenAPI 3.1 spec is assembled dynamically from route registrations in the registry -- there is no separate spec file to maintain. Schemas are derived from shared Zod definitions via toJSONSchema(). Interactive docs use Scalar UI at /api/docs.",
       "importance": 0.6,
       "entity_keys": ["openapi_spec", "rest_api", "shared_schemas"]
     },
@@ -426,7 +566,7 @@
     },
     {
       "type": "fact",
-      "content": "All write operations (MCP tools and REST API) are audit-logged to both D1 (queryable hot window, 90-day retention) and R2 (individual JSON objects at audit/events/{day}/{id}.json, retained indefinitely). Both writes are fire-and-forget — failures never block the request.",
+      "content": "All write operations (MCP tools and REST API) are audit-logged to both D1 (queryable hot window, 90-day retention) and R2 (individual JSON objects at audit/events/{day}/{id}.json, retained indefinitely). Both writes are fire-and-forget -- failures never block the request.",
       "importance": 0.7,
       "entity_keys": ["audit_logging", "d1_database", "r2_storage"]
     },
@@ -438,7 +578,7 @@
     },
     {
       "type": "fact",
-      "content": "D1 write operations are wrapped with withRetry() — up to 3 retries with jitter backoff on transient errors (network loss, object reset, code update, transient resolution failures).",
+      "content": "D1 write operations are wrapped with withRetry() -- up to 3 retries with jitter backoff on transient errors (network loss, object reset, code update, transient resolution failures).",
       "importance": 0.6,
       "entity_keys": ["d1_database"]
     },
@@ -462,9 +602,9 @@
     },
     {
       "type": "fact",
-      "content": "Namespaces have private or public visibility. Public namespaces appear in every user's list and allow read operations for any authenticated user. Write access requires ownership or admin role. Admins can set visibility via manage_namespace tool or PATCH /api/v1/namespaces/:id.",
+      "content": "Namespaces have private or public visibility. Public namespaces appear in every user's list and allow read operations for any authenticated user. Write access requires editor or owner role via direct or group grants. Admins can write to any public namespace. Visibility is set via manage_namespace tool or PATCH /api/v1/namespaces/:id.",
       "importance": 0.7,
-      "entity_keys": ["namespace_visibility", "knowledge_graph"]
+      "entity_keys": ["namespace_visibility", "knowledge_graph", "rbac_system"]
     },
     {
       "type": "fact",
@@ -513,6 +653,78 @@
       "content": "Graph traversal uses breadth-first search from a start entity, following outgoing relations up to 5 hops deep. Relation-type filtering lets you walk only specific edge types like depends_on or part_of.",
       "importance": 0.7,
       "entity_keys": ["knowledge_graph"]
+    },
+    {
+      "type": "fact",
+      "content": "RBAC uses three namespace roles: viewer (read-only), editor (read-write), and owner (full control including share/transfer/delete). Access level is the maximum of ownership (level 3), direct grants, and group grants. Admins bypass all checks.",
+      "importance": 0.8,
+      "entity_keys": ["rbac_system", "namespace_visibility"]
+    },
+    {
+      "type": "fact",
+      "content": "Groups support three member roles (owner, admin, member) and four member statuses (pending, active, suspended, expired). Groups can be granted namespace access just like individual users. Stored in D1 groups and group_members tables.",
+      "importance": 0.7,
+      "entity_keys": ["rbac_system", "d1_database"]
+    },
+    {
+      "type": "fact",
+      "content": "Namespace grants link a user email or group to a namespace with a role (viewer, editor, owner). Grants have status tracking (active, expired, revoked, suspended), optional expiration, and unique constraints preventing duplicate active grants per principal.",
+      "importance": 0.7,
+      "entity_keys": ["rbac_system", "d1_database"]
+    },
+    {
+      "type": "fact",
+      "content": "User identity is loaded from D1 in a single batched query (group memberships, namespace grants, owned namespaces) and cached in USERS KV with a 5-minute TTL. Cache is busted on grant, group membership, or namespace ownership changes.",
+      "importance": 0.7,
+      "entity_keys": ["identity_system", "kv_store", "d1_database"]
+    },
+    {
+      "type": "fact",
+      "content": "All KV JSON payloads include a version field (v: 1.0) for safe future migrations. Four payload types have typed encode/decode helpers: AdminEmailsPayload, IdentityPayload, ServiceTokenPayloadV1, and BindChallengePayloadV1. Decode returns null on malformed data (fail-closed).",
+      "importance": 0.6,
+      "entity_keys": ["kv_payload_versioning", "kv_store"]
+    },
+    {
+      "type": "fact",
+      "content": "Analytics Engine tracks per-request metrics for both REST API and MCP tool calls. Each data point records: user email (index), channel (api/mcp), operation (route path or tool name), status (ok/error), latency in ms, and response size in bytes.",
+      "importance": 0.6,
+      "entity_keys": ["analytics_engine"]
+    },
+    {
+      "type": "fact",
+      "content": "All Workers AI calls (embeddings, reranker, memory merge, entity summaries) are routed through AI Gateway via the aiRun() wrapper. Uses the native binding approach -- env.AI.run(model, input, { gateway: { id } }). Provides analytics, caching, rate limiting, and logging for all AI inference.",
+      "importance": 0.7,
+      "entity_keys": ["ai_gateway", "workers_ai"]
+    },
+    {
+      "type": "fact",
+      "content": "Structured logging emits JSON to console for wrangler tail parsing. Three log types: audit (correlation ID, action, resource), error (source, message, stack), warn (source, message). PII (email) excluded from all console output.",
+      "importance": 0.5,
+      "entity_keys": ["structured_logging", "audit_logging"]
+    },
+    {
+      "type": "fact",
+      "content": "Two Worker rate limiter bindings protect API routes: RATE_LIMIT_AUTH guards auth-sensitive operations (service token binding), RATE_LIMIT_SEARCH guards semantic search and message search. Rate keys are scoped per-user or per-service-token. Returns 429 when exceeded.",
+      "importance": 0.6,
+      "entity_keys": ["rate_limiting", "rest_api"]
+    },
+    {
+      "type": "fact",
+      "content": "The DB router separates control plane queries (groups, grants, admin operations) from data plane queries (entities, memories, relations, conversations). Both currently route to the centralized DB. The namespace shard_id column is a scaffold for future multi-database sharding.",
+      "importance": 0.5,
+      "entity_keys": ["db_router", "d1_database"]
+    },
+    {
+      "type": "fact",
+      "content": "D1 write retry detects replay insert conflicts -- when a duplicate-key error occurs after retries, it checks whether the row with the intended ID already exists. If so, it treats the error as a replayed success rather than surfacing a false failure.",
+      "importance": 0.5,
+      "entity_keys": ["d1_database"]
+    },
+    {
+      "type": "fact",
+      "content": "Context-mode search uses batch entity hydration -- 3 queries total (entities, relations, memories) instead of 4 queries per entity. This eliminates the N+1 query pattern when enriching multiple search results with graph context.",
+      "importance": 0.6,
+      "entity_keys": ["semantic_search", "knowledge_graph"]
     }
   ]
 }
