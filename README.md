@@ -108,6 +108,28 @@ Works with Claude Desktop, Cursor, OpenCode, or any MCP-compatible client.
 > [!NOTE]
 > Access is gated by Cloudflare Access. To request a test account, open an issue or reach out.
 
+## Service tokens (CI/CD and automation)
+
+Browser login works for interactive use, but CI pipelines, scripts, and headless agents can't complete an OAuth flow. Cloudflare Access service tokens solve this -- they authenticate requests at the edge without a browser. Each token must be bound to an email so the server knows which user owns the writes.
+
+1. **Create a service token** in the [Zero Trust dashboard](https://one.dash.cloudflare.com/) (Access > Service Auth > Service Tokens) _(admin)_
+2. **Add a Service Auth policy** to your Access application _(admin)_
+3. **Bind the token to your identity** -- visit the self-service form in your browser _(any authenticated user)_:
+
+   [memory.flarelylegal.com/api/v1/admin/service-tokens/bind](https://memory.flarelylegal.com/api/v1/admin/service-tokens/bind)
+
+   Enter your Client ID and Secret, click "Bind token". The form validates credentials and links the token to your Cloudflare Access identity.
+
+4. **Use the token in API or MCP calls:**
+
+```bash
+curl https://memory.flarelylegal.com/api/v1/namespaces \
+ -H "CF-Access-Client-Id: <client-id>" \
+ -H "CF-Access-Client-Secret: <client-secret>"
+```
+
+> For programmatic binding (CI pipelines, scripts), see [REST API -- service tokens](docs/rest-api.md#programmatic-service-tokens).
+
 ## MCP Tools (17)
 
 17 tools covering namespaces, entities, relations, traversal, memories, conversations, semantic search, and admin workflows. See [MCP Tools](docs/mcp-tools.md) for the full list with parameters and usage.

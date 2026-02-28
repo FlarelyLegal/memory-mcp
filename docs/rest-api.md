@@ -34,13 +34,17 @@ The middleware checks in order:
 
 Visit the Worker URL in a browser. Cloudflare Access handles the login flow and sets the `CF_Authorization` cookie automatically.
 
-### Programmatic (service tokens)
+### Service tokens
 
-1. **Create a service token** in the Zero Trust dashboard (Access > Service Auth > Service Tokens)
-2. **Add a Service Auth policy** to your Access application
-3. **Bind the token to an email** -- use the self-service UI or curl:
+Service tokens let CI pipelines, scripts, and headless agents authenticate without a browser OAuth flow. Cloudflare Access issues the token, but the server needs to know which user it belongs to -- binding links the token's `common_name` (Client ID) to your email so writes are attributed correctly and RBAC is enforced.
 
-**Browser:** Visit `https://<worker>/api/v1/admin/service-tokens/bind`, fill in Client ID and Secret, click "Bind token".
+1. **Create a service token** in the Zero Trust dashboard (Access > Service Auth > Service Tokens) _(admin)_
+2. **Add a Service Auth policy** to your Access application _(admin)_
+3. **Bind the token to your identity** _(any authenticated user)_:
+
+**Browser (recommended):** Visit `https://<worker>/api/v1/admin/service-tokens/bind`, enter your Client ID and Secret, click "Bind token".
+
+#### Programmatic binding {#programmatic-service-tokens}
 
 **curl (combined endpoint):**
 
@@ -51,7 +55,8 @@ curl -X POST https://<worker>/api/v1/admin/service-tokens/bind \
   -d '{"client_id": "<client-id>", "client_secret": "<client-secret>", "label": "My CI bot"}'
 ```
 
-**curl (two-step challenge flow):**
+<details>
+<summary>Two-step challenge flow (legacy)</summary>
 
 ```bash
 # Step 1: Human creates bind challenge (browser-authenticated)
@@ -67,6 +72,8 @@ curl -X POST https://<worker>/api/v1/admin/service-tokens/bind-self \
   -H "Content-Type: application/json" \
   -d '{"challenge_id": "<challenge-id>"}'
 ```
+
+</details>
 
 4. **Make API calls:**
 
