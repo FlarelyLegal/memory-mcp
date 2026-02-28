@@ -1,15 +1,6 @@
-/**
- * Per-user authorization helpers.
- *
- * Namespaces have an `owner` column and a `visibility` column:
- * - `private`: only the owner can read or write.
- * - `public`: any authenticated user can read; only owner or admin can write.
- *
- * Unowned namespaces (owner IS NULL) are inaccessible — claim them first.
- */
-
-import type { NamespaceRow } from "./types.js";
+import { getAccessLevel } from "./identity.js";
 import type { DbHandle } from "./db.js";
+import type { NamespaceRow, UserIdentity } from "./types.js";
 
 const ADMIN_KEY = "admin:emails";
 
@@ -32,11 +23,29 @@ export class AccessDeniedError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Namespace-level access checks
-// ---------------------------------------------------------------------------
+type AccessPrincipal =
+  | { mode: "legacy"; email: string; admin: boolean }
+  | { mode: "identity"; identity: UserIdentity };
 
-/** Fetch a namespace or throw. */
+function isUserIdentity(value: unknown): value is UserIdentity {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    Array.isArray(v.groups) &&
+    Array.isArray(v.ownedNamespaces) &&
+    typeof v.directGrants === "object" &&
+    v.directGrants !== null &&
+    typeof v.groupGrants === "object" &&
+    v.groupGrants !== null &&
+    typeof v.isAdmin === "boolean"
+  );
+}
+
+function principalFrom(identityOrEmail: UserIdentity | string, admin = false): AccessPrincipal {
+  if (isUserIdentity(identityOrEmail)) return { mode: "identity", identity: identityOrEmail };
+  return { mode: "legacy", email: identityOrEmail, admin };
+}
+
 async function fetchNamespace(db: DbHandle, namespaceId: string): Promise<NamespaceRow> {
   const ns = await db
     .prepare(`SELECT * FROM namespaces WHERE id = ?`)
@@ -46,62 +55,67 @@ async function fetchNamespace(db: DbHandle, namespaceId: string): Promise<Namesp
   return ns;
 }
 
-/** Can the user read? Owner always can; public namespaces allow any authenticated user. */
-function canRead(ns: NamespaceRow, email: string): boolean {
-  return ns.owner === email || ns.visibility === "public";
+function canRead(ns: NamespaceRow, principal: AccessPrincipal): boolean {
+  if (principal.mode === "identity") {
+    return getAccessLevel(principal.identity, ns.id) >= 1 || ns.visibility === "public";
+  }
+  return ns.owner === principal.email || ns.visibility === "public";
 }
 
-/** Can the user write? Owner always can; admins can write to public namespaces. */
-function canWrite(ns: NamespaceRow, email: string, admin: boolean): boolean {
-  return ns.owner === email || (admin && ns.visibility === "public");
+function canWrite(ns: NamespaceRow, principal: AccessPrincipal): boolean {
+  if (principal.mode === "identity") {
+    return (
+      getAccessLevel(principal.identity, ns.id) >= 2 ||
+      (principal.identity.isAdmin && ns.visibility === "public")
+    );
+  }
+  return ns.owner === principal.email || (principal.admin && ns.visibility === "public");
 }
 
-/**
- * Assert the user can read the namespace.
- * Allowed if: owner OR namespace is public.
- */
+function canOwn(ns: NamespaceRow, principal: AccessPrincipal): boolean {
+  if (principal.mode === "identity") {
+    return getAccessLevel(principal.identity, ns.id) >= 3 || principal.identity.isAdmin;
+  }
+  return ns.owner === principal.email || principal.admin;
+}
+
 export async function assertNamespaceReadAccess(
   db: DbHandle,
   namespaceId: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
 ): Promise<NamespaceRow> {
   const ns = await fetchNamespace(db, namespaceId);
-  if (!canRead(ns, email)) throw new AccessDeniedError("You do not have access to this namespace");
+  if (!canRead(ns, principalFrom(identityOrEmail))) {
+    throw new AccessDeniedError("You do not have access to this namespace");
+  }
   return ns;
 }
 
-/**
- * Assert the user can write to the namespace.
- * Allowed if: owner OR (admin AND namespace is public).
- */
 export async function assertNamespaceWriteAccess(
   db: DbHandle,
   namespaceId: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
   admin = false,
 ): Promise<NamespaceRow> {
   const ns = await fetchNamespace(db, namespaceId);
-  if (!canWrite(ns, email, admin)) {
+  if (!canWrite(ns, principalFrom(identityOrEmail, admin))) {
     throw new AccessDeniedError("You do not have write access to this namespace");
   }
   return ns;
 }
 
-/**
- * Legacy alias — equivalent to assertNamespaceWriteAccess without admin bypass.
- * Kept for backward compatibility; prefer the explicit read/write variants.
- */
-export async function assertNamespaceAccess(
+export async function assertNamespaceOwnerAccess(
   db: DbHandle,
   namespaceId: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
+  admin = false,
 ): Promise<NamespaceRow> {
-  return assertNamespaceWriteAccess(db, namespaceId, email, false);
+  const ns = await fetchNamespace(db, namespaceId);
+  if (!canOwn(ns, principalFrom(identityOrEmail, admin))) {
+    throw new AccessDeniedError("You do not have owner access to this namespace");
+  }
+  return ns;
 }
-
-// ---------------------------------------------------------------------------
-// Resource-level access checks (JOIN to namespace)
-// ---------------------------------------------------------------------------
 
 type NsJoinRow = { namespace_id: string; owner: string | null; visibility: string };
 
@@ -124,85 +138,97 @@ async function fetchResourceNs(
   return row;
 }
 
-/** Assert read access to a resource's namespace. */
 export async function assertResourceReadAccess(
   db: DbHandle,
   table: ResourceTable,
   id: string,
   label: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
 ): Promise<string> {
+  const principal = principalFrom(identityOrEmail);
   const row = await fetchResourceNs(db, table, id, label);
-  if (row.owner !== email && row.visibility !== "public") {
+  const canReadResource =
+    principal.mode === "identity"
+      ? getAccessLevel(principal.identity, row.namespace_id) >= 1 || row.visibility === "public"
+      : row.owner === principal.email || row.visibility === "public";
+  if (!canReadResource) {
     throw new AccessDeniedError("You do not have access to this namespace");
   }
   return row.namespace_id;
 }
 
-/** Assert write access to a resource's namespace. */
 async function assertResourceWriteAccess(
   db: DbHandle,
   table: ResourceTable,
   id: string,
   label: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
   admin = false,
 ): Promise<string> {
+  const principal = principalFrom(identityOrEmail, admin);
   const row = await fetchResourceNs(db, table, id, label);
-  if (row.owner !== email && !(admin && row.visibility === "public")) {
+  const canWriteResource =
+    principal.mode === "identity"
+      ? getAccessLevel(principal.identity, row.namespace_id) >= 2 ||
+        (principal.identity.isAdmin && row.visibility === "public")
+      : row.owner === principal.email || (principal.admin && row.visibility === "public");
+  if (!canWriteResource) {
     throw new AccessDeniedError("You do not have write access to this namespace");
   }
   return row.namespace_id;
 }
 
-// --- Write access (owner, or admin for public namespaces) ---
 export function assertEntityAccess(
   db: DbHandle,
   id: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
   admin = false,
 ): Promise<string> {
-  return assertResourceWriteAccess(db, "entities", id, "Entity", email, admin);
+  return assertResourceWriteAccess(db, "entities", id, "Entity", identityOrEmail, admin);
 }
 export function assertMemoryAccess(
   db: DbHandle,
   id: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
   admin = false,
 ): Promise<string> {
-  return assertResourceWriteAccess(db, "memories", id, "Memory", email, admin);
+  return assertResourceWriteAccess(db, "memories", id, "Memory", identityOrEmail, admin);
 }
 export function assertConversationAccess(
   db: DbHandle,
   id: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
   admin = false,
 ): Promise<string> {
-  return assertResourceWriteAccess(db, "conversations", id, "Conversation", email, admin);
+  return assertResourceWriteAccess(db, "conversations", id, "Conversation", identityOrEmail, admin);
 }
 export function assertRelationAccess(
   db: DbHandle,
   id: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
   admin = false,
 ): Promise<string> {
-  return assertResourceWriteAccess(db, "relations", id, "Relation", email, admin);
+  return assertResourceWriteAccess(db, "relations", id, "Relation", identityOrEmail, admin);
 }
 
-// --- Read access (owner OR public) ---
-export function assertEntityReadAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceReadAccess(db, "entities", id, "Entity", email);
+export function assertEntityReadAccess(
+  db: DbHandle,
+  id: string,
+  identityOrEmail: UserIdentity | string,
+): Promise<string> {
+  return assertResourceReadAccess(db, "entities", id, "Entity", identityOrEmail);
 }
-export function assertMemoryReadAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceReadAccess(db, "memories", id, "Memory", email);
+export function assertMemoryReadAccess(
+  db: DbHandle,
+  id: string,
+  identityOrEmail: UserIdentity | string,
+): Promise<string> {
+  return assertResourceReadAccess(db, "memories", id, "Memory", identityOrEmail);
 }
 export function assertConversationReadAccess(
   db: DbHandle,
   id: string,
-  email: string,
+  identityOrEmail: UserIdentity | string,
 ): Promise<string> {
-  return assertResourceReadAccess(db, "conversations", id, "Conversation", email);
-}
-export function assertRelationReadAccess(db: DbHandle, id: string, email: string): Promise<string> {
-  return assertResourceReadAccess(db, "relations", id, "Relation", email);
+  return assertResourceReadAccess(db, "conversations", id, "Conversation", identityOrEmail);
 }
