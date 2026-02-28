@@ -1,9 +1,17 @@
 name: Setup
-description: Install project dependencies (Node.js is pre-installed on self-hosted runner)
+description: Restore node_modules from cache or install dependencies
 
 runs:
   using: composite
   steps:
+    - name: Cache node_modules
+      id: cache-modules
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
     - name: Install dependencies
+      if: steps.cache-modules.outputs.cache-hit != 'true'
       shell: bash
       run: npm ci
