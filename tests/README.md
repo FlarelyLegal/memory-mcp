@@ -1,6 +1,6 @@
 # Tests
 
-[< Back to main README](../README.md) | [Docs](../docs/README.md) | [Contributing](../docs/contributing.md)
+[README](../README.md) > Tests
 
 ## Structure
 

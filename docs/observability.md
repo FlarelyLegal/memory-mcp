@@ -1,6 +1,6 @@
 # Observability
 
-[< Back to docs](README.md)
+[README](../README.md) > [Docs](README.md) > Observability
 
 ## Audit logging
 

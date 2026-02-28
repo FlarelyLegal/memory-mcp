@@ -1,6 +1,6 @@
 # Unit Tests
 
-[< Back to main README](../../README.md) | [Docs](../../docs/README.md)
+[README](../../README.md) > [Tests](../README.md) > Unit Tests
 
 Vitest unit tests for core logic. These run without network, Workers runtime, or D1 -- all external dependencies are mocked.
 

@@ -1,6 +1,6 @@
 # REST API
 
-[< Back to docs](README.md)
+[README](../README.md) > [Docs](README.md) > REST API
 
 ## Live docs
 

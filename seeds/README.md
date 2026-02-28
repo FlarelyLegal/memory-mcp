@@ -1,6 +1,6 @@
 # Seed Data
 
-[< Back to main README](../README.md) | [Docs](../docs/README.md)
+[README](../README.md) > [Docs](../docs/README.md) > Seeds
 
 JSON seed files for populating demo namespaces via the REST API.
 

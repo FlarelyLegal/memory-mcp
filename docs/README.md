@@ -1,6 +1,6 @@
 # Documentation
 
-[< Back to main README](../README.md)
+[README](../README.md) > Documentation
 
 Operational and reference documentation for FlarelyLegal Memory MCP.
 

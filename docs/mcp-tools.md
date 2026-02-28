@@ -1,6 +1,6 @@
 # MCP Tools
 
-[< Back to docs](README.md)
+[README](../README.md) > [Docs](README.md) > MCP Tools
 
 17 tools organized by domain. All tool calls are authenticated via Cloudflare Access. Data access is scoped by namespace ownership and RBAC grants (owner/editor/viewer).
 
