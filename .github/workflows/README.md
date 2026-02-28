@@ -2,7 +2,7 @@
 
 [< Back to main README](../../README.md)
 
-14 workflows organized into CI, release, PR automation, and manual operations.
+15 workflows organized into CI, release, PR automation, and manual operations.
 
 ## CI pipeline
 
@@ -12,6 +12,7 @@
 | --------------- | ---------------------------------------------- |
 | `lint.yml`      | Prettier format check + ESLint                 |
 | `typecheck.yml` | TypeScript compiler in check mode              |
+| `unit-test.yml` | Vitest unit tests with JUnit reporting         |
 | `build.yml`     | Wrangler dry-run build, lists `dist/` output   |
 | `e2e.yml`       | Playwright E2E against site B (with preflight) |
 
