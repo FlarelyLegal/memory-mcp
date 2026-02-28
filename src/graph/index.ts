@@ -38,3 +38,11 @@ export {
   listNamespaceGrants,
   listAllNamespaceGrants,
 } from "./grants.js";
+export {
+  MAX_GROUP_DEPTH,
+  walkAncestors,
+  walkDescendants,
+  validateParentGroup,
+  getChildGroupIds,
+} from "./group-hierarchy.js";
+export { resolveInheritedGrants } from "./grant-inheritance.js";

@@ -114,6 +114,7 @@ export const groupCreateSchema = z.object({
   slug: slugField.optional(),
   description: groupDescriptionField.optional(),
   privacy: groupPrivacy.optional(),
+  parent_group_id: z.string().uuid().nullable().optional(),
 });
 
 export const groupUpdateSchema = z
@@ -122,6 +123,7 @@ export const groupUpdateSchema = z
     slug: slugField.optional(),
     description: groupDescriptionField.optional(),
     privacy: groupPrivacy.optional(),
+    parent_group_id: z.string().uuid().nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "At least one field is required");
 

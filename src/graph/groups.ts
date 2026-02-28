@@ -10,21 +10,35 @@ type GroupUpdates = {
   description?: string;
   privacy?: GroupPrivacy;
   settings?: Record<string, unknown>;
+  parent_group_id?: string | null;
 };
 type ListMembersOpts = { status?: MemberStatus; limit?: number; offset?: number };
 
 export async function createGroup(
   db: DbHandle,
-  opts: { name: string; slug: string; description?: string; created_by: string },
+  opts: {
+    name: string;
+    slug: string;
+    description?: string;
+    created_by: string;
+    parent_group_id?: string | null;
+  },
 ): Promise<string> {
   const id = generateId();
   await withRetry(() =>
     db
       .prepare(
-        `INSERT INTO groups (id, name, slug, description, created_by)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO groups (id, name, slug, description, created_by, parent_group_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, opts.name, opts.slug, opts.description ?? null, opts.created_by)
+      .bind(
+        id,
+        opts.name,
+        opts.slug,
+        opts.description ?? null,
+        opts.created_by,
+        opts.parent_group_id ?? null,
+      )
       .run(),
   );
   return id;
@@ -73,6 +87,10 @@ export async function updateGroup(db: DbHandle, id: string, updates: GroupUpdate
   if (updates.settings !== undefined) {
     sets.push("settings = ?");
     params.push(toJson(updates.settings));
+  }
+  if (updates.parent_group_id !== undefined) {
+    sets.push("parent_group_id = ?");
+    params.push(updates.parent_group_id);
   }
   params.push(id);
   await withRetry(() =>

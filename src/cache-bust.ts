@@ -1,5 +1,5 @@
 import type { DbHandle } from "./db.js";
-import { listNamespaceGrants } from "./graph/index.js";
+import { listNamespaceGrants, walkDescendants } from "./graph/index.js";
 
 export async function bustIdentityCache(usersKv: KVNamespace, email: string): Promise<void> {
   await usersKv.delete(email);
@@ -21,6 +21,20 @@ export async function bustIdentityCacheForGroup(
     .all<{ email: string }>();
   const members = rows.results as { email: string }[];
   await Promise.all(members.map((member) => usersKv.delete(member.email)));
+}
+
+/**
+ * Bust identity cache for all members of a group and all its descendants.
+ * Used when hierarchy changes (reparenting, deletion) affect inherited grants.
+ */
+export async function bustIdentityCacheForGroupTree(
+  db: DbHandle,
+  usersKv: KVNamespace,
+  groupId: string,
+): Promise<void> {
+  const descendants = await walkDescendants(db, groupId);
+  const allGroupIds = [groupId, ...descendants];
+  await Promise.all(allGroupIds.map((gid) => bustIdentityCacheForGroup(db, usersKv, gid)));
 }
 
 export async function bustIdentityCacheForNamespace(

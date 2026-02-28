@@ -76,7 +76,18 @@ describe("loadIdentity", () => {
         .mockResolvedValue(JSON.stringify({ v: "1.0", emails: ["user@memory.flarelylegal.com"] })),
     };
     const db = {
-      prepare: vi.fn(() => ({ bind: vi.fn().mockReturnThis() })),
+      prepare: vi.fn((query: string) => ({
+        bind: vi.fn().mockReturnValue({
+          async first() {
+            // resolveInheritedGrants walks ancestors -- g1 has no parent
+            if (query.includes("parent_group_id")) return null;
+            return null;
+          },
+          async all() {
+            return { results: [] };
+          },
+        }),
+      })),
       async batch() {
         return [
           { results: [{ group_id: "g1" }] },
