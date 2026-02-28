@@ -14,7 +14,7 @@ Both endpoints are unauthenticated.
 
 | Endpoint                | Response                                                      |
 | ----------------------- | ------------------------------------------------------------- |
-| `GET /`                 | Plain-text landing page (version, description, repo)          |
+| `GET /`                 | HTML landing page (health status, about, quick links)         |
 | `GET /health`           | `{"status":"ok","server":"memory-graph-mcp","version":"..."}` |
 | `GET /api/docs`         | Scalar API reference UI                                       |
 | `GET /api/openapi.json` | OpenAPI 3.1 spec                                              |
@@ -38,7 +38,20 @@ Visit the Worker URL in a browser. Cloudflare Access handles the login flow and 
 
 1. **Create a service token** in the Zero Trust dashboard (Access > Service Auth > Service Tokens)
 2. **Add a Service Auth policy** to your Access application
-3. **Bind the token to an email** (two-step challenge flow):
+3. **Bind the token to an email** -- use the self-service UI or curl:
+
+**Browser:** Visit `https://<worker>/api/v1/admin/service-tokens/bind`, fill in Client ID and Secret, click "Bind token".
+
+**curl (combined endpoint):**
+
+```bash
+curl -X POST https://<worker>/api/v1/admin/service-tokens/bind \
+  -H "Cookie: CF_Authorization=<your-jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"client_id": "<client-id>", "client_secret": "<client-secret>", "label": "My CI bot"}'
+```
+
+**curl (two-step challenge flow):**
 
 ```bash
 # Step 1: Human creates bind challenge (browser-authenticated)
@@ -67,6 +80,8 @@ curl https://<worker>/api/v1/namespaces \
 
 | Action                | Method   | Endpoint                                    |
 | --------------------- | -------- | ------------------------------------------- |
+| Bind UI (browser)     | `GET`    | `/api/v1/admin/service-tokens/bind`         |
+| Bind (combined)       | `POST`   | `/api/v1/admin/service-tokens/bind`         |
 | Create bind challenge | `POST`   | `/api/v1/admin/service-tokens/bind-request` |
 | Complete self-bind    | `POST`   | `/api/v1/admin/service-tokens/bind-self`    |
 | List your tokens      | `GET`    | `/api/v1/admin/service-tokens`              |

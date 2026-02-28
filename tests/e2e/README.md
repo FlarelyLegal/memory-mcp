@@ -1,24 +1,37 @@
-# E2E API Tests
+# E2E Tests
 
 [< Back to main README](../../README.md) | [Docs](../../docs/README.md) | [REST API](../../docs/rest-api.md)
 
-Playwright API tests for the live REST API. These run against deployed workers, not local dev.
+Playwright tests for the live deployed workers. Two projects:
+
+| Project   | Spec file       | Description                                              |
+| --------- | --------------- | -------------------------------------------------------- |
+| `api`     | `api.spec.ts`   | API-only tests (no browser) for REST endpoint CRUD flows |
+| `browser` | `pages.spec.ts` | Chromium browser tests for HTML pages with screenshots   |
 
 ## What these tests cover
+
+### API tests (`api.spec.ts`)
 
 - Public endpoints (`/health`, `/api/openapi.json`)
 - Authenticated CRUD flows (entities, relations, memories, conversations, messages)
 - Graph traversal and error handling paths
+
+### Browser tests (`pages.spec.ts`)
+
+- Landing page (`GET /`): title, health status pill, about section, quick links
+- Service token bind UI (`GET /api/v1/admin/service-tokens/bind`): form fields, signed-in email, token list loading, client-side validation
+- Screenshots saved to `tests/e2e/screenshots/` (gitignored)
 
 ## Auth setup
 
 Tests authenticate via **Cloudflare Access service tokens**. The service token must be:
 
 1. Created in the Cloudflare Access dashboard
-2. Bound to an email via the `POST /api/v1/admin/service-tokens/bind-request` + `bind-self` flow
+2. Bound to an email via `POST /api/v1/admin/service-tokens/bind` (combined endpoint) or the two-step `bind-request` + `bind-self` flow
 3. The KV mapping must use the versioned format: `{"v":"1.0","email":"...","label":"...","created_at":...}`
 
-The `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers are sent on every request.
+The `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers are sent on every request. For browser tests, these headers pass through Cloudflare Access at the edge, allowing the browser to reach authenticated pages without an interactive login.
 
 ## Required env vars
 
@@ -43,21 +56,25 @@ Tests default to namespace `demo` (override with `TEST_NAMESPACE_NAME`). The sui
 
 - Test-created entities, relations, and memories are deleted in `afterAll`
 - Conversations and messages are left in place (small, non-destructive)
+- Screenshots are overwritten on each run
 
 ## Run locally
 
 ```bash
-# Default (account A)
+# API tests only (default)
 CF_ACCESS_CLIENT_ID="..." CF_ACCESS_CLIENT_SECRET="..." npm run test:e2e
 
-# Explicit target
-API_TARGET=a npm run test:e2e:a
-API_TARGET=b npm run test:e2e:b
+# Browser tests only (takes screenshots)
+CF_ACCESS_CLIENT_ID="..." CF_ACCESS_CLIENT_SECRET="..." npm run test:e2e:pages
 
-# Custom base URL
-API_BASE_URL="https://your-worker.example.com" CF_ACCESS_CLIENT_ID="..." CF_ACCESS_CLIENT_SECRET="..." npm run test:e2e
+# All tests (API + browser)
+CF_ACCESS_CLIENT_ID="..." CF_ACCESS_CLIENT_SECRET="..." npm run test:e2e:all
+
+# Explicit target
+API_TARGET=b npm run test:e2e:b
+API_TARGET=b npm run test:e2e:pages:b
 ```
 
 ## CI
 
-E2E tests run automatically on push to `main` via `.github/workflows/e2e.yml`. Secrets are configured in the repo's GitHub Actions environment.
+E2E API tests run automatically on push to `main` via `.github/workflows/e2e.yml`. Browser tests can be run manually or added to CI when screenshot baselines are desired.

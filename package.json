@@ -40,9 +40,13 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "test:e2e:a": "API_TARGET=a playwright test",
-    "test:e2e:b": "API_TARGET=b playwright test"
+    "test:e2e": "playwright test --project=api",
+    "test:e2e:a": "API_TARGET=a playwright test --project=api",
+    "test:e2e:b": "API_TARGET=b playwright test --project=api",
+    "test:e2e:pages": "playwright test --project=browser",
+    "test:e2e:pages:a": "API_TARGET=a playwright test --project=browser",
+    "test:e2e:pages:b": "API_TARGET=b playwright test --project=browser",
+    "test:e2e:all": "playwright test"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.2.3",

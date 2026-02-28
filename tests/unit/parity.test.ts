@@ -28,6 +28,7 @@ import { registerWorkflowRoutes } from "../../src/api/routes/workflows.js";
 import { registerTokenRoutes } from "../../src/api/routes/tokens.js";
 import { registerTokenCrudRoutes } from "../../src/api/routes/token-crud.js";
 import { registerDemoRoutes } from "../../src/api/routes/demo.js";
+import { registerBindUiRoutes } from "../../src/api/routes/bind-ui.js";
 
 // ---------------------------------------------------------------------------
 // Parity manifest: every MCP tool action → REST method + path + data fields
@@ -380,6 +381,8 @@ const REST_ONLY_PATHS = new Set([
   "PATCH /api/v1/admin/service-tokens/:common_name",
   "DELETE /api/v1/admin/service-tokens/:common_name",
   "GET /api/demo",
+  "GET /api/v1/admin/service-tokens/bind",
+  "POST /api/v1/admin/service-tokens/bind",
 ]);
 
 /** All 17 MCP tool names. */
@@ -427,6 +430,7 @@ beforeAll(() => {
   registerTokenRoutes();
   registerTokenCrudRoutes();
   registerDemoRoutes();
+  registerBindUiRoutes();
 });
 
 describe("MCP ↔ REST parity", () => {
