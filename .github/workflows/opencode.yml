@@ -8,30 +8,41 @@ on:
 
 jobs:
   opencode:
-    # Match /oc or /opencode commands with proper word boundaries
+    # Gate 1: command text (precise word-boundary matching)
+    # Gate 2: author must be repo OWNER or org MEMBER (blocks random commenters)
     if: |
-      github.event.comment.body == '/oc' ||
-      github.event.comment.body == '/opencode' ||
-      startsWith(github.event.comment.body, '/oc ') ||
-      startsWith(github.event.comment.body, '/oc\n') ||
-      startsWith(github.event.comment.body, '/opencode ') ||
-      startsWith(github.event.comment.body, '/opencode\n') ||
-      contains(github.event.comment.body, ' /oc ') ||
-      contains(github.event.comment.body, ' /oc\n') ||
-      endsWith(github.event.comment.body, ' /oc') ||
-      contains(github.event.comment.body, ' /opencode ') ||
-      contains(github.event.comment.body, ' /opencode\n') ||
-      endsWith(github.event.comment.body, ' /opencode')
+      (
+        github.event.comment.body == '/oc' ||
+        github.event.comment.body == '/opencode' ||
+        startsWith(github.event.comment.body, '/oc ') ||
+        startsWith(github.event.comment.body, '/oc\n') ||
+        startsWith(github.event.comment.body, '/opencode ') ||
+        startsWith(github.event.comment.body, '/opencode\n') ||
+        contains(github.event.comment.body, ' /oc ') ||
+        contains(github.event.comment.body, ' /oc\n') ||
+        endsWith(github.event.comment.body, ' /oc') ||
+        contains(github.event.comment.body, ' /opencode ') ||
+        contains(github.event.comment.body, ' /opencode\n') ||
+        endsWith(github.event.comment.body, ' /opencode')
+      ) && (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER'
+      )
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: opencode-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-      issues: write
+      id-token: write # Required: OpenCode OIDC auth (non-negotiable)
+      contents: read # Read-only: OpenCode App token handles commits
+      pull-requests: write # Needed for PR comments; App token handles pushes
+      issues: write # Needed for issue comments
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Check PR requirements
@@ -73,37 +84,43 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -n "${{ github.event.issue.number }}" ]; then
-            PR_NUMBER="${{ github.event.issue.number }}"
-          else
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-          fi
+          PR_NUMBER="${{ steps.check-pr.outputs.pr_number }}"
           gh pr checkout "$PR_NUMBER"
 
       - name: Run opencode
         if: steps.check-pr.outputs.skip != 'true'
-        uses: anomalyco/opencode/github@latest
+        uses: anomalyco/opencode/github@a9fea49cebbe985ae1aea412e2d99d9f52668f19 # latest
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_GATEWAY_ID: ${{ secrets.CLOUDFLARE_GATEWAY_ID }}
         with:
-          model: cloudflare-ai-gateway/anthropic/claude-sonnet-4-5
+          model: cloudflare-ai-gateway/anthropic/claude-opus-4-6
 
       - name: Job summary
         if: always()
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_USER: ${{ github.event.comment.user.login }}
+          SKIP: ${{ steps.check-pr.outputs.skip }}
+          SKIP_REASON: ${{ steps.check-pr.outputs.reason }}
+          PR_NUM: ${{ steps.check-pr.outputs.pr_number || github.event.issue.number }}
         run: |
-          echo "## OpenCode Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Triggered by** | @${{ github.event.comment.user.login }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Comment** | \`${{ github.event.comment.body }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.check-pr.outputs.skip }}" = "true" ]; then
-            echo "| **Status** | Skipped |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| **Reason** | ${{ steps.check-pr.outputs.reason }} |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| **Status** | Ran |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| **PR** | #${{ steps.check-pr.outputs.pr_number || github.event.issue.number }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| **Model** | \`claude-sonnet-4-5\` |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          # Sanitize comment body for markdown table (truncate, strip pipes/newlines)
+          SAFE_BODY=$(echo "$COMMENT_BODY" | head -c 200 | tr '|\n\r' '   ' | sed 's/`/\\`/g')
+          {
+            echo "## OpenCode Summary"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Triggered by** | @${COMMENT_USER} |"
+            echo "| **Comment** | \`${SAFE_BODY}\` |"
+            if [ "$SKIP" = "true" ]; then
+              echo "| **Status** | Skipped |"
+              echo "| **Reason** | ${SKIP_REASON} |"
+            else
+              echo "| **Status** | Ran |"
+              echo "| **PR** | #${PR_NUM} |"
+              echo "| **Model** | \`claude-opus-4-6\` |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
