@@ -20,6 +20,9 @@ import { registerMemoryQueryRoutes } from "../../src/api/routes/memory-queries.j
 import { registerConversationRoutes } from "../../src/api/routes/conversations.js";
 import { registerMessageRoutes } from "../../src/api/routes/messages.js";
 import { registerSearchRoutes } from "../../src/api/routes/search.js";
+import { registerGroupRoutes } from "../../src/api/routes/groups.js";
+import { registerGroupMemberRoutes } from "../../src/api/routes/group-members.js";
+import { registerGrantRoutes } from "../../src/api/routes/grants.js";
 import { registerAdminRoutes } from "../../src/api/routes/admin.js";
 import { registerWorkflowRoutes } from "../../src/api/routes/workflows.js";
 import { registerTokenRoutes } from "../../src/api/routes/tokens.js";
@@ -53,7 +56,7 @@ const PARITY: ParityEntry[] = [
     action: "create",
     method: "POST",
     path: "/api/v1/namespaces",
-    dataFields: ["name", "description", "metadata"],
+    dataFields: ["name", "description"],
   },
   {
     tool: "manage_namespace",
@@ -74,7 +77,7 @@ const PARITY: ParityEntry[] = [
     action: "update",
     method: "PATCH",
     path: "/api/v1/namespaces/:id",
-    dataFields: ["name", "description", "metadata"],
+    dataFields: ["name", "description"],
   },
   {
     tool: "manage_namespace",
@@ -89,6 +92,28 @@ const PARITY: ParityEntry[] = [
     method: "PATCH",
     path: "/api/v1/namespaces/:id",
     dataFields: ["visibility"],
+  },
+  {
+    tool: "manage_namespace",
+    action: "share",
+    method: "POST",
+    path: "/api/v1/namespaces/:id/grants",
+    dataFields: ["email", "group_id", "role", "expires_at"],
+  },
+  {
+    tool: "manage_namespace",
+    action: "list_access",
+    method: "GET",
+    path: "/api/v1/namespaces/:id/grants",
+    dataFields: [],
+  },
+  {
+    tool: "manage_namespace",
+    action: "unshare",
+    method: "DELETE",
+    path: "/api/v1/namespaces/:id/grants/:grant_id",
+    dataFields: [],
+    notes: "REST revokes by grant_id; MCP also supports principal-based unshare",
   },
 
   // --- Entity ---
@@ -339,6 +364,15 @@ const PARITY: ParityEntry[] = [
 
 /** REST-only routes (intentionally no MCP tool equivalent). */
 const REST_ONLY_PATHS = new Set([
+  "GET /api/v1/groups",
+  "POST /api/v1/groups",
+  "GET /api/v1/groups/:id",
+  "PATCH /api/v1/groups/:id",
+  "DELETE /api/v1/groups/:id",
+  "GET /api/v1/groups/:id/members",
+  "POST /api/v1/groups/:id/members",
+  "DELETE /api/v1/groups/:id/members/:email",
+  "PATCH /api/v1/groups/:id/members/:email",
   "POST /api/v1/admin/service-tokens/bind-request",
   "POST /api/v1/admin/service-tokens/bind-self",
   "GET /api/v1/admin/service-tokens",
@@ -385,6 +419,9 @@ beforeAll(() => {
   registerConversationRoutes();
   registerMessageRoutes();
   registerSearchRoutes();
+  registerGroupRoutes();
+  registerGroupMemberRoutes();
+  registerGrantRoutes();
   registerAdminRoutes();
   registerWorkflowRoutes();
   registerTokenRoutes();

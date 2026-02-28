@@ -1,63 +1,23 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
+import {
+  cleanupArtifacts,
+  createApiContext,
+  ensureNamespace,
+  type E2eCleanup,
+} from "./api-helpers.js";
 
 const NAMESPACE_NAME = process.env.TEST_NAMESPACE_NAME ?? "demo";
 let api: APIRequestContext;
 let namespaceId: string;
-
-const target = (process.env.API_TARGET ?? "a").toLowerCase();
-const isB = target === "b";
-
-const baseURL =
-  (isB ? process.env.API_BASE_URL_B : process.env.API_BASE_URL_A) ??
-  process.env.API_BASE_URL ??
-  "https://memory.schenanigans.com";
-
-const clientId =
-  (isB ? process.env.CF_ACCESS_CLIENT_ID_B : process.env.CF_ACCESS_CLIENT_ID_A) ??
-  process.env.CF_ACCESS_CLIENT_ID ??
-  "";
-
-const clientSecret =
-  (isB ? process.env.CF_ACCESS_CLIENT_SECRET_B : process.env.CF_ACCESS_CLIENT_SECRET_A) ??
-  process.env.CF_ACCESS_CLIENT_SECRET ??
-  "";
-
-const cleanup = { entities: [] as string[], relations: [] as string[], memories: [] as string[] };
+const cleanup: E2eCleanup = { entities: [], relations: [], memories: [] };
 
 test.beforeAll(async ({ playwright }) => {
-  api = await playwright.request.newContext({
-    baseURL,
-    extraHTTPHeaders: {
-      "CF-Access-Client-Id": clientId,
-      "CF-Access-Client-Secret": clientSecret,
-    },
-  });
-
-  // Resolve the test namespace by name (default: demo)
-  const res = await api.get("/api/v1/namespaces");
-  expect(res.ok()).toBe(true);
-  const namespaces = await res.json();
-  let ns = namespaces.find((n: { name: string }) => n.name === NAMESPACE_NAME);
-  if (!ns) {
-    const created = await api.post("/api/v1/namespaces", {
-      data: { name: NAMESPACE_NAME, description: "Shared namespace for API E2E tests" },
-    });
-    expect(created.ok()).toBe(true);
-    ns = await created.json();
-  }
-  namespaceId = ns.id;
+  api = await createApiContext(playwright.request);
+  namespaceId = await ensureNamespace(api, NAMESPACE_NAME);
 });
 
 test.afterAll(async () => {
-  for (const id of cleanup.relations) {
-    await api.delete(`/api/v1/relations/${id}`);
-  }
-  for (const id of cleanup.memories) {
-    await api.delete(`/api/v1/memories/${id}`);
-  }
-  for (const id of cleanup.entities) {
-    await api.delete(`/api/v1/entities/${id}`);
-  }
+  await cleanupArtifacts(api, cleanup);
   await api.dispose();
 });
 
