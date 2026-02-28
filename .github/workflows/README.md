@@ -2,7 +2,7 @@
 
 [< Back to main README](../../README.md)
 
-20 workflows organized into CI, release, PR automation, operational, and manual operations.
+21 workflows organized into CI, release, PR automation, operational, and manual operations.
 
 ## CI pipeline
 
@@ -29,6 +29,7 @@ E2E tests only run when `src/`, `schemas/`, `tests/`, config files, or `playwrig
 | `pr-standards.yml`          | PR open/edit/sync       | Enforces conventional commit titles, linked issues, and contributor labeling |
 | `labeler.yml`               | PR open/sync            | Labels by file paths + PR size (`size/xs` through `size/xl`)                 |
 | `dependabot-auto-merge.yml` | PR open/sync            | Enables squash auto-merge on Dependabot PRs                                  |
+| `link-check.yml`            | PR + push + weekly      | Checks markdown links with lychee (config in `.lychee.toml`)                 |
 | `close-stale-prs.yml`       | Daily schedule + manual | Warns after 45 days inactive, closes after 60 days                           |
 
 ## AI coding agent
