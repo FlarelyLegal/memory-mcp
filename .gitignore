@@ -5,6 +5,8 @@ dist/
 .env
 *.log
 .DS_Store
+.idea/
+.vscode/
 
 # Playwright
 test-results/
