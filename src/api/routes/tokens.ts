@@ -1,8 +1,15 @@
 /** Service token bind challenge + list endpoints. */
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
-import { ST_BIND_PREFIX, ST_PREFIX } from "../service-tokens.js";
-import type { ServiceTokenBindChallenge, ServiceTokenMapping } from "../service-tokens.js";
+import {
+  ST_BIND_PREFIX,
+  ST_PREFIX,
+  decodeServiceToken,
+  encodeServiceToken,
+  decodeBindChallenge,
+  encodeBindChallenge,
+} from "../service-tokens.js";
+import type { ServiceTokenMapping } from "../service-tokens.js";
 import { tokenSchema } from "../schemas.js";
 import { serviceTokenBindRequestSchema, serviceTokenBindSelfSchema } from "../validators.js";
 import { enforceAuthRateLimit } from "../rate-limit.js";
@@ -22,7 +29,9 @@ export function registerTokenRoutes(): void {
         const body = await parseBodyWithSchema(request, serviceTokenBindRequestSchema);
         if (body instanceof Response) return body;
         const key = `${ST_PREFIX}${body.common_name}`;
-        const existing = await ctx.env.CACHE.get<ServiceTokenMapping>(key, "json");
+        const existing = decodeServiceToken(
+          await ctx.env.CACHE.get<Record<string, unknown>>(key, "json"),
+        );
         if (existing) {
           await writeAuditEvent(ctx.env, {
             action: "service_token_bind_request_conflict",
@@ -35,14 +44,14 @@ export function registerTokenRoutes(): void {
         }
         const now = Math.floor(Date.now() / 1000);
         const challengeId = crypto.randomUUID();
-        const challenge: ServiceTokenBindChallenge = {
+        const challenge = {
           common_name: body.common_name,
           email: ctx.email,
           label: body.label ?? body.common_name,
           created_at: now,
           expires_at: now + BIND_TTL_SECONDS,
         };
-        await ctx.env.CACHE.put(`${ST_BIND_PREFIX}${challengeId}`, JSON.stringify(challenge), {
+        await ctx.env.CACHE.put(`${ST_BIND_PREFIX}${challengeId}`, encodeBindChallenge(challenge), {
           expirationTtl: BIND_TTL_SECONDS,
         });
         await writeAuditEvent(ctx.env, {
@@ -120,9 +129,11 @@ export function registerTokenRoutes(): void {
         if (rl) return rl;
         const body = await parseBodyWithSchema(request, serviceTokenBindSelfSchema);
         if (body instanceof Response) return body;
-        const challenge = await ctx.env.CACHE.get<ServiceTokenBindChallenge>(
-          `${ST_BIND_PREFIX}${body.challenge_id}`,
-          "json",
+        const challenge = decodeBindChallenge(
+          await ctx.env.CACHE.get<Record<string, unknown>>(
+            `${ST_BIND_PREFIX}${body.challenge_id}`,
+            "json",
+          ),
         );
         if (!challenge) {
           await writeAuditEvent(ctx.env, {
@@ -153,7 +164,9 @@ export function registerTokenRoutes(): void {
           return jsonError("Service token does not match bind challenge", 403);
         }
         const key = `${ST_PREFIX}${ctx.auth.common_name}`;
-        const existing = await ctx.env.CACHE.get<ServiceTokenMapping>(key, "json");
+        const existing = decodeServiceToken(
+          await ctx.env.CACHE.get<Record<string, unknown>>(key, "json"),
+        );
         if (existing) {
           await writeAuditEvent(ctx.env, {
             action: "service_token_bind_self_conflict",
@@ -163,12 +176,12 @@ export function registerTokenRoutes(): void {
           });
           return jsonError(`Service token already bound to ${existing.email}`, 409);
         }
-        const mapping: ServiceTokenMapping = {
+        const mapping = {
           email: challenge.email,
           label: challenge.label,
           created_at: Math.floor(Date.now() / 1000),
         };
-        await ctx.env.CACHE.put(key, JSON.stringify(mapping));
+        await ctx.env.CACHE.put(key, encodeServiceToken(mapping));
         await ctx.env.CACHE.delete(`${ST_BIND_PREFIX}${body.challenge_id}`);
         await writeAuditEvent(ctx.env, {
           action: "service_token_bound",
@@ -218,7 +231,9 @@ export function registerTokenRoutes(): void {
         do {
           const batch = await ctx.env.CACHE.list({ prefix: ST_PREFIX, cursor });
           for (const key of batch.keys) {
-            const mapping = await ctx.env.CACHE.get<ServiceTokenMapping>(key.name, "json");
+            const mapping = decodeServiceToken(
+              await ctx.env.CACHE.get<Record<string, unknown>>(key.name, "json"),
+            );
             if (mapping && mapping.email === ctx.email && !mapping.revoked_at) {
               tokens.push({ common_name: key.name.slice(ST_PREFIX.length), ...mapping });
             }

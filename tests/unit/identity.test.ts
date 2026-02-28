@@ -42,6 +42,7 @@ describe("identity", () => {
   it("loads identity from KV cache hit", async () => {
     const users = makeKv({
       "user@memory.flarelylegal.com": {
+        v: "1.0",
         groups: ["g1"],
         isAdmin: false,
         ownedNamespaces: ["ns1"],
@@ -49,7 +50,11 @@ describe("identity", () => {
         groupGrants: { ns3: "viewer" },
       },
     });
-    const flags = { get: vi.fn().mockResolvedValue("admin@memory.flarelylegal.com") };
+    const flags = {
+      get: vi
+        .fn()
+        .mockResolvedValue(JSON.stringify({ v: "1.0", emails: ["admin@memory.flarelylegal.com"] })),
+    };
     const db = { batch: vi.fn(), prepare: vi.fn() };
 
     const identity = await loadIdentity(
@@ -65,7 +70,11 @@ describe("identity", () => {
 
   it("loads identity from D1 batch on cache miss and writes KV", async () => {
     const users = makeKv();
-    const flags = { get: vi.fn().mockResolvedValue("user@memory.flarelylegal.com") };
+    const flags = {
+      get: vi
+        .fn()
+        .mockResolvedValue(JSON.stringify({ v: "1.0", emails: ["user@memory.flarelylegal.com"] })),
+    };
     const db = {
       prepare: vi.fn(() => ({ bind: vi.fn().mockReturnThis() })),
       async batch() {

@@ -1,5 +1,6 @@
 import type { DbHandle } from "./db.js";
 import type { NamespaceRole, UserIdentity } from "./types.js";
+import { decodeAdminEmails, decodeIdentity, encodeIdentity } from "./kv.js";
 
 const ADMIN_KEY = "admin:emails";
 const IDENTITY_TTL = 300;
@@ -27,39 +28,9 @@ function isNamespaceRole(v: unknown): v is NamespaceRole {
   return v === "viewer" || v === "editor" || v === "owner";
 }
 
-function parseIdentity(raw: unknown): UserIdentity | null {
-  if (!raw || typeof raw !== "object") return null;
-  const rec = raw as Record<string, unknown>;
-  const groups = Array.isArray(rec.groups)
-    ? rec.groups.filter((v): v is string => typeof v === "string")
-    : [];
-  const ownedNamespaces = Array.isArray(rec.ownedNamespaces)
-    ? rec.ownedNamespaces.filter((v): v is string => typeof v === "string")
-    : [];
-  const directGrants = Object.fromEntries(
-    Object.entries((rec.directGrants as Record<string, unknown>) ?? {}).filter(([, role]) =>
-      isNamespaceRole(role),
-    ) as [string, NamespaceRole][],
-  );
-  const groupGrants = Object.fromEntries(
-    Object.entries((rec.groupGrants as Record<string, unknown>) ?? {}).filter(([, role]) =>
-      isNamespaceRole(role),
-    ) as [string, NamespaceRole][],
-  );
-  return {
-    groups,
-    isAdmin: Boolean(rec.isAdmin),
-    ownedNamespaces,
-    directGrants,
-    groupGrants,
-  };
-}
-
 async function loadAdminFlag(flagsKv: KVNamespace, email: string): Promise<boolean> {
   const raw = await flagsKv.get(ADMIN_KEY, { cacheTtl: IDENTITY_CACHE_TTL });
-  if (!raw) return false;
-  const admins = raw.split(",").map((e) => e.trim().toLowerCase());
-  return admins.includes(email.toLowerCase());
+  return decodeAdminEmails(raw).includes(email.toLowerCase());
 }
 
 function coalesceIdentity(
@@ -99,7 +70,7 @@ export async function loadIdentity(
     type: "json",
     cacheTtl: IDENTITY_CACHE_TTL,
   });
-  const parsed = parseIdentity(cached);
+  const parsed = decodeIdentity(cached);
   if (parsed) return parsed;
 
   const [groupsResult, grantsResult, ownedResult] = await db.batch([
@@ -128,7 +99,7 @@ export async function loadIdentity(
   const isAdmin = await loadAdminFlag(flagsKv, email);
   const identity = coalesceIdentity(groups, ownedNamespaces, grants, isAdmin);
 
-  void usersKv.put(email, JSON.stringify(identity), { expirationTtl: IDENTITY_TTL });
+  void usersKv.put(email, encodeIdentity(identity), { expirationTtl: IDENTITY_TTL });
   return identity;
 }
 

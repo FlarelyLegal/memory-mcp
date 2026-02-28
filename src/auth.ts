@@ -1,19 +1,18 @@
 import { getAccessLevel } from "./identity.js";
 import type { DbHandle } from "./db.js";
 import type { NamespaceRow, UserIdentity } from "./types.js";
+import { decodeAdminEmails } from "./kv.js";
 
 const ADMIN_KEY = "admin:emails";
 
 /**
  * Check if an email is in the admin allowlist stored in FLAGS KV.
- * Key: `admin:emails`, value: comma-separated emails.
- * Returns false when the key is missing (fail-closed).
+ * Key: `admin:emails`, value: JSON `{ v: "1.0", emails: [...] }`
+ * or legacy comma-separated string. Returns false when missing (fail-closed).
  */
 export async function isAdmin(kv: KVNamespace, email: string): Promise<boolean> {
   const raw = await kv.get(ADMIN_KEY);
-  if (!raw) return false;
-  const admins = raw.split(",").map((e) => e.trim().toLowerCase());
-  return admins.includes(email.toLowerCase());
+  return decodeAdminEmails(raw).includes(email.toLowerCase());
 }
 
 export class AccessDeniedError extends Error {
