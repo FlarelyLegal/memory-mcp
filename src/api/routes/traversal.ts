@@ -11,7 +11,7 @@ export function registerTraversalRoutes(): void {
     "/api/v1/entities/:id/traverse",
     async (ctx) => {
       try {
-        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.identity);
         const maxDepth = Math.min(Number(ctx.query.get("max_depth") ?? 2), 5);
         const typesParam = ctx.query.get("relation_types");
         const relationTypes = typesParam ? typesParam.split(",") : undefined;

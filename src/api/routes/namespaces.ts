@@ -31,7 +31,7 @@ export function registerNamespaceRoutes(): void {
         });
         const limit = 50;
         const offset = parseCursor(ctx.query);
-        const rows = await listNamespaces(ctx.db, ctx.email, { limit: limit + 1, offset });
+        const rows = await listNamespaces(ctx.db, ctx.identity, { limit: limit + 1, offset });
         const hasMore = rows.length > limit;
         const data = projectRows(rows.slice(0, limit).map(parseNamespaceRow), fields);
         const response = json(data);

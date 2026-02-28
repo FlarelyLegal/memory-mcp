@@ -1,7 +1,7 @@
 /** Admin REST endpoints: claim-namespaces, stats + OpenAPI definitions. */
 import { defineRoute } from "../registry.js";
 import { json, jsonError, handleError } from "../middleware.js";
-import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
+import { assertNamespaceWriteAccess } from "../../auth.js";
 import { claimUnownedNamespaces } from "../../graph/index.js";
 import { getNamespaceStats } from "../../stats.js";
 import { audit } from "../../audit.js";
@@ -13,7 +13,7 @@ export function registerAdminRoutes(): void {
     "/api/v1/admin/stats/:namespace_id",
     async (ctx) => {
       try {
-        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, true);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.identity);
         const stats = await getNamespaceStats(ctx.db, ctx.params.namespace_id);
         return json(stats);
       } catch (e) {
@@ -65,8 +65,7 @@ export function registerAdminRoutes(): void {
     "/api/v1/admin/claim-namespaces",
     async (ctx) => {
       try {
-        if (!(await isAdmin(ctx.env.FLAGS, ctx.email)))
-          return jsonError("Admin access required", 403);
+        if (!ctx.identity.isAdmin) return jsonError("Admin access required", 403);
         const claimed = await claimUnownedNamespaces(ctx.db, ctx.email);
         if (claimed > 0) {
           await audit(ctx.db, ctx.env.STORAGE, {

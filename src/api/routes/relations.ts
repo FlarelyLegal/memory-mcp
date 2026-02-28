@@ -13,7 +13,6 @@ import {
   assertEntityAccess,
   assertEntityReadAccess,
   assertRelationAccess,
-  isAdmin,
 } from "../../auth.js";
 import {
   nsPathParam,
@@ -34,8 +33,7 @@ export function registerRelationRoutes(): void {
     "/api/v1/namespaces/:namespace_id/relations",
     async (ctx, request) => {
       try {
-        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
-        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.email, admin);
+        await assertNamespaceWriteAccess(ctx.db, ctx.params.namespace_id, ctx.identity);
         const body = await parseBody(request);
         if (body instanceof Response) return body;
         const parsed = relationCreateSchema.safeParse(body);
@@ -44,8 +42,8 @@ export function registerRelationRoutes(): void {
         }
         const payload = parsed.data;
 
-        await assertEntityAccess(ctx.db, payload.source_id, ctx.email, admin);
-        await assertEntityAccess(ctx.db, payload.target_id, ctx.email, admin);
+        await assertEntityAccess(ctx.db, payload.source_id, ctx.identity);
+        await assertEntityAccess(ctx.db, payload.target_id, ctx.identity);
 
         const [source, target] = await Promise.all([
           getEntity(ctx.db, payload.source_id),
@@ -130,7 +128,7 @@ export function registerRelationRoutes(): void {
     "/api/v1/entities/:id/relations",
     async (ctx) => {
       try {
-        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.identity);
         const direction = ctx.query.get("direction") ?? "both";
         const relationType = ctx.query.get("relation_type") ?? undefined;
         const limit = queryLimit(ctx.query, 50);
@@ -179,8 +177,7 @@ export function registerRelationRoutes(): void {
     "/api/v1/relations/:id",
     async (ctx) => {
       try {
-        const admin = await isAdmin(ctx.env.FLAGS, ctx.email);
-        await assertRelationAccess(ctx.db, ctx.params.id, ctx.email, admin);
+        await assertRelationAccess(ctx.db, ctx.params.id, ctx.identity);
         await deleteRelation(ctx.db, ctx.params.id);
         await audit(ctx.db, ctx.env.STORAGE, {
           action: "relation.delete",

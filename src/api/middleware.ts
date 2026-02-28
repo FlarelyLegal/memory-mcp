@@ -12,9 +12,12 @@
 import type { Env } from "../types.js";
 import { verifyToken } from "../jwt.js";
 import { AccessDeniedError } from "../auth.js";
+import { loadIdentity } from "../identity.js";
+import type { DbHandle } from "../db.js";
 import { ST_PREFIX } from "./service-tokens.js";
 import type { ServiceTokenMapping } from "./service-tokens.js";
 import type { AuthIdentity } from "./types.js";
+import type { UserIdentity } from "../types.js";
 import { z } from "zod";
 
 /** Standard JSON success response. */
@@ -147,6 +150,21 @@ export async function authenticateIdentity(
   }
 
   return { type: "service_token", common_name: commonName, email: mapping.email, bound: true };
+}
+
+export async function authenticateRequestIdentity(
+  request: Request,
+  env: Env,
+  db: DbHandle,
+  opts?: { allowUnboundServiceToken?: boolean },
+): Promise<{ auth: AuthIdentity; email: string; identity: UserIdentity } | Response> {
+  const auth = await authenticateIdentity(request, env, opts);
+  if (auth instanceof Response) return auth;
+  if (!auth.email) {
+    return jsonError("Service token not registered. Bind it to an email first.", 403);
+  }
+  const identity = await loadIdentity(db, env.USERS, env.FLAGS, auth.email);
+  return { auth, email: auth.email, identity };
 }
 
 /** Parse JSON body with error handling. */

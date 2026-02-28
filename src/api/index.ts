@@ -9,7 +9,7 @@ import type { Env } from "../types.js";
 import type { HttpMethod } from "./types.js";
 import { session, getBookmark } from "../db.js";
 import { matchRoute } from "./registry.js";
-import { authenticateIdentity, json, jsonError } from "./middleware.js";
+import { authenticateRequestIdentity, json, jsonError } from "./middleware.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { renderScalarDocs } from "./docs.js";
 import { preflightResponse, applyCors } from "./cors.js";
@@ -106,13 +106,21 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   let email = "";
 
   if (!route.public) {
-    const result = await authenticateIdentity(request, env, {
+    const result = await authenticateRequestIdentity(request, env, db, {
       allowUnboundServiceToken: route.allowUnboundServiceToken,
     });
     if (result instanceof Response) return applyCors(request, result);
-    email = result.email ?? "";
+    email = result.email;
 
-    const ctx = { env, db, email, auth: result, params, query: url.searchParams };
+    const ctx = {
+      env,
+      db,
+      email,
+      auth: result.auth,
+      identity: result.identity,
+      params,
+      query: url.searchParams,
+    };
     const response = await route.handler(ctx, request);
     trackApi(env, request.method, route.pattern, email, start, response);
     return withBookmark(db, applyCors(request, response));
@@ -123,6 +131,13 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     db,
     email: "",
     auth: { type: "human", email: "" } as const,
+    identity: {
+      groups: [],
+      isAdmin: false,
+      ownedNamespaces: [],
+      directGrants: {},
+      groupGrants: {},
+    },
     params,
     query: url.searchParams,
   };

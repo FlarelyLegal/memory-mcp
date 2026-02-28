@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBody, handleError } from "../middleware.js";
-import { assertNamespaceWriteAccess, isAdmin } from "../../auth.js";
+import { assertNamespaceWriteAccess } from "../../auth.js";
 import { consolidateFields, WORKFLOW_TYPES } from "../../tool-schemas.js";
 import { zodSchema } from "../schemas.js";
 import { audit } from "../../audit.js";
@@ -29,14 +29,13 @@ export function registerWorkflowRoutes(): void {
     "/api/v1/admin/reindex",
     async (ctx, request) => {
       try {
-        if (!(await isAdmin(ctx.env.FLAGS, ctx.email)))
-          return jsonError("Admin access required", 403);
+        if (!ctx.identity.isAdmin) return jsonError("Admin access required", 403);
         const body = await parseBody<{ namespace_id?: string }>(request);
         if (body instanceof Response) return body;
         if (!body.namespace_id) return jsonError("namespace_id is required", 400);
 
         if (body.namespace_id !== "all") {
-          await assertNamespaceWriteAccess(ctx.db, body.namespace_id, ctx.email, true);
+          await assertNamespaceWriteAccess(ctx.db, body.namespace_id, ctx.identity);
         }
 
         const instance = await ctx.env.REINDEX_WORKFLOW.create({
@@ -89,8 +88,7 @@ export function registerWorkflowRoutes(): void {
     "/api/v1/admin/consolidate",
     async (ctx, request) => {
       try {
-        if (!(await isAdmin(ctx.env.FLAGS, ctx.email)))
-          return jsonError("Admin access required", 403);
+        if (!ctx.identity.isAdmin) return jsonError("Admin access required", 403);
         const body = await parseBody<{
           namespace_id?: string;
           decay_threshold?: number;
@@ -102,7 +100,7 @@ export function registerWorkflowRoutes(): void {
         if (body instanceof Response) return body;
         if (!body.namespace_id) return jsonError("namespace_id is required", 400);
 
-        await assertNamespaceWriteAccess(ctx.db, body.namespace_id, ctx.email, true);
+        await assertNamespaceWriteAccess(ctx.db, body.namespace_id, ctx.identity);
 
         const instance = await ctx.env.CONSOLIDATION_WORKFLOW.create({
           params: {
@@ -155,8 +153,7 @@ export function registerWorkflowRoutes(): void {
     "/api/v1/admin/workflows/:workflow/:instance_id",
     async (ctx) => {
       try {
-        if (!(await isAdmin(ctx.env.FLAGS, ctx.email)))
-          return jsonError("Admin access required", 403);
+        if (!ctx.identity.isAdmin) return jsonError("Admin access required", 403);
         const { workflow, instance_id } = ctx.params;
         const binding =
           workflow === "reindex"

@@ -22,7 +22,7 @@ export function registerMemoryQueryRoutes(): void {
     "/api/v1/namespaces/:namespace_id/memories",
     async (ctx) => {
       try {
-        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.email);
+        await assertNamespaceReadAccess(ctx.db, ctx.params.namespace_id, ctx.identity);
         const mode = ctx.query.get("mode") ?? "recall";
         const type = ctx.query.get("type") as MemoryType | undefined;
         const limit = queryLimit(ctx.query, 50);
@@ -125,7 +125,7 @@ export function registerMemoryQueryRoutes(): void {
     "/api/v1/entities/:id/memories",
     async (ctx) => {
       try {
-        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.email);
+        await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.identity);
         const limit = queryLimit(ctx.query, 50);
         const offset = parseCursor(ctx.query);
         const allowed = [
