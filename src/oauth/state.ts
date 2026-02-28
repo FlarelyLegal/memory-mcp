@@ -34,16 +34,9 @@ export async function validateOAuthState(
     throw new OAuthError("invalid_request", "Missing state parameter", 400);
   }
 
-  const storedDataJson = await kv.get(`oauth:state:${stateFromQuery}`);
-  if (!storedDataJson) {
+  const oauthReqInfo = await kv.get<AuthRequest>(`oauth:state:${stateFromQuery}`, "json");
+  if (!oauthReqInfo) {
     throw new OAuthError("invalid_request", "Invalid or expired state", 400);
-  }
-
-  let oauthReqInfo: AuthRequest;
-  try {
-    oauthReqInfo = JSON.parse(storedDataJson) as AuthRequest;
-  } catch {
-    throw new OAuthError("server_error", "Invalid state data", 500);
   }
 
   await kv.delete(`oauth:state:${stateFromQuery}`);

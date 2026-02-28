@@ -5,8 +5,7 @@
  */
 import { defineRoute } from "../registry.js";
 import { json, jsonError, parseBodyWithSchema, handleError } from "../middleware.js";
-import { ST_PREFIX } from "../service-tokens.js";
-import type { ServiceTokenMapping } from "../service-tokens.js";
+import { ST_PREFIX, decodeServiceToken, encodeServiceToken } from "../service-tokens.js";
 import { tokenSchema } from "../schemas.js";
 import { serviceTokenLabelSchema } from "../validators.js";
 import { audit } from "../../audit.js";
@@ -28,7 +27,9 @@ export function registerTokenCrudRoutes(): void {
     async (ctx) => {
       try {
         const key = `${ST_PREFIX}${ctx.params.common_name}`;
-        const mapping = await ctx.env.CACHE.get<ServiceTokenMapping>(key, "json");
+        const mapping = decodeServiceToken(
+          await ctx.env.CACHE.get<Record<string, unknown>>(key, "json"),
+        );
         if (!mapping) return jsonError("Service token not found", 404);
         if (mapping.email !== ctx.email) return jsonError("Access denied", 403);
         return json({ common_name: ctx.params.common_name, ...mapping });
@@ -58,7 +59,9 @@ export function registerTokenCrudRoutes(): void {
     async (ctx, request) => {
       try {
         const key = `${ST_PREFIX}${ctx.params.common_name}`;
-        const mapping = await ctx.env.CACHE.get<ServiceTokenMapping>(key, "json");
+        const mapping = decodeServiceToken(
+          await ctx.env.CACHE.get<Record<string, unknown>>(key, "json"),
+        );
         if (!mapping) return jsonError("Service token not found", 404);
         if (mapping.email !== ctx.email) return jsonError("Access denied", 403);
 
@@ -66,7 +69,7 @@ export function registerTokenCrudRoutes(): void {
         if (body instanceof Response) return body;
 
         mapping.label = body.label;
-        await ctx.env.CACHE.put(key, JSON.stringify(mapping));
+        await ctx.env.CACHE.put(key, encodeServiceToken(mapping));
         audit(ctx.db, ctx.env.STORAGE, {
           action: "service_token.update",
           email: ctx.email,
@@ -116,15 +119,17 @@ export function registerTokenCrudRoutes(): void {
     async (ctx) => {
       try {
         const key = `${ST_PREFIX}${ctx.params.common_name}`;
-        const mapping = await ctx.env.CACHE.get<ServiceTokenMapping>(key, "json");
+        const mapping = decodeServiceToken(
+          await ctx.env.CACHE.get<Record<string, unknown>>(key, "json"),
+        );
         if (!mapping) return jsonError("Service token not found", 404);
         if (mapping.email !== ctx.email) return jsonError("Access denied", 403);
         if (mapping.revoked_at) return jsonError("Service token already revoked", 409);
         // Soft-delete: mark as revoked rather than deleting. KV is eventually
-        // consistent — a hard delete could leave a stale readable mapping.
+        // consistent -- a hard delete could leave a stale readable mapping.
         // TTL ensures the entry is garbage-collected after 7 days.
         mapping.revoked_at = Math.floor(Date.now() / 1000);
-        await ctx.env.CACHE.put(key, JSON.stringify(mapping), { expirationTtl: 7 * 86400 });
+        await ctx.env.CACHE.put(key, encodeServiceToken(mapping), { expirationTtl: 7 * 86400 });
         audit(ctx.db, ctx.env.STORAGE, {
           action: "service_token.revoke",
           email: ctx.email,

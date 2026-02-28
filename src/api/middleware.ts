@@ -14,8 +14,7 @@ import { verifyToken } from "../jwt.js";
 import { AccessDeniedError } from "../auth.js";
 import { loadIdentity } from "../identity.js";
 import type { DbHandle } from "../db.js";
-import { ST_PREFIX } from "./service-tokens.js";
-import type { ServiceTokenMapping } from "./service-tokens.js";
+import { ST_PREFIX, decodeServiceToken } from "./service-tokens.js";
 import type { AuthIdentity } from "./types.js";
 import type { UserIdentity } from "../types.js";
 import { z } from "zod";
@@ -137,7 +136,9 @@ export async function authenticateIdentity(
     return jsonError("JWT missing email and common_name claims", 401);
   }
 
-  const mapping = await env.CACHE.get<ServiceTokenMapping>(`${ST_PREFIX}${commonName}`, "json");
+  const mapping = decodeServiceToken(
+    await env.CACHE.get<Record<string, unknown>>(`${ST_PREFIX}${commonName}`, "json"),
+  );
   if (!mapping) {
     if (opts?.allowUnboundServiceToken) {
       return { type: "service_token", common_name: commonName, email: null, bound: false };
