@@ -36,6 +36,87 @@ Full schema: `schemas/schema.sql`
 - D1 RBAC footprint example: `docs/examples/rbac-user-footprint.example.json`
 - USERS KV cached identity example: `docs/examples/identity-cache.example.json`
 
+## Security model
+
+Every request is authenticated and authorized before any data access.
+
+### Identity flow
+
+1. Client sends JWT via `Cf-Access-Jwt-Assertion` header or `CF_Authorization` cookie
+2. RSA signature verified against the Cloudflare Access JWKS endpoint
+3. Token expiry and audience tag (`ACCESS_AUD_TAG`) validated
+4. Email extracted from verified claims
+
+Service tokens follow a different path: the JWT has no `email` or `sub` claim. Identity is resolved via `common_name` (the `CF-Access-Client-Id` header, which survives token rotation). The middleware looks up `st:<common_name>` in KV to get the bound email.
+
+### Authorization
+
+`loadIdentity()` populates a `UserIdentity` from D1 via the KV identity cache. This includes owned namespaces, direct grants, and group memberships with their associated grants. After identity is loaded, all access checks are pure in-memory lookups with zero additional D1 queries per request.
+
+### Audit trail
+
+Every write operation is logged to two stores:
+
+- **D1** (hot window): queryable for 90 days, indexed by namespace, action, and timestamp
+- **R2** (archive): individual event objects consolidated into daily NDJSON files at `audit/{YYYY-MM-DD}.ndjson`, retained indefinitely
+
+R2 is S3-compatible. The NDJSON audit archive can be consumed directly by any S3-aware log aggregator (Loki, Splunk, Datadog, Elastic) without building an export pipeline.
+
+Both writes are fire-and-forget via `Promise.allSettled` and never block the primary operation. The consolidation workflow merges individual R2 events into daily archives and purges D1 records beyond 90 days.
+
+### Security headers and input validation
+
+- All responses include `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`
+- CSRF protection via `Origin`/`Referer`/`Sec-Fetch-Site` validation in middleware for cookie-based flows
+- All MCP tool and REST API inputs have Zod `.max()` bounds on strings and arrays to prevent oversized payloads
+- Cross-namespace relation creation is rejected at the data layer (both source and target must belong to the same namespace)
+
+## RBAC model
+
+Namespace access is controlled by three roles, each with a numeric level:
+
+| Role     | Level | Capabilities                                    |
+| -------- | ----- | ----------------------------------------------- |
+| `owner`  | 3     | Full control, transfer ownership, manage grants |
+| `editor` | 2     | Read and write entities, relations, memories    |
+| `viewer` | 1     | Read-only access                                |
+
+A user's effective role is the highest level across all sources: implicit ownership (from `namespaces.owner`), direct user grants, and group membership grants. This is a union model where the most permissive grant wins.
+
+### Groups
+
+Groups are app-managed in D1 (not synced from an identity provider). Each group has its own role hierarchy:
+
+| Group role | Capabilities                                    |
+| ---------- | ----------------------------------------------- |
+| `owner`    | Delete group, manage all members and roles      |
+| `admin`    | Add/remove members, change member roles         |
+| `member`   | Inherits namespace grants assigned to the group |
+
+### Namespace visibility
+
+Namespaces have a `visibility` column: `private` (default) or `public`. Public namespaces are readable by any authenticated user. Write access still requires an explicit editor or owner grant.
+
+### Administration
+
+Groups, group members, and namespace grants are managed through the REST API, not MCP tools. This keeps the MCP tool surface lean (17 tools). Namespace sharing actions (`share`, `unshare`, `list_access`, `transfer`, `set_visibility`) are available through the `manage_namespace` MCP tool.
+
+## Infrastructure rationale
+
+The server runs entirely on Cloudflare's developer platform. Each service was chosen for a specific technical reason:
+
+| Service             | Why                                                                                                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D1**              | SQLite semantics with read replication. Sessions API for read/write consistency. No connection pooling. `withRetry()` handles transient errors.                                    |
+| **Vectorize**       | Native ANN search integrated with the Workers runtime. No external vector database to provision.                                                                                   |
+| **Workers AI**      | Embedded inference (embeddings via `@cf/baai/bge-m3`, summaries, merge, reranking) routed through AI Gateway for analytics, caching, and rate limiting.                            |
+| **KV**              | Globally distributed cache with TTL control. Four separate namespaces (USERS, FLAGS, CACHE, OAUTH_KV) for isolation. 30-second cacheTtl on identity for security-first revocation. |
+| **R2**              | S3-compatible object storage for the audit archive. No egress fees. Indefinite retention.                                                                                          |
+| **Durable Objects** | Stateful MCP sessions with persistent state across tool calls within a conversation.                                                                                               |
+| **Workflows**       | Durable multi-step background jobs with step-level retry. Consolidation and reindex survive Worker restarts.                                                                       |
+
+The net result: one `wrangler deploy` provisions the entire stack. No separate databases, queues, or object stores to manage.
+
 ## Data flow
 
 ### Write path

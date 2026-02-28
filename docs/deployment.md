@@ -86,7 +86,7 @@ Migrations are idempotent (`IF NOT EXISTS`, `DROP IF EXISTS`).
 
 ## Demo seed
 
-Seeds a `demo` namespace with the server modeled as its own knowledge graph — 14 entities, 18 relations, and 14 memories.
+Seeds a `demo` namespace with the server modeled as its own knowledge graph -- 14 entities, 18 relations, and 14 memories.
 
 ```bash
 API_BASE_URL="https://<your-worker-domain>" \
@@ -95,7 +95,7 @@ CF_ACCESS_CLIENT_SECRET="<service-token-secret>" \
 npm run seed:demo
 ```
 
-The seeder is idempotent — it skips entities, relations, and memories that already exist.
+The seeder is idempotent -- it skips entities, relations, and memories that already exist.
 
 GitHub Actions workflows for manual seeding: **Seed Demo (A Manual)** and **Seed Demo (B Manual)** under Actions > workflow_dispatch.
 

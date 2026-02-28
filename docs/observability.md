@@ -7,36 +7,97 @@
 All write operations (MCP tools + REST API) are audit-logged via `audit()` from `src/audit.ts`. Each call writes to two destinations concurrently:
 
 1. **D1 `audit_logs` table** -- queryable hot window (90-day retention, purged by consolidation workflow)
-2. **R2 NDJSON archive** -- cold storage at `audit/{YYYY-MM-DD}.ndjson` (Loki-compatible, retained indefinitely)
+2. **R2 NDJSON archive** -- cold storage at `audit/{YYYY-MM-DD}.ndjson` (retained indefinitely)
 
 Both writes are best-effort via `Promise.allSettled` -- failures never break the primary operation.
 
 ### Logged actions
 
-| Action                        | Resource      | Trigger                |
-| ----------------------------- | ------------- | ---------------------- |
-| `namespace.create`            | namespace     | MCP + API              |
-| `namespace.claim`             | namespace     | MCP + API              |
-| `entity.create`               | entity        | MCP + API              |
-| `entity.update`               | entity        | MCP + API              |
-| `entity.delete`               | entity        | MCP + API              |
-| `relation.create`             | relation      | MCP + API              |
-| `relation.delete`             | relation      | MCP + API              |
-| `memory.create`               | memory        | MCP + API              |
-| `memory.update`               | memory        | MCP + API              |
-| `memory.delete`               | memory        | MCP + API              |
-| `conversation.create`         | conversation  | MCP + API              |
-| `conversation.delete`         | conversation  | MCP                    |
-| `message.create`              | message       | MCP + API              |
-| `workflow.reindex`            | workflow      | MCP + API              |
-| `workflow.consolidate`        | workflow      | MCP + API              |
-| `audit.purge`                 | audit_logs    | Consolidation workflow |
-| `service_token.bind_request`  | service_token | API                    |
-| `service_token.bind_self`     | service_token | API                    |
-| `service_token.bind_denied`   | service_token | API                    |
-| `service_token.bind_conflict` | service_token | API                    |
-| `service_token.update`        | service_token | API                    |
-| `service_token.revoke`        | service_token | API                    |
+35 actions across 10 resource types:
+
+**Namespace**
+
+| Action                     | Trigger   |
+| -------------------------- | --------- |
+| `namespace.create`         | MCP + API |
+| `namespace.update`         | MCP + API |
+| `namespace.delete`         | MCP + API |
+| `namespace.claim`          | MCP + API |
+| `namespace.set_visibility` | MCP + API |
+| `namespace.transfer`       | MCP + API |
+
+**RBAC grants**
+
+| Action                   | Trigger   |
+| ------------------------ | --------- |
+| `namespace_grant.create` | MCP + API |
+| `namespace_grant.revoke` | MCP + API |
+
+**Entities**
+
+| Action          | Trigger   |
+| --------------- | --------- |
+| `entity.create` | MCP + API |
+| `entity.update` | MCP + API |
+| `entity.delete` | MCP + API |
+
+**Relations**
+
+| Action            | Trigger   |
+| ----------------- | --------- |
+| `relation.create` | MCP + API |
+| `relation.delete` | MCP + API |
+
+**Memories**
+
+| Action          | Trigger   |
+| --------------- | --------- |
+| `memory.create` | MCP + API |
+| `memory.update` | MCP + API |
+| `memory.delete` | MCP + API |
+
+**Conversations & messages**
+
+| Action                | Trigger   |
+| --------------------- | --------- |
+| `conversation.create` | MCP + API |
+| `conversation.delete` | MCP       |
+| `message.create`      | MCP + API |
+
+**Groups & members**
+
+| Action                     | Trigger |
+| -------------------------- | ------- |
+| `group.create`             | API     |
+| `group.update`             | API     |
+| `group.delete`             | API     |
+| `group_member.add`         | API     |
+| `group_member.remove`      | API     |
+| `group_member.update_role` | API     |
+
+**Workflows**
+
+| Action                 | Trigger   |
+| ---------------------- | --------- |
+| `workflow.reindex`     | MCP + API |
+| `workflow.consolidate` | MCP + API |
+
+**Audit lifecycle**
+
+| Action        | Trigger                |
+| ------------- | ---------------------- |
+| `audit.purge` | Consolidation workflow |
+
+**Service tokens**
+
+| Action                        | Trigger |
+| ----------------------------- | ------- |
+| `service_token.bind_request`  | API     |
+| `service_token.bind_self`     | API     |
+| `service_token.bind_denied`   | API     |
+| `service_token.bind_conflict` | API     |
+| `service_token.update`        | API     |
+| `service_token.revoke`        | API     |
 
 ### D1 audit schema
 
@@ -64,17 +125,19 @@ Each line in the daily NDJSON file:
 ```json
 {
   "timestamp": "2026-02-27T12:34:56.000Z",
-  "id": "...",
-  "namespace_id": "...",
+  "id": "abc123",
+  "namespace_id": "my-project",
   "email": "tim@example.com",
   "action": "entity.create",
   "resource_type": "entity",
-  "resource_id": "...",
+  "resource_id": "ent_xyz",
   "detail": { "name": "Foo", "type": "concept" }
 }
 ```
 
-Compatible with Loki, Grafana, or any NDJSON log processor.
+### S3-compatible export
+
+R2 is S3-compatible. The NDJSON audit archive can be consumed directly by any S3-aware log aggregator -- Loki, Splunk, Datadog, Elastic, Grafana -- without building a separate export pipeline. Point your log collector at the R2 bucket using S3 API credentials and read `audit/*.ndjson`.
 
 ### Retention
 
@@ -86,6 +149,134 @@ Recommended R2 lifecycle policy:
 - Production: 90+ days
 - Non-production: 30 days
 
+## Correlation ID
+
+Every audit event gets a unique `id` (generated by `generateId()` in `src/utils.ts`). This ID is:
+
+1. Stored in both D1 (`audit_logs.id`) and R2 (`audit/events/{day}/{id}.json`)
+2. Emitted in the structured console log alongside the event
+
+The correlation ID lets you trace from a real-time tail log back to the full audit record:
+
+```
+wrangler tail → {"audit":true,"id":"abc123","action":"entity.create",...}
+                   │
+                   ├── D1: SELECT * FROM audit_logs WHERE id = 'abc123'
+                   └── R2: audit/events/2026-02-27/abc123.json
+```
+
+### Tracing an event with jq
+
+```bash
+# Stream tail logs and extract audit events
+npx wrangler tail --config wrangler-b.jsonc --format json \
+  | jq -r '.logs[] | select(.message[] | test("\"audit\":true"))'
+
+# Get the full audit record from D1 by correlation ID
+npx wrangler d1 execute memory-graph --config wrangler-b.jsonc \
+  --command "SELECT * FROM audit_logs WHERE id = 'abc123'"
+```
+
+## Structured log format
+
+All console output is structured JSON, parseable by `wrangler tail --format json` and log aggregators.
+
+### Log types
+
+Three top-level type flags distinguish log categories:
+
+| Flag    | Source         | Example                                                  |
+| ------- | -------------- | -------------------------------------------------------- |
+| `audit` | `src/audit.ts` | `{"audit":true,"id":"...","action":"entity.create",...}` |
+| `error` | `src/log.ts`   | `{"error":true,"source":"tool","message":"...",...}`     |
+| `warn`  | `src/log.ts`   | `{"warn":true,"source":"db","message":"...",...}`        |
+
+### Audit log schema
+
+```json
+{
+  "audit": true,
+  "id": "abc123",
+  "action": "entity.create",
+  "namespace_id": "my-project",
+  "resource_type": "entity",
+  "resource_id": "ent_xyz",
+  "ts": 1740652496
+}
+```
+
+No PII (email) in console output. Use the `id` to look up the full record in D1 or R2.
+
+### Error log schema
+
+```json
+{
+  "error": true,
+  "source": "tool",
+  "tool": "manage_entity",
+  "message": "D1_ERROR: UNIQUE constraint failed",
+  "stack": "Error: D1_ERROR..."
+}
+```
+
+Source values: `tool`, `api`, `oauth`, `db`, `fts`, `audit`.
+
+### Warning log schema
+
+```json
+{
+  "warn": true,
+  "source": "db",
+  "message": "Retrying D1 write after transient error",
+  "attempt": 2
+}
+```
+
+### PII exclusion policy
+
+Email addresses are deliberately excluded from all console output. Structured logs contain only operational metadata (action, resource type/ID, namespace, error message). To correlate a log entry with a user, query D1 by the audit `id`:
+
+```sql
+SELECT email, detail FROM audit_logs WHERE id = ?
+```
+
+## Analytics Engine
+
+Per-request metrics are tracked via Cloudflare Analytics Engine (`src/analytics.ts`). The `trackEvent()` function writes a data point for every REST API request and MCP tool call. Fire-and-forget -- never blocks the request. Gracefully no-ops when the `ANALYTICS` binding is absent.
+
+### Data point schema
+
+| Field     | Content                                 |
+| --------- | --------------------------------------- |
+| `index`   | User email (sampling key)               |
+| `blob1`   | Channel: `api` or `mcp`                 |
+| `blob2`   | Operation: route path or tool name      |
+| `blob3`   | Status: `ok` or `error`                 |
+| `blob4`   | Detail: HTTP method (api) or action     |
+| `blob5`   | Namespace ID (when available)           |
+| `double1` | Latency in milliseconds                 |
+| `double2` | Response size in bytes (api) or 0 (mcp) |
+
+### Querying
+
+Analytics Engine data is queryable via the Cloudflare dashboard (Workers > Analytics Engine) or the SQL API:
+
+```sql
+-- Top 10 slowest MCP tools in the last 24 hours
+SELECT blob2 AS tool, AVG(double1) AS avg_latency_ms, COUNT() AS calls
+FROM memory_graph
+WHERE blob1 = 'mcp' AND timestamp > NOW() - INTERVAL '24' HOUR
+GROUP BY blob2
+ORDER BY avg_latency_ms DESC
+LIMIT 10
+
+-- Error rate by channel
+SELECT blob1 AS channel, blob3 AS status, COUNT() AS total
+FROM memory_graph
+WHERE timestamp > NOW() - INTERVAL '1' HOUR
+GROUP BY blob1, blob3
+```
+
 ## Tail logging
 
 Workers emit structured `console.log` output visible via `wrangler tail`:
@@ -93,22 +284,27 @@ Workers emit structured `console.log` output visible via `wrangler tail`:
 ```bash
 npx wrangler tail --config wrangler-a.jsonc        # account A
 npx wrangler tail --config wrangler-b.jsonc        # account B
-npx wrangler tail --config wrangler-a.jsonc --format json  # JSON output
+npx wrangler tail --config wrangler-b.jsonc --format json  # JSON output
 ```
 
-Audit events are logged to console as structured JSON alongside D1/R2 writes, making them visible in real-time via tail without additional infrastructure.
+Audit events, errors, and warnings are all structured JSON, making them filterable with `jq` or any JSON log processor.
 
 ### Filtering tail output
 
 ```bash
 # Only errors
-npx wrangler tail --config wrangler-a.jsonc --status error
+npx wrangler tail --config wrangler-b.jsonc --status error
 
 # Specific path
-npx wrangler tail --config wrangler-a.jsonc --search "/api/v1/entities"
+npx wrangler tail --config wrangler-b.jsonc --search "/api/v1/entities"
 
-# JSON format for piping to jq
-npx wrangler tail --config wrangler-a.jsonc --format json | jq '.logs[]'
+# JSON format: extract audit events only
+npx wrangler tail --config wrangler-b.jsonc --format json \
+  | jq '.logs[] | select(.message[] | test("\"audit\":true"))'
+
+# JSON format: extract errors only
+npx wrangler tail --config wrangler-b.jsonc --format json \
+  | jq '.logs[] | select(.message[] | test("\"error\":true"))'
 ```
 
 ## Workflow monitoring
@@ -126,7 +322,7 @@ Workflow status values: `queued`, `running`, `complete`, `errored`.
 `GET /health` returns server status without authentication:
 
 ```json
-{ "status": "ok", "server": "memory-graph-mcp", "version": "0.11.1" }
+{ "status": "ok", "server": "memory-graph-mcp", "version": "1.0.1" }
 ```
 
 Use this for uptime monitoring, load balancer health checks, or CI preflight.

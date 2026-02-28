@@ -31,7 +31,13 @@ function mapAction(action: string): AuditAction {
   const mapped = map[action];
   if (!mapped) {
     // eslint-disable-next-line no-console
-    console.warn(`audit: unknown legacy action "${action}", logging as-is`);
+    console.warn(
+      JSON.stringify({
+        warn: true,
+        source: "audit",
+        message: `unknown legacy action "${action}", logging as-is`,
+      }),
+    );
     return action as AuditAction;
   }
   return mapped;

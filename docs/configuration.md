@@ -63,7 +63,7 @@ npx wrangler kv key put "admin:emails" "alice@example.com,bob@example.com" \
   --namespace-id <CACHE_KV_NAMESPACE_ID> --remote
 ```
 
-No redeploy needed — changes take effect immediately. If the key is missing, all admin operations are denied (fail-closed).
+No redeploy needed -- changes take effect immediately. If the key is missing, all admin operations are denied (fail-closed).
 
 **Guarded operations:**
 

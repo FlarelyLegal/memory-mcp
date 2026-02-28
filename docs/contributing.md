@@ -64,7 +64,17 @@ npm run build           # wrangler dry-run
 - **All data-layer writes use `withRetry()`** from `src/db.ts` for transient D1 error resilience. Workflow steps have their own retry and don't need it.
 - **All data-layer functions accept `DbHandle`**, never raw `D1Database`.
 - **Input validation.** All tool/API inputs must have Zod `.max()` bounds on strings and arrays.
-- **Limit console.log output.** Only structural metadata — no emails, no detail, no sensitive data.
+- **Limit console.log output.** Only structural metadata -- no emails, no detail, no sensitive data.
+
+## Security requirements for new tools and routes
+
+Every new tool or route must follow these requirements:
+
+- **Auth checks:** Every data access must call `assertNamespaceReadAccess` or `assertNamespaceWriteAccess` with a `UserIdentity` (loaded via `loadIdentity()`). Never access data without verifying the caller has permission.
+- **Audit logging:** Every write operation must call `audit()` from `src/audit.ts` with the appropriate action and resource type. Audit writes are fire-and-forget but must always be present.
+- **Input validation:** All string and array inputs must have Zod `.max()` bounds to prevent oversized payloads to D1 and Workers AI. Use shared field definitions from `src/tool-schemas.ts`.
+- **Elicitation:** Destructive operations (deletes, bulk mutations) should use the `confirm()` helper from `src/response-helpers.ts` to prompt for human confirmation. The helper degrades gracefully if the client does not support elicitation.
+- **OpenAPI registration:** New REST routes must register their `PathOperation` in the same file using `zodSchema()` for request/response schemas.
 
 ## Adding an MCP tool
 
@@ -82,7 +92,7 @@ npm run build           # wrangler dry-run
 2. Define the route and its `PathOperation` in the same file.
 3. Register it in `src/api/index.ts`.
 4. Use validators from `src/api/validators.ts` (composed from `src/tool-schemas.ts`).
-5. Derive OpenAPI schemas with `zodSchema()` — don't hand-write JSON Schema.
+5. Derive OpenAPI schemas with `zodSchema()` -- don't hand-write JSON Schema.
 
 ## Branch workflow
 

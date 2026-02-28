@@ -96,7 +96,14 @@ export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
       attempt += 1;
       if (attempt > MAX_ATTEMPTS || !isD1Retryable(err)) throw err;
       // eslint-disable-next-line no-console
-      console.warn(`D1 retry ${attempt - 1}/${MAX_ATTEMPTS - 1}: ${String(err).slice(0, 120)}`);
+      console.warn(
+        JSON.stringify({
+          warn: true,
+          source: "db",
+          message: `D1 retry ${attempt - 1}/${MAX_ATTEMPTS - 1}: ${String(err).slice(0, 120)}`,
+          attempt: attempt - 1,
+        }),
+      );
       await new Promise((resolve) => setTimeout(resolve, jitterBackoff(attempt)));
     }
   }

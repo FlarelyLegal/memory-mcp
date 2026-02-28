@@ -45,7 +45,13 @@ export function handleFtsError(err: unknown): void {
   const msg = err instanceof Error ? err.message : String(err);
   if (/no such table.*_fts|fts5/i.test(msg)) return; // expected — FTS not set up
   // eslint-disable-next-line no-console
-  console.warn("FTS query failed (unexpected, falling back to LIKE):", msg);
+  console.warn(
+    JSON.stringify({
+      warn: true,
+      source: "fts",
+      message: `FTS query failed (unexpected, falling back to LIKE): ${msg}`,
+    }),
+  );
 }
 
 /**

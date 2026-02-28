@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Env } from "./types.js";
 import { AccessDeniedError } from "./auth.js";
 import { trackEvent } from "./analytics.js";
+import { logError } from "./log.js";
 
 /** Tool result type matching MCP SDK CallToolResult. */
 type ToolResult = {
@@ -65,9 +66,8 @@ export function toolHandler<T>(
       if (e instanceof AccessDeniedError) {
         return err(e.message);
       }
-      // eslint-disable-next-line no-console
-      console.error("Tool error:", e);
-      return err("Internal error — please try again");
+      logError({ source: "tool", tool: analytics.tool }, e);
+      return err("Internal error -- please try again");
     }
   };
 }
