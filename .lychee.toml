@@ -1,0 +1,32 @@
+# Lychee link checker configuration
+# https://lychee.cli.rs/configuration/
+
+# Only check project markdown, skip node_modules and dist
+exclude_path = ["node_modules", "dist", "CHANGELOG.md"]
+
+# Exclude URLs that require auth or are template placeholders
+exclude = [
+  # Deployed workers (require Cloudflare Access auth)
+  "^https://memory\\.flarelylegal\\.com",
+  # Template/placeholder URLs in docs
+  "^https://<",
+  "^https://dash\\.cloudflare\\.com",
+  "^https://one\\.dash\\.cloudflare\\.com",
+  # Cloudflare dashboard links (require login)
+  "^https://.*\\.cloudflare\\.com/.*dashboard",
+  # GitHub edit/new links that 404 without auth
+  "^https://github\\.com/.*/edit/",
+  "^https://github\\.com/.*/new/",
+]
+
+# Accept 429 (rate limited) as valid
+accept = [200, 429]
+
+# Timeout per request
+timeout = 30
+
+# Max concurrent requests (be polite)
+max_concurrency = 8
+
+# Don't check mail addresses
+exclude_mail = true

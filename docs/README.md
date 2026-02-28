@@ -18,7 +18,8 @@ Operational and reference documentation for FlarelyLegal Memory MCP.
 | [FAQ](faq.md)                           | Frequently asked questions                                            |
 | [Contributing](contributing.md)         | Setup, coding standards, branch workflow                              |
 | [CI/CD](../.github/workflows/README.md) | GitHub Actions pipeline and automation                                |
-| [Testing](../tests/e2e/README.md)       | E2E test suite, targets, secrets, running locally                     |
+| [Testing](../tests/README.md)           | Test structure, commands, unit + E2E suites                           |
+| [Migrations](../migrations/README.md)   | D1 schema migrations, commands, adding new migrations                 |
 
 ## Quick reference
 
