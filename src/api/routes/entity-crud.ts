@@ -8,16 +8,25 @@ import { idPathParam, entitySchema, okSchema, zodSchema } from "../schemas.js";
 import { parseEntityRow } from "../row-parsers.js";
 import { entityUpdateSchema } from "../validators.js";
 import { audit } from "../../audit.js";
+import { wantsHtml } from "../html/negotiate.js";
+import { renderEntityDetail } from "../html/entity-detail.js";
+import { fetchEntityDetail } from "../html/queries.js";
 
 export function registerEntityCrudRoutes(): void {
   defineRoute(
     "GET",
     "/api/v1/entities/:id",
-    async (ctx) => {
+    async (ctx, request) => {
       try {
         await assertEntityReadAccess(ctx.db, ctx.params.id, ctx.identity);
         const entity = await getEntity(ctx.db, ctx.params.id);
         if (!entity) return jsonError("Entity not found", 404);
+
+        if (wantsHtml(request)) {
+          const data = await fetchEntityDetail(ctx.db, ctx.params.id, entity);
+          return renderEntityDetail(data);
+        }
+
         return json(parseEntityRow(entity));
       } catch (e) {
         return handleError(e);
