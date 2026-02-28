@@ -1,7 +1,7 @@
 # Memory Graph MCP
 
 [![CI](https://github.com/FlarelyLegal/memory-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/FlarelyLegal/memory-mcp/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-178_passed-2ea44f?logo=vitest)](https://github.com/FlarelyLegal/memory-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-214_passed-2ea44f?logo=vitest)](https://github.com/FlarelyLegal/memory-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/FlarelyLegal/memory-mcp?logo=github&label=release)](https://github.com/FlarelyLegal/memory-mcp/releases/latest)
 
 [![Node.js](https://img.shields.io/badge/Node.js-≥24-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
