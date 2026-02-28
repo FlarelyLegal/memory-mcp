@@ -2,7 +2,7 @@
 
 [< Back to main README](../../README.md)
 
-15 workflows organized into CI, release, PR automation, and manual operations.
+20 workflows organized into CI, release, PR automation, operational, and manual operations.
 
 ## CI pipeline
 
@@ -35,13 +35,23 @@ E2E tests only run when `src/`, `schemas/`, `tests/`, config files, or `playwrig
 
 `opencode.yml` responds to `/oc` or `/opencode` commands in issue/PR comments. Runs the OpenCode agent via Cloudflare AI Gateway (Claude Sonnet 4.5).
 
+## Operational
+
+| Workflow                | Trigger              | What it does                                           |
+| ----------------------- | -------------------- | ------------------------------------------------------ |
+| `health-check.yml`      | Every 30 min         | Curls both sites, opens/closes GitHub issue on failure |
+| `nightly-smoke.yml`     | Daily 06:00 UTC      | Runs API E2E suite against site B                      |
+| `stale.yml`             | Weekly Monday 09:00  | Marks/closes inactive issues (60d) and PRs (30d)       |
+| `dependency-review.yml` | PR (package changes) | Flags high-severity vulns and GPL/AGPL deps            |
+
 ## Manual operations
 
-| Workflow            | What it does                                        |
-| ------------------- | --------------------------------------------------- |
-| `e2e-a-manual.yml`  | Playwright E2E against site A                       |
-| `seed-a-manual.yml` | Seed demo namespace on site A from a JSON seed file |
-| `seed-b-manual.yml` | Seed demo namespace on site B from a JSON seed file |
+| Workflow               | What it does                                               |
+| ---------------------- | ---------------------------------------------------------- |
+| `e2e-a-manual.yml`     | Playwright E2E against site A                              |
+| `e2e-pages-manual.yml` | Playwright browser tests (landing page, bind UI) on site B |
+| `seed-a-manual.yml`    | Seed demo namespace on site A from a JSON seed file        |
+| `seed-b-manual.yml`    | Seed demo namespace on site B from a JSON seed file        |
 
 ## Environments
 
@@ -51,3 +61,22 @@ Two deployed environments (A and B), each with its own Cloudflare Access service
 - `CF_ACCESS_CLIENT_ID_B` / `CF_ACCESS_CLIENT_SECRET_B` / `API_BASE_URL_B`
 
 CI runs E2E against site B automatically. Site A has manual-only workflows.
+
+## Self-hosted runner
+
+All CI, build, test, and E2E workflows run on a self-hosted runner. Lightweight workflows (labeler, pr-standards, dependency-review, stale, health-check, release, opencode, dependabot-auto-merge, close-stale-prs, ci orchestrator) stay on `ubuntu-latest`.
+
+| Detail      | Value                                                                  |
+| ----------- | ---------------------------------------------------------------------- |
+| Host        | `10.1.1.41` (Proxmox LXC, Debian 13 trixie, 8 CPU / 16GB RAM)          |
+| Runner user | `runner` (non-root, docker + sudo groups)                              |
+| Service     | `actions.runner.FlarelyLegal.runner-01.service` (systemd, auto-start)  |
+| Node.js     | 24/22/20 via fnm, npm 11, corepack 0.34                                |
+| Build tools | wrangler, TypeScript, ESLint, Prettier                                 |
+| Test tools  | Playwright (Chromium + Firefox + WebKit pre-installed), Google Chrome  |
+| Linters     | yamllint, shellcheck, jsonlint, markdownlint-cli, actionlint, hadolint |
+| Other       | Docker, git, gh                                                        |
+
+**Why no `actions/setup-node`:** Node and all tools are pre-installed. Skipping setup-node saves ~30s per job.
+
+**Why no `npx playwright install`:** Browsers are pre-installed at `/home/runner/.cache/ms-playwright`. No download needed.

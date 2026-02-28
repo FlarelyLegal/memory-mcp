@@ -1,15 +1,17 @@
 name: Setup
-description: Setup Node.js and project dependencies
+description: Restore node_modules from cache or install dependencies
 
 runs:
   using: composite
   steps:
-    - name: Setup Node.js
-      uses: actions/setup-node@v6
+    - name: Cache node_modules
+      id: cache-modules
+      uses: actions/cache@v4
       with:
-        node-version: "24"
-        cache: "npm"
+        path: node_modules
+        key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
     - name: Install dependencies
+      if: steps.cache-modules.outputs.cache-hit != 'true'
       shell: bash
       run: npm ci
