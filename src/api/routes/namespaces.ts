@@ -8,6 +8,7 @@ import { namespaceSchema, zodSchema } from "../schemas.js";
 import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js";
 import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
+import { bustIdentityCache } from "../../cache-bust.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
@@ -94,6 +95,7 @@ export function registerNamespaceRoutes(): void {
           resource_id: id,
           detail: { name: body.name },
         });
+        await bustIdentityCache(ctx.env.USERS, ctx.email);
         return json({ id, name: body.name }, 201);
       } catch (e) {
         return handleError(e);

@@ -14,6 +14,7 @@ import { nameField, descriptionField, visibility } from "../../tool-schemas.js";
 import { namespaceSchema, okSchema, zodSchema } from "../schemas.js";
 import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
+import { bustIdentityCacheForNamespace } from "../../cache-bust.js";
 import type { NamespaceVisibility } from "../../types.js";
 
 const idParam = {
@@ -131,6 +132,10 @@ export function registerNamespaceCrudRoutes(): void {
       try {
         const ns = await assertNamespaceWriteAccess(ctx.db, ctx.params.id, ctx.identity);
         const vectorIds = await collectNamespaceVectorIds(ctx.db, ctx.params.id);
+        await bustIdentityCacheForNamespace(ctx.db, ctx.env.USERS, ctx.params.id, [
+          ctx.email,
+          ns.owner ?? "",
+        ]);
         await deleteNamespace(ctx.db, ctx.params.id);
         await deleteVectorBatch(ctx.env, vectorIds);
         await audit(ctx.db, ctx.env.STORAGE, {

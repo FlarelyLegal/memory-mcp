@@ -11,6 +11,7 @@ Operational and reference documentation for FlarelyLegal Memory MCP.
 | [Deployment](deployment.md)             | Setup, resource creation, deploy commands, database migrations |
 | [Configuration](configuration.md)       | Secrets, Cloudflare Access, environment variables, admin role  |
 | [Architecture](architecture.md)         | Components, file structure, data flow, design decisions        |
+| [Examples](examples/)                   | JSON examples for RBAC footprint and identity cache            |
 | [MCP Tools](mcp-tools.md)               | All 17 tools with parameters, actions, and usage notes         |
 | [REST API](rest-api.md)                 | Authentication, endpoints, response shaping, service tokens    |
 | [Observability](observability.md)       | Audit logging, `wrangler tail`, monitoring, R2 archive         |

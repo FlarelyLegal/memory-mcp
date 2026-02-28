@@ -29,14 +29,14 @@ This is the MCP memory layer for organizations, not just individuals.
 
 ## Architecture
 
-| Component       | Service                | Purpose                                                  |
-| --------------- | ---------------------- | -------------------------------------------------------- |
-| MCP sessions    | Durable Objects        | Stateful per-session agent with persistent state         |
-| Graph + data    | D1 (SQLite)            | Entities, relations, memories, conversations, audit logs |
-| Semantic search | Vectorize + Workers AI | Embeddings via `@cf/baai/bge-m3` (1024d)                 |
-| Auth + config   | KV                     | OAuth state, service token bindings, admin allowlist     |
-| Cold archive    | R2                     | Audit log NDJSON archive (Loki-compatible)               |
-| Background jobs | Workflows              | Durable reindex and consolidation pipelines              |
+| Component       | Service                | Purpose                                                    |
+| --------------- | ---------------------- | ---------------------------------------------------------- |
+| MCP sessions    | Durable Objects        | Stateful per-session agent with persistent state           |
+| Graph + data    | D1 (SQLite)            | Entities, relations, memories, conversations, audit logs   |
+| Semantic search | Vectorize + Workers AI | Embeddings via `@cf/baai/bge-m3` (1024d)                   |
+| Auth + config   | KV                     | OAuth state, service token bindings, identity cache, flags |
+| Cold archive    | R2                     | Audit log NDJSON archive (Loki-compatible)                 |
+| Background jobs | Workflows              | Durable reindex and consolidation pipelines                |
 
 ## Public demo
 
@@ -80,7 +80,7 @@ Access is gated by Cloudflare Access — to request a test account, open an issu
 
 ## REST API
 
-Full REST API mirrors the MCP tools with OpenAPI 3.1 spec.
+Full REST API is documented with OpenAPI 3.1 and Scalar. It covers MCP-parity endpoints plus REST-only RBAC/user-management routes.
 
 - **Interactive docs:** [memory.flarelylegal.com/api/docs](https://memory.flarelylegal.com/api/docs)
 - **OpenAPI spec:** `GET /api/openapi.json`

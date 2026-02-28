@@ -9,11 +9,11 @@
 | MCP sessions     | **Durable Objects**            | Stateful per-session MCP agent with persistent state             |
 | Structured graph | **D1** (SQLite)                | Entities, relations, memories, conversations, audit logs         |
 | Semantic search  | **Vectorize** + **Workers AI** | Embeddings via `@cf/baai/bge-m3` (1024 dims, 60K context)        |
-| Auth + tokens    | **KV**                         | OAuth state, service token bindings, admin allowlist, JWKS cache |
+| Auth + tokens    | **KV**                         | OAuth state, service token bindings, identity cache, flags, JWKS |
 | Cold archive     | **R2**                         | Audit log NDJSON archive (Loki-compatible)                       |
 | Background jobs  | **Workflows**                  | Durable reindex and consolidation pipelines                      |
 
-## D1 schema (8 tables)
+## D1 schema (11 tables)
 
 | Table                 | Purpose                                                   |
 | --------------------- | --------------------------------------------------------- |
@@ -25,8 +25,16 @@
 | `conversations`       | Conversation containers within a namespace                |
 | `messages`            | Individual messages within a conversation                 |
 | `audit_logs`          | Write operation audit trail (D1 hot window)               |
+| `groups`              | Group definitions for RBAC principals                     |
+| `group_members`       | Group membership + role/status                            |
+| `namespace_grants`    | User/group grants to namespaces with role + lifecycle     |
 
 Full schema: `schemas/schema.sql`
+
+## Identity model examples
+
+- D1 RBAC footprint example: `docs/examples/rbac-user-footprint.example.json`
+- USERS KV cached identity example: `docs/examples/identity-cache.example.json`
 
 ## Data flow
 

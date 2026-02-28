@@ -12,7 +12,7 @@ import {
   updateGroupMemberRole,
 } from "../../graph/index.js";
 import { audit } from "../../audit.js";
-import { bustIdentityCache } from "../../identity.js";
+import { bustIdentityCache } from "../../cache-bust.js";
 import { parseGroupMemberRow } from "../row-parsers.js";
 import { zodSchema } from "../schemas.js";
 import { groupMemberAddSchema, groupMemberRoleSchema } from "../validators.js";

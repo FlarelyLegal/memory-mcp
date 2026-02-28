@@ -36,7 +36,7 @@ Local dev setup (local flag, AI/Vectorize limitations, D1 init) is covered in [d
 - **D1 read replication:** All D1 queries go through `D1DatabaseSession` (via `src/db.ts`). Read-only operations use `"first-unconstrained"` (any replica), write operations use `"first-primary"` (primary first). API routes accept/return `X-D1-Bookmark` header for cross-request consistency. All data-layer functions accept `DbHandle` (union of `D1Database` and `D1DatabaseSession`) — never raw `D1Database`.
 - **D1 write retry:** All data-layer write operations are wrapped with `withRetry()` from `src/db.ts`. Retries up to 3 times with jitter backoff on transient D1 errors (`"Network connection lost"`, `"storage caused object to be reset"`, etc.). Workflow steps have their own retry mechanism and don't need `withRetry`.
 - **Audit logging:** All write operations (MCP tools + REST API) are audit-logged via `audit()` from `src/audit.ts`. Each call writes to D1 `audit_logs` (queryable hot window) and an individual R2 object at `audit/events/{day}/{id}.json`. Both writes are fire-and-forget — failures never block the request flow. The consolidation workflow merges individual R2 events into daily NDJSON files (`audit/{YYYY-MM-DD}.ndjson`), then purges D1 audit logs older than 90 days. R2 archive is retained indefinitely.
-- **Namespace visibility:** Namespaces have a `visibility` column (`private` | `public`, default `private`). Public namespaces appear in every user's namespace list and allow read operations (get, find, search, traverse, query memories, get messages) for any authenticated user. Write operations require `owner === email` OR (`isAdmin` AND `visibility = 'public'`). Use `manage_namespace` `set_visibility` action (admin only) or `PATCH /api/v1/namespaces/:id`.
+- **Namespace visibility + RBAC:** Namespaces have `visibility` (`private` | `public`, default `private`) and RBAC grants via `namespace_grants` (direct user or group). Public namespaces are readable by any authenticated user. Write requires editor/owner level; owner-only actions require owner level (or admin). Use `manage_namespace` actions (`share`, `unshare`, `list_access`, `transfer`, `set_visibility`) or REST grant routes.
 - **Relation ownership:** `manage_relation` create verifies both `source_id` and `target_id` belong to the specified namespace — cross-namespace relations are rejected.
 - **AI Gateway:** All Workers AI calls (`embeddings.ts`, `summaries.ts`, `merge.ts`, `reranker.ts`) are routed through AI Gateway via `aiRun()` from `src/ai.ts`. Uses the native binding approach — `env.AI.run(model, input, { gateway: { id } })` — no extra packages or API tokens needed. Gateway ID is a constant in `ai.ts` (`flarelylegal-ai-gateway`). Provides analytics, caching, rate limiting, and logging for all AI inference.
 - **Elicitation (human-in-the-loop):** Destructive MCP tool operations (entity/relation/memory delete, consolidate, reindex-all, claim namespaces) prompt the user for confirmation via `server.server.elicitInput()`. The `confirm()` helper in `response-helpers.ts` checks `getClientCapabilities().elicitation.form` first ��� if the client doesn't support elicitation, operations proceed without confirmation (graceful degradation).
@@ -81,28 +81,28 @@ Code is organized into focused modules with a 250-line cap per file:
   - `openapi.ts` — Assembles OpenAPI 3.1 spec dynamically from registered routes
   - `schemas.ts` — OpenAPI response schemas, parameter helpers, `queryLimit()`, `zodSchema()` (Zod → OpenAPI converter)
   - `docs.ts` — Scalar API reference UI
-  - `routes/` — One file per domain (namespaces, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, workflows, tokens, token-crud, demo). Each registers routes + their OpenAPI path definitions.
+  - `routes/` — One file per domain (namespaces, namespace-crud, grants, groups, group-members, entities, entity-crud, relations, traversal, memories, memory-queries, conversations, messages, search, admin, workflows, tokens, token-crud, demo). Each registers routes + their OpenAPI path definitions.
 - `src/oauth/` — OAuth utilities split by concern (error, sanitize, csrf, state, approval) with barrel re-export via `index.ts`.
-- `schemas/schema.sql` — D1 schema (8 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, audit_logs).
+- `schemas/schema.sql` — D1 schema (11 tables: namespaces, entities, relations, conversations, messages, memories, memory_entity_links, audit_logs, groups, group_members, namespace_grants).
 
 ### MCP tools (17 total)
 
-| Tool                  | Domain       | Description                                                     |
-| --------------------- | ------------ | --------------------------------------------------------------- |
-| `manage_namespace`    | namespace    | Create, list, delete, or set visibility on namespaces           |
-| `manage_entity`       | entity       | CRUD for graph entities with embedding upsert                   |
-| `find_entities`       | entity       | Search entities by name/type/keyword                            |
-| `manage_relation`     | relation     | Create or delete directed relations (with ownership check)      |
-| `get_relations`       | relation     | Query relations from/to an entity                               |
-| `traverse_graph`      | traversal    | BFS from an entity up to max_depth hops                         |
-| `manage_memory`       | memory       | Create/update/delete memories with embedding                    |
-| `query_memories`      | memory       | Recall (decay-ranked), search (keyword), or entity-linked       |
-| `manage_conversation` | conversation | Create or list conversations                                    |
-| `add_message`         | conversation | Add a message and embed for search                              |
-| `get_messages`        | conversation | Get or search messages                                          |
-| `search`              | search       | Semantic vector search; context mode enriches with graph        |
-| `reindex_vectors`     | admin        | Trigger durable reindex workflow (returns instance ID)          |
-| `consolidate_memory`  | admin        | Trigger consolidation workflow (decay, dedup, merge, summarize) |
-| `get_workflow_status` | admin        | Check status of a running workflow instance                     |
-| `namespace_stats`     | admin        | Entity/memory/relation/conversation counts for a namespace      |
-| `claim_namespaces`    | admin        | Claim all unowned namespaces for current user                   |
+| Tool                  | Domain       | Description                                                       |
+| --------------------- | ------------ | ----------------------------------------------------------------- |
+| `manage_namespace`    | namespace    | Namespace CRUD plus share/unshare/list_access/transfer/visibility |
+| `manage_entity`       | entity       | CRUD for graph entities with embedding upsert                     |
+| `find_entities`       | entity       | Search entities by name/type/keyword                              |
+| `manage_relation`     | relation     | Create or delete directed relations (with ownership check)        |
+| `get_relations`       | relation     | Query relations from/to an entity                                 |
+| `traverse_graph`      | traversal    | BFS from an entity up to max_depth hops                           |
+| `manage_memory`       | memory       | Create/update/delete memories with embedding                      |
+| `query_memories`      | memory       | Recall (decay-ranked), search (keyword), or entity-linked         |
+| `manage_conversation` | conversation | Create or list conversations                                      |
+| `add_message`         | conversation | Add a message and embed for search                                |
+| `get_messages`        | conversation | Get or search messages                                            |
+| `search`              | search       | Semantic vector search; context mode enriches with graph          |
+| `reindex_vectors`     | admin        | Trigger durable reindex workflow (returns instance ID)            |
+| `consolidate_memory`  | admin        | Trigger consolidation workflow (decay, dedup, merge, summarize)   |
+| `get_workflow_status` | admin        | Check status of a running workflow instance                       |
+| `namespace_stats`     | admin        | Entity/memory/relation/conversation counts for a namespace        |
+| `claim_namespaces`    | admin        | Claim all unowned namespaces for current user                     |

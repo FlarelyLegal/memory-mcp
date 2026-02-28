@@ -2,7 +2,8 @@ import type { Env, NamespaceRole } from "../types.js";
 import { session } from "../db.js";
 import { audit } from "../audit.js";
 import { assertNamespaceOwnerAccess, assertNamespaceReadAccess } from "../auth.js";
-import { bustIdentityCache, bustIdentityCacheForGroup, loadIdentity } from "../identity.js";
+import { bustIdentityCache, bustIdentityCacheForGroup, bustIdentityCaches } from "../cache-bust.js";
+import { loadIdentity } from "../identity.js";
 import * as graph from "../graph/index.js";
 import { err, ok, txt } from "../response-helpers.js";
 
@@ -96,10 +97,7 @@ export async function handleNamespaceAccessAction(
     const identity = await loadIdentity(db, env.USERS, env.FLAGS, email);
     await assertNamespaceOwnerAccess(db, id, identity);
     await graph.transferNamespaceOwner(db, id, target_email);
-    await Promise.all([
-      bustIdentityCache(env.USERS, email),
-      bustIdentityCache(env.USERS, target_email),
-    ]);
+    await bustIdentityCaches(env.USERS, [email, target_email]);
     await audit(db, env.STORAGE, {
       action: "namespace.transfer",
       email,

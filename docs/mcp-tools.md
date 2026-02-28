@@ -33,11 +33,11 @@ The server tracks active context across tool calls:
 
 ### Namespace
 
-| Tool               | Description                                           |
-| ------------------ | ----------------------------------------------------- |
-| `manage_namespace` | Create, list, delete, or set visibility on namespaces |
+| Tool               | Description                                   |
+| ------------------ | --------------------------------------------- |
+| `manage_namespace` | Manage namespaces and namespace access grants |
 
-Actions: `create` (requires `name`), `list`, `delete` (requires `id`, prompts for confirmation), `set_visibility` (admin only, requires `id` + `visibility`). Delete cascades all entities, relations, memories, conversations, messages, and Vectorize vectors.
+Actions: `create`, `list`, `get`, `update`, `delete`, `set_visibility` (admin only), `share`, `unshare`, `list_access`, `transfer`. Delete cascades all entities, relations, memories, conversations, messages, and Vectorize vectors.
 
 ### Entity
 

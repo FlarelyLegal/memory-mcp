@@ -54,4 +54,4 @@ D1 for the graph, memories, conversations, and audit logs. Vectorize for semanti
 See [Contributing](contributing.md) for setup, coding standards (250-line file cap, shared Zod schemas, audit logging requirements), and the branch workflow.
 
 **How do I add a new MCP tool?**
-Add the tool in `src/tools/`, add the matching REST route in `src/api/routes/`, use shared schemas from `src/tool-schemas.ts`, and audit-log writes. Step-by-step in [Contributing](contributing.md#adding-an-mcp-tool).
+Add the tool in `src/tools/`, use shared schemas from `src/tool-schemas.ts`, and audit-log writes. For RBAC/user/group administration, prefer REST routes in `src/api/routes/` to keep MCP tool context lean. Step-by-step in [Contributing](contributing.md#adding-an-mcp-tool).

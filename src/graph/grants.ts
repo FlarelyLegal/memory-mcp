@@ -87,6 +87,16 @@ export async function revokeAccess(
   );
 }
 
+export async function getNamespaceGrant(
+  db: DbHandle,
+  grantId: string,
+): Promise<NamespaceGrantRow | null> {
+  return db
+    .prepare(`SELECT * FROM namespace_grants WHERE id = ?`)
+    .bind(grantId)
+    .first<NamespaceGrantRow>();
+}
+
 export async function revokeAccessByPrincipal(
   db: DbHandle,
   namespaceId: string,

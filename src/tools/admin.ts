@@ -5,6 +5,7 @@ import { consolidateFields, WORKFLOW_TYPES } from "../tool-schemas.js";
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import { loadIdentity } from "../identity.js";
+import { bustIdentityCache } from "../cache-bust.js";
 import { assertNamespaceWriteAccess } from "../auth.js";
 import { claimUnownedNamespaces } from "../graph/namespaces.js";
 import { getNamespaceStats } from "../stats.js";
@@ -195,6 +196,7 @@ export function registerAdminTools(server: McpServer, env: Env, email: string, a
         return err("Cancelled");
       const claimed = await claimUnownedNamespaces(db, email);
       if (claimed === 0) return ok("No unowned namespaces found.");
+      await bustIdentityCache(env.USERS, email);
       await audit(db, env.STORAGE, {
         action: "namespace.claim",
         email,

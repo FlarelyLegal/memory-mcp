@@ -34,6 +34,11 @@ npx wrangler d1 migrations list memory-graph-mcp-db --config wrangler-b.jsonc
 npx wrangler d1 migrations list memory-graph-mcp-db --config wrangler-a.jsonc
 ```
 
+RBAC data model examples:
+
+- D1 footprint for one user principal: `docs/examples/rbac-user-footprint.example.json`
+- USERS KV cache value format: `docs/examples/identity-cache.example.json`
+
 ## Checks
 
 All four must pass before opening a PR:
@@ -51,7 +56,7 @@ npm run build           # wrangler dry-run
 - **One concern per file.** Don't add self-contained utilities to unrelated files. Keep helpers in the file that uses them unless they're shared.
 - **Conventional commits required.** `feat:` = minor, `fix:` = patch, `feat!:` / `fix!:` = major. Scopes encouraged (e.g. `feat(api):`, `fix(tools):`). The release workflow uses git-cliff to generate changelogs from these.
 - **Merge commits only.** Squash and rebase are disabled on the repo.
-- **MCP tools and REST API routes mirror each other.** If you add a tool, add the corresponding REST endpoint (and vice versa).
+- **Keep MCP tool surface minimal.** User/group/RBAC administration is REST-first. Add MCP tools only when they materially improve LLM workflow.
 - **Shared Zod schemas.** Field definitions live in `src/tool-schemas.ts`. MCP tools import Zod directly, REST validators compose from them, OpenAPI specs derive JSON Schema via `zodSchema()` in `api/schemas.ts`. Never duplicate field constraints.
 - **OpenAPI is auto-generated.** Each route file registers its handler and its `PathOperation`. No separate spec file.
 - **Version lives in `package.json` only.** `src/version.ts` reads it at build time. Never hardcode version strings.
@@ -66,7 +71,7 @@ npm run build           # wrangler dry-run
 1. Create or edit the file in `src/tools/` for the relevant domain.
 2. Import shared schemas from `src/tool-schemas.ts`.
 3. Use the `toolHandler()` wrapper from `src/response-helpers.ts` for consistent error handling.
-4. Add the corresponding REST route in `src/api/routes/`.
+4. If needed, add or update corresponding REST routes in `src/api/routes/`.
 5. Register the OpenAPI `PathOperation` using `zodSchema()` for request/response schemas.
 6. Audit-log write operations with `audit()`.
 7. Update the tool table in `AGENTS.md`.

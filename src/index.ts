@@ -29,7 +29,6 @@ import { registerMemoryQueryTools } from "./tools/memory-queries.js";
 import { registerConversationTools } from "./tools/conversation.js";
 import { registerMessageTools } from "./tools/message.js";
 import { registerSearchTools } from "./tools/search.js";
-import { registerGroupTools } from "./tools/group.js";
 import { registerAdminTools } from "./tools/admin.js";
 
 // Workflow exports (Wrangler resolves class_name from these re-exports)
@@ -92,7 +91,6 @@ export class MemoryGraphMCP extends McpAgent<Env, SessionState, AuthProps> {
     registerConversationTools(this.server, this.env, this.email, this);
     registerMessageTools(this.server, this.env, this.email, this);
     registerSearchTools(this.server, this.env, this.email, this);
-    registerGroupTools(this.server, this.env, this.email, this);
     registerAdminTools(this.server, this.env, this.email, this);
   }
 }

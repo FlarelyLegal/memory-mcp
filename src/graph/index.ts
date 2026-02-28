@@ -32,6 +32,7 @@ export {
 } from "./groups.js";
 export {
   grantAccess,
+  getNamespaceGrant,
   revokeAccess,
   revokeAccessByPrincipal,
   listNamespaceGrants,

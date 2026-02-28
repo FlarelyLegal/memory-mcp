@@ -132,23 +132,6 @@ export async function loadIdentity(
   return identity;
 }
 
-export async function bustIdentityCache(usersKv: KVNamespace, email: string): Promise<void> {
-  await usersKv.delete(email);
-}
-
-export async function bustIdentityCacheForGroup(
-  db: DbHandle,
-  usersKv: KVNamespace,
-  groupId: string,
-): Promise<void> {
-  const rows = await db
-    .prepare(`SELECT email FROM group_members WHERE group_id = ? AND status = 'active'`)
-    .bind(groupId)
-    .all<{ email: string }>();
-  const members = rows.results as { email: string }[];
-  await Promise.all(members.map((member) => usersKv.delete(member.email)));
-}
-
 export function getAccessLevel(identity: UserIdentity, namespaceId: string): number {
   let level = 0;
   if (identity.ownedNamespaces.includes(namespaceId)) level = 3;

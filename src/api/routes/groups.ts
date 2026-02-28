@@ -11,7 +11,7 @@ import {
   updateGroup,
 } from "../../graph/index.js";
 import { audit } from "../../audit.js";
-import { bustIdentityCache, bustIdentityCacheForGroup } from "../../identity.js";
+import { bustIdentityCache, bustIdentityCacheForGroup } from "../../cache-bust.js";
 import { parseGroupRow } from "../row-parsers.js";
 import { zodSchema } from "../schemas.js";
 import { groupCreateSchema, groupUpdateSchema } from "../validators.js";

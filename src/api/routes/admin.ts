@@ -5,6 +5,7 @@ import { assertNamespaceWriteAccess } from "../../auth.js";
 import { claimUnownedNamespaces } from "../../graph/index.js";
 import { getNamespaceStats } from "../../stats.js";
 import { audit } from "../../audit.js";
+import { bustIdentityCache } from "../../cache-bust.js";
 
 export function registerAdminRoutes(): void {
   // --- Namespace stats ---
@@ -74,6 +75,7 @@ export function registerAdminRoutes(): void {
             resource_type: "namespace",
             detail: { claimed },
           });
+          await bustIdentityCache(ctx.env.USERS, ctx.email);
         }
         return json({ claimed, owner: ctx.email });
       } catch (e) {

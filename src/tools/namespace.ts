@@ -5,6 +5,7 @@ import { nameField, descriptionField, namespaceRole, visibility } from "../tool-
 import type { Env, StateHandle } from "../types.js";
 import { session } from "../db.js";
 import { loadIdentity } from "../identity.js";
+import { bustIdentityCache, bustIdentityCacheForNamespace } from "../cache-bust.js";
 import * as graph from "../graph/index.js";
 import { deleteVectorBatch } from "../vectorize.js";
 import { assertNamespaceWriteAccess, assertNamespaceReadAccess } from "../auth.js";
@@ -110,6 +111,7 @@ export function registerNamespaceTools(
           const db = session(env.DB, "first-primary");
           if (!name) return err("name required");
           const nsId = await graph.createNamespace(db, { name, description, owner: email });
+          await bustIdentityCache(env.USERS, email);
           track(agent, { namespace: nsId });
           await audit(db, env.STORAGE, {
             action: "namespace.create",
@@ -129,6 +131,7 @@ export function registerNamespaceTools(
           if (!(await confirm(server, `Delete namespace "${ns.name}" and ALL its contents?`)))
             return ok("Cancelled");
           const vectorIds = await graph.collectNamespaceVectorIds(db, id);
+          await bustIdentityCacheForNamespace(db, env.USERS, id, [email, ns.owner ?? ""]);
           await graph.deleteNamespace(db, id);
           await deleteVectorBatch(env, vectorIds);
           await audit(db, env.STORAGE, {
