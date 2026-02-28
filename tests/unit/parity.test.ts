@@ -428,9 +428,9 @@ beforeAll(() => {
   registerAdminRoutes();
   registerWorkflowRoutes();
   registerTokenRoutes();
+  registerBindUiRoutes();
   registerTokenCrudRoutes();
   registerDemoRoutes();
-  registerBindUiRoutes();
 });
 
 describe("MCP ↔ REST parity", () => {

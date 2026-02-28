@@ -2,8 +2,9 @@
  * Browser tests for HTML pages: landing page and service token bind UI.
  *
  * Uses a real Chromium browser (via Playwright) against the live Worker.
- * Service token headers authenticate through Cloudflare Access so the
- * browser can reach authenticated pages without an interactive login.
+ * Service token headers (CF-Access-Client-Id / CF-Access-Client-Secret)
+ * are injected via extraHTTPHeaders in the Playwright config, so
+ * Cloudflare Access authenticates every browser request automatically.
  *
  * Screenshots are saved to tests/e2e/screenshots/ for visual review.
  */

@@ -61,8 +61,8 @@ function ensureRegistered(): void {
   registerAdminRoutes();
   registerWorkflowRoutes();
   registerTokenRoutes();
+  registerBindUiRoutes(); // before token-crud: literal /bind must match before :common_name
   registerTokenCrudRoutes();
-  registerBindUiRoutes();
   registerDemoRoutes();
 }
 
