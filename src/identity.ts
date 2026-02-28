@@ -1,4 +1,5 @@
 import type { DbHandle } from "./db.js";
+import { resolveInheritedGrants } from "./graph/index.js";
 import type { NamespaceRole, UserIdentity } from "./types.js";
 import { decodeAdminEmails, decodeIdentity, encodeIdentity } from "./kv.js";
 
@@ -97,7 +98,22 @@ export async function loadIdentity(
   const grants = grantsResult.results as GrantRow[];
   const ownedNamespaces = (ownedResult.results as { id: string }[]).map((r) => r.id);
   const isAdmin = await loadAdminFlag(flagsKv, email);
-  const identity = coalesceIdentity(groups, ownedNamespaces, grants, isAdmin);
+
+  // Resolve inherited grants from ancestor groups (read-time inheritance)
+  const inherited = await resolveInheritedGrants(db, groups);
+  const inheritedAsGrants: GrantRow[] = inherited.map((g) => ({
+    namespace_id: g.namespace_id,
+    email: null,
+    group_id: g.group_id,
+    role: g.role,
+  }));
+
+  const identity = coalesceIdentity(
+    groups,
+    ownedNamespaces,
+    [...grants, ...inheritedAsGrants],
+    isAdmin,
+  );
 
   void usersKv.put(email, encodeIdentity(identity), { expirationTtl: IDENTITY_TTL });
   return identity;

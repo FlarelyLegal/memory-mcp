@@ -18,6 +18,8 @@ npm run test:watch    # watch mode
 | `identity.test.ts`          | Identity loading, KV cache hit/miss, access level helpers             |
 | `cache-bust.test.ts`        | Identity cache busting: single/multi key, group and namespace fan-out |
 | `auth-rbac.test.ts`         | Namespace read/write/owner access assertions, public visibility       |
+| `group-hierarchy.test.ts`   | Ancestor/descendant walks, cycle detection, parent validation         |
+| `grant-inheritance.test.ts` | Inherited grants from ancestor groups, dedup, deleted/expired edge    |
 | `kv-admin.test.ts`          | `FLAGS` admin:emails encode/decode                                    |
 | `kv-identity.test.ts`       | `USERS` identity cache encode/decode                                  |
 | `kv-service-token.test.ts`  | `CACHE` service token mapping encode/decode                           |

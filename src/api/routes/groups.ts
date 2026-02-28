@@ -9,9 +9,10 @@ import {
   getGroupMembership,
   listUserGroups,
   updateGroup,
+  validateParentGroup,
 } from "../../graph/index.js";
 import { audit } from "../../audit.js";
-import { bustIdentityCache, bustIdentityCacheForGroup } from "../../cache-bust.js";
+import { bustIdentityCache, bustIdentityCacheForGroupTree } from "../../cache-bust.js";
 import { parseGroupRow } from "../row-parsers.js";
 import { zodSchema } from "../schemas.js";
 import { groupCreateSchema, groupUpdateSchema } from "../validators.js";
@@ -46,12 +47,18 @@ export function registerGroupRoutes(): void {
       try {
         const body = await parseBodyWithSchema(request, groupCreateSchema);
         if (body instanceof Response) return body;
+        if (body.parent_group_id) {
+          // For new groups we use a dummy ID -- no descendants exist yet
+          const check = await validateParentGroup(ctx.db, "new-group", body.parent_group_id);
+          if (!check.ok) return jsonError(check.message, check.code);
+        }
         const slug = body.slug ?? (await generateSlug(ctx.db, body.name));
         const id = await createGroup(ctx.db, {
           name: body.name,
           slug,
           description: body.description,
           created_by: ctx.email,
+          parent_group_id: body.parent_group_id,
         });
         await audit(ctx.db, ctx.env.STORAGE, {
           action: "group.create",
@@ -117,7 +124,14 @@ export function registerGroupRoutes(): void {
         }
         const body = await parseBodyWithSchema(request, groupUpdateSchema);
         if (body instanceof Response) return body;
+        if (body.parent_group_id !== undefined) {
+          const check = await validateParentGroup(ctx.db, group.id, body.parent_group_id ?? null);
+          if (!check.ok) return jsonError(check.message, check.code);
+        }
         await updateGroup(ctx.db, group.id, body);
+        if (body.parent_group_id !== undefined) {
+          await bustIdentityCacheForGroupTree(ctx.db, ctx.env.USERS, group.id);
+        }
         await audit(ctx.db, ctx.env.STORAGE, {
           action: "group.update",
           email: ctx.email,
@@ -151,7 +165,7 @@ export function registerGroupRoutes(): void {
           return jsonError("Owner access required", 403);
         }
         await deleteGroup(ctx.db, group.id);
-        await bustIdentityCacheForGroup(ctx.db, ctx.env.USERS, group.id);
+        await bustIdentityCacheForGroupTree(ctx.db, ctx.env.USERS, group.id);
         await audit(ctx.db, ctx.env.STORAGE, {
           action: "group.delete",
           email: ctx.email,
