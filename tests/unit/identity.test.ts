@@ -1,3 +1,9 @@
+/**
+ * Unit tests for identity loading and access level computation.
+ *
+ * Tests KV cache hit/miss paths, D1 batch loading, admin detection,
+ * and access level resolution from ownership + grants.
+ */
 import { describe, expect, it, vi } from "vitest";
 import {
   getAccessLevel,
@@ -6,12 +12,6 @@ import {
   hasWriteAccess,
   loadIdentity,
 } from "../../src/identity.js";
-import {
-  bustIdentityCache,
-  bustIdentityCacheForGroup,
-  bustIdentityCacheForNamespace,
-  bustIdentityCaches,
-} from "../../src/cache-bust.js";
 
 function makeKv(initial: Record<string, unknown> = {}) {
   const store = new Map<string, string>(
@@ -38,7 +38,7 @@ function makeKv(initial: Record<string, unknown> = {}) {
   };
 }
 
-describe("identity", () => {
+describe("loadIdentity", () => {
   it("loads identity from KV cache hit", async () => {
     const users = makeKv({
       "user@memory.flarelylegal.com": {
@@ -107,7 +107,9 @@ describe("identity", () => {
     expect(identity.directGrants.ns2).toBe("owner");
     expect(users.has("user@memory.flarelylegal.com")).toBe(true);
   });
+});
 
+describe("getAccessLevel", () => {
   it("computes access levels from ownership and highest grant", () => {
     const identity = {
       groups: ["g1"],
@@ -121,88 +123,5 @@ describe("identity", () => {
     expect(hasReadAccess(identity, "ns2")).toBe(true);
     expect(hasWriteAccess(identity, "ns2")).toBe(true);
     expect(hasOwnerAccess(identity, "ns2")).toBe(false);
-  });
-});
-
-describe("cache-bust", () => {
-  function makeDb() {
-    const grants = [
-      {
-        namespace_id: "ns1",
-        email: "direct@memory.flarelylegal.com",
-        group_id: null,
-        role: "viewer",
-        status: "active",
-      },
-      { namespace_id: "ns1", email: null, group_id: "g1", role: "editor", status: "active" },
-    ];
-    const members = [
-      { group_id: "g1", email: "a@memory.flarelylegal.com", status: "active" },
-      { group_id: "g1", email: "b@memory.flarelylegal.com", status: "active" },
-      { group_id: "g1", email: "c@memory.flarelylegal.com", status: "suspended" },
-    ];
-    return {
-      prepare(query: string) {
-        let params: unknown[] = [];
-        return {
-          bind(...p: unknown[]) {
-            params = p;
-            return this;
-          },
-          async all<T>() {
-            if (query.includes("FROM group_members")) {
-              return {
-                results: members.filter(
-                  (m) => m.group_id === params[0] && m.status === "active",
-                ) as T[],
-              };
-            }
-            if (query.includes("FROM namespace_grants")) {
-              return {
-                results: grants.filter(
-                  (g) => g.namespace_id === params[0] && g.status === "active",
-                ) as T[],
-              };
-            }
-            return { results: [] as T[] };
-          },
-        };
-      },
-      batch: vi.fn(),
-    };
-  }
-
-  it("busts single and multiple identity cache keys", async () => {
-    const users = makeKv({
-      "a@memory.flarelylegal.com": { ok: true },
-      "b@memory.flarelylegal.com": { ok: true },
-    });
-    await bustIdentityCache(users as never, "a@memory.flarelylegal.com");
-    await bustIdentityCaches(users as never, [
-      "b@memory.flarelylegal.com",
-      "B@MEMORY.FLARELYLEGAL.COM",
-      "",
-    ]);
-    expect(users.size()).toBe(0);
-  });
-
-  it("busts group and namespace fan-out deterministically", async () => {
-    const users = makeKv({
-      "a@memory.flarelylegal.com": { ok: true },
-      "b@memory.flarelylegal.com": { ok: true },
-      "direct@memory.flarelylegal.com": { ok: true },
-      "owner@memory.flarelylegal.com": { ok: true },
-    });
-    const db = makeDb();
-
-    await bustIdentityCacheForGroup(db as never, users as never, "g1");
-    expect(users.has("a@memory.flarelylegal.com")).toBe(false);
-    expect(users.has("b@memory.flarelylegal.com")).toBe(false);
-
-    await bustIdentityCacheForNamespace(db as never, users as never, "ns1", [
-      "owner@memory.flarelylegal.com",
-    ]);
-    expect(users.has("direct@memory.flarelylegal.com")).toBe(false);
-    expect(users.has("owner@memory.flarelylegal.com")).toBe(false);
   });
 });
