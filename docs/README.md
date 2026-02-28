@@ -15,6 +15,7 @@ Operational and reference documentation for FlarelyLegal Memory MCP.
 | [MCP Tools](mcp-tools.md)               | All 17 tools with parameters, actions, and usage notes                |
 | [REST API](rest-api.md)                 | Authentication, endpoints, response shaping, service tokens           |
 | [Observability](observability.md)       | Audit logging, `wrangler tail`, monitoring, R2 archive                |
+| [Troubleshooting](troubleshooting.md)   | Common issues and resolutions (auth, service tokens, local dev)       |
 | [FAQ](faq.md)                           | Frequently asked questions                                            |
 | [Contributing](contributing.md)         | Setup, coding standards, branch workflow                              |
 | [CI/CD](../.github/workflows/README.md) | GitHub Actions pipeline and automation                                |

@@ -28,6 +28,7 @@ exclude_paths = ["node_modules", "dist"]
 "docs/mcp-tools.md"         = "[README](../README.md) > [Docs](README.md) > MCP Tools"
 "docs/observability.md"     = "[README](../README.md) > [Docs](README.md) > Observability"
 "docs/rest-api.md"          = "[README](../README.md) > [Docs](README.md) > REST API"
+"docs/troubleshooting.md"   = "[README](../README.md) > [Docs](README.md) > Troubleshooting"
 "docs/examples/README.md"   = "[README](../../README.md) > [Docs](../README.md) > Examples"
 
 # -- tests/ --

@@ -29,7 +29,7 @@ See `.dev.vars.example`. Without secrets, `/health` and `/register` work but the
 ## CI/CD
 
 **How does CI work?**
-Push to `main` or open a PR to trigger the full pipeline: lint, typecheck, build, and E2E tests (site B). See [.github/workflows/README.md](../.github/workflows/README.md) for details on all 13 workflows.
+Push to `main` or open a PR to trigger the full pipeline: lint, typecheck, unit tests, build, and conditional E2E tests against site B. The workflow catalog currently has 21 workflows covering CI, release automation, PR checks, operational monitors, and manual operations. See [.github/workflows/README.md](../.github/workflows/README.md) for the complete catalog.
 
 **How are releases created?**
 Automated via `release.yml`. Pushing to `main` triggers git-cliff to calculate the next semver from conventional commits, bump `package.json`, generate a changelog, and create a GitHub Release. No manual version management needed.
@@ -43,7 +43,13 @@ Automated via `release.yml`. Pushing to `main` triggers git-cliff to calculate t
 Each MCP session gets its own stateful Durable Object instance with direct access to all env bindings. Sessions auto-expire after 24 hours of inactivity.
 
 **How does auth work?**
-Cloudflare Access via a full OAuth/OIDC flow. MCP clients go through `/authorize` → `/callback`. The REST API accepts `Cf-Access-Jwt-Assertion` header or `CF_Authorization` cookie. No Bearer tokens.
+Cloudflare Access via a full OAuth/OIDC flow. Every protected endpoint (`/api/v1/*` and MCP tool calls) is authenticated and authorized. Public endpoints (`/`, `/health`, `/api/docs`, `/api/openapi.json`, `/api/demo`) require no auth.
+
+- **MCP clients:** OAuth flow via `/authorize` then `/callback`. Cloudflare Access handles the login page.
+- **REST API:** JWT from Cloudflare Access, checked in order: `Cf-Access-Jwt-Assertion` header, `cf-access-token` header, or `CF_Authorization` cookie.
+- **Service tokens:** `CF-Access-Client-Id` + `CF-Access-Client-Secret` headers for CI/headless use. See [Headless/CI](#headlessci) below.
+
+No Bearer tokens.
 
 **Where is data stored?**
 D1 for the graph, memories, conversations, and audit logs. Vectorize for semantic search indexes. R2 for audit log archive. KV for caching and OAuth state.
@@ -62,7 +68,27 @@ Yes. When you do not share any namespaces, it works exactly like a personal memo
 ## Security
 
 **What security model does this use?**
-Cloudflare Access provides identity through a full OAuth/OIDC flow. Every request is authenticated via RSA JWT verification with audience tag validation. Every write operation is audit-logged to D1 (90 days queryable) and R2 (NDJSON archive, indefinite retention). R2 is S3-compatible, so the audit archive can be consumed directly by Loki, Splunk, Datadog, Elastic, or any S3-aware log aggregator without building an export pipeline. All responses include security headers (HSTS, X-Frame-Options, X-Content-Type-Options). Cookie-based flows are protected by CSRF validation (Origin/Referer/Sec-Fetch-Site). Service tokens are supported with identity binding for CI/CD and automation. Cloudflare encrypts all stored data at rest at the storage layer.
+
+- **Auth:** Cloudflare Access identity via OAuth/OIDC. Every protected endpoint verified by RSA JWT signature + expiry + audience tag. See [auth details above](#architecture).
+- **Audit:** Every write is logged to D1 (90 days queryable) and R2 NDJSON archive (indefinite, S3-compatible). See [Observability](observability.md).
+- **CSRF:** Cookie-based flows validated via Origin/Referer/Sec-Fetch-Site checks in middleware.
+- **Service tokens:** CI/headless auth with identity binding -- `common_name` links token to user email. See [REST API -- service tokens](rest-api.md#service-tokens).
+- **Headers:** All responses include HSTS, X-Frame-Options DENY, X-Content-Type-Options nosniff.
+- **Encryption:** Cloudflare encrypts all stored data at rest at the storage layer.
+
+## Headless/CI
+
+**How do CI pipelines and headless agents authenticate?**
+Use Cloudflare Access [service tokens](rest-api.md#service-tokens). Send `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers on every request. The token must be bound to a user email first -- see [Service tokens](../README.md#service-tokens-cicd-and-automation) in the README.
+
+**Why do I get "Service token not registered" (403)?**
+The service token is valid at the Access edge but has not been bound to a user email on this server. Visit the [bind UI](https://memory.flarelylegal.com/api/v1/admin/service-tokens/bind) in your browser to link the token to your identity. See [Troubleshooting](troubleshooting.md#service-token-not-registered) for step-by-step resolution.
+
+**Does rotating a service token secret require re-binding?**
+No. Binding is keyed on `common_name` (= Client ID), which does not change when you rotate the secret in the Zero Trust dashboard. Rotate freely.
+
+**Why does a valid Access JWT fail with "Invalid or expired token"?**
+The most common cause is an `ACCESS_AUD_TAG` mismatch -- the audience tag in the Worker's config does not match the Access application that issued the JWT. See [Troubleshooting](troubleshooting.md#invalid-or-expired-token) for details.
 
 ## Contributing
 
