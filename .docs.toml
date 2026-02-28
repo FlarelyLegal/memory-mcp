@@ -1,0 +1,41 @@
+# Docs configuration -- breadcrumbs and link-checking rules.
+#
+# The [breadcrumbs] table maps each .md file (repo-relative path) to its
+# expected breadcrumb line. The script checks that line 3 of every listed
+# file matches exactly.
+#
+# Format:  "[Root](link) > [Parent](link) > Current Title"
+# - Links are relative to the file's own directory
+# - The last segment is plain text (current page, no link)
+# - Root files (README.md, AGENTS.md) have no breadcrumb -- omit them
+#
+# The [settings] table controls which files are excluded from checks.
+
+[settings]
+# Files with no breadcrumb requirement (entry points, auto-generated)
+root_files = ["README.md", "AGENTS.md", "CHANGELOG.md"]
+# Directories to skip entirely
+exclude_paths = ["node_modules", "dist"]
+
+[breadcrumbs]
+# -- docs/ --
+"docs/README.md"            = "[README](../README.md) > Documentation"
+"docs/architecture.md"      = "[README](../README.md) > [Docs](README.md) > Architecture"
+"docs/configuration.md"     = "[README](../README.md) > [Docs](README.md) > Configuration"
+"docs/contributing.md"      = "[README](../README.md) > [Docs](README.md) > Contributing"
+"docs/deployment.md"        = "[README](../README.md) > [Docs](README.md) > Deployment"
+"docs/faq.md"               = "[README](../README.md) > [Docs](README.md) > FAQ"
+"docs/mcp-tools.md"         = "[README](../README.md) > [Docs](README.md) > MCP Tools"
+"docs/observability.md"     = "[README](../README.md) > [Docs](README.md) > Observability"
+"docs/rest-api.md"          = "[README](../README.md) > [Docs](README.md) > REST API"
+"docs/examples/README.md"   = "[README](../../README.md) > [Docs](../README.md) > Examples"
+
+# -- tests/ --
+"tests/README.md"           = "[README](../README.md) > Tests"
+"tests/unit/README.md"      = "[README](../../README.md) > [Tests](../README.md) > Unit Tests"
+"tests/e2e/README.md"       = "[README](../../README.md) > [Tests](../README.md) > E2E Tests"
+
+# -- other top-level dirs --
+"migrations/README.md"      = "[README](../README.md) > [Docs](../docs/README.md) > Migrations"
+"seeds/README.md"           = "[README](../README.md) > [Docs](../docs/README.md) > Seeds"
+".github/workflows/README.md" = "[README](../../README.md) > CI/CD Workflows"

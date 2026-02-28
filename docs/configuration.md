@@ -1,6 +1,6 @@
 # Configuration
 
-[< Back to docs](README.md)
+[README](../README.md) > [Docs](README.md) > Configuration
 
 ## Secrets
 

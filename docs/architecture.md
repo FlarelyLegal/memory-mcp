@@ -1,6 +1,6 @@
 # Architecture
 
-[< Back to docs](README.md)
+[README](../README.md) > [Docs](README.md) > Architecture
 
 ## Components
 

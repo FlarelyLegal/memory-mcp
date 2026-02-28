@@ -1,6 +1,6 @@
 # Contributing
 
-[< Back to docs](README.md) | [< Back to main README](../README.md)
+[README](../README.md) > [Docs](README.md) > Contributing
 
 ## Setup
 

@@ -1,6 +1,6 @@
 # FAQ
 
-[< Back to docs](README.md) | [< Back to main README](../README.md)
+[README](../README.md) > [Docs](README.md) > FAQ
 
 Frequently asked questions about FlarelyLegal Memory MCP.
 

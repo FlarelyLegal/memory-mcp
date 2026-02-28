@@ -1,6 +1,6 @@
 # D1 Migrations
 
-[< Back to main README](../README.md) | [Docs](../docs/README.md) | [Deployment](../docs/deployment.md)
+[README](../README.md) > [Docs](../docs/README.md) > Migrations
 
 Sequential D1 schema migrations applied via `wrangler d1 migrations apply`. Wrangler tracks which migrations have run -- each file executes at most once per database.
 

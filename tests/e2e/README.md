@@ -1,6 +1,6 @@
 # E2E Tests
 
-[< Back to main README](../../README.md) | [Docs](../../docs/README.md) | [REST API](../../docs/rest-api.md)
+[README](../../README.md) > [Tests](../README.md) > E2E Tests
 
 Playwright tests for the live deployed workers. Two projects:
 

@@ -1,6 +1,6 @@
 # Deployment
 
-[< Back to docs](README.md)
+[README](../README.md) > [Docs](README.md) > Deployment
 
 ## Prerequisites
 
