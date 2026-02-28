@@ -2,7 +2,7 @@
 
 [< Back to main README](../README.md)
 
-Operational and reference documentation for Memory Graph MCP.
+Operational and reference documentation for FlarelyLegal Memory MCP.
 
 ## Contents
 

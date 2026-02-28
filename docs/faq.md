@@ -2,12 +2,12 @@
 
 [< Back to docs](README.md) | [< Back to main README](../README.md)
 
-Frequently asked questions about Memory Graph MCP.
+Frequently asked questions about FlarelyLegal Memory MCP.
 
 ## General
 
 **What is this?**
-A remote MCP server on Cloudflare Workers that gives LLMs persistent structured memory — knowledge graphs, semantic search, conversation history, and temporally-decayed recall.
+FlarelyLegal Memory MCP is a remote MCP server on Cloudflare Workers that gives LLMs collaborative, persistent structured memory — shared knowledge graphs with RBAC, semantic search, conversation history, and temporally-decayed recall.
 
 **Can I try it?**
 The public demo runs at `memory.flarelylegal.com`. Access is gated by Cloudflare Access — open an issue or reach out to request a test account.
