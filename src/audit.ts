@@ -51,10 +51,14 @@ export function audit(db: DbHandle, r2: R2Bucket, entry: AuditEntry): void {
 
   // Structured tail log — visible via `wrangler tail` in real-time.
   // Only structural metadata; no email, detail, or other sensitive data.
+  // The `id` field is the correlation key: use it to look up the full
+  // record in D1 (`SELECT * FROM audit_logs WHERE id = ?`) or R2
+  // (`audit/events/{day}/{id}.json`).
   // eslint-disable-next-line no-console
   console.log(
     JSON.stringify({
       audit: true,
+      id,
       action: entry.action,
       namespace_id: entry.namespace_id ?? null,
       resource_type: entry.resource_type ?? null,

@@ -20,6 +20,7 @@ import {
   validateOAuthState,
 } from "./oauth/index.js";
 import { verifyToken } from "./jwt.js";
+import { logError } from "./log.js";
 import {
   VERSION,
   SERVER_NAME,
@@ -128,8 +129,7 @@ async function handleRequest(
         "Set-Cookie": approvedClientCookie,
       });
     } catch (error: unknown) {
-      // eslint-disable-next-line no-console
-      console.error("POST /authorize error:", error);
+      logError({ source: "oauth", route: "/authorize" }, error);
       if (error instanceof OAuthError) {
         return error.toResponse();
       }

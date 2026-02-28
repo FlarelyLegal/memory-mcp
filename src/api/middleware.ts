@@ -19,6 +19,7 @@ import type { ServiceTokenMapping } from "./service-tokens.js";
 import type { AuthIdentity } from "./types.js";
 import type { UserIdentity } from "../types.js";
 import { z } from "zod";
+import { logError } from "../log.js";
 
 /** Standard JSON success response. */
 export function json(data: unknown, status = 200): Response {
@@ -200,7 +201,6 @@ export function handleError(error: unknown): Response {
   if (error instanceof SyntaxError) {
     return jsonError("Invalid JSON body", 400);
   }
-  // eslint-disable-next-line no-console
-  console.error("API error:", error);
+  logError({ source: "api" }, error);
   return jsonError("Internal server error", 500);
 }
