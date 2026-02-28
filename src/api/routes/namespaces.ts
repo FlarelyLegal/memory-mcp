@@ -9,12 +9,15 @@ import { parseFields, parseCursor, nextCursor, projectRows } from "../fields.js"
 import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
 import { bustIdentityCache } from "../../cache-bust.js";
+import { wantsHtml } from "../html/negotiate.js";
+import { renderNamespaceList } from "../html/namespace-list.js";
+import { fetchNamespaceStatsMap } from "../html/queries.js";
 
 export function registerNamespaceRoutes(): void {
   defineRoute(
     "GET",
     "/api/v1/namespaces",
-    async (ctx) => {
+    async (ctx, request) => {
       try {
         const allowed = [
           "id",
@@ -35,7 +38,27 @@ export function registerNamespaceRoutes(): void {
         const offset = parseCursor(ctx.query);
         const rows = await listNamespaces(ctx.db, ctx.identity, { limit: limit + 1, offset });
         const hasMore = rows.length > limit;
-        const data = projectRows(rows.slice(0, limit).map(parseNamespaceRow), fields);
+        const pageRows = rows.slice(0, limit);
+
+        if (wantsHtml(request)) {
+          const statsMap = await fetchNamespaceStatsMap(
+            ctx.db,
+            pageRows.map((r) => r.id),
+          );
+          return renderNamespaceList(
+            pageRows.map((r) => ({
+              id: r.id,
+              name: r.name,
+              owner: r.owner,
+              visibility: r.visibility,
+              description: r.description,
+              created_at: r.created_at ? new Date(r.created_at * 1000).toISOString() : null,
+            })),
+            statsMap,
+          );
+        }
+
+        const data = projectRows(pageRows.map(parseNamespaceRow), fields);
         const response = json(data);
         const cursor = nextCursor(offset, limit, hasMore);
         if (cursor) response.headers.set("X-Next-Cursor", cursor);

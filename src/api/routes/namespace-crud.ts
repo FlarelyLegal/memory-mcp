@@ -16,6 +16,10 @@ import { parseNamespaceRow } from "../row-parsers.js";
 import { audit } from "../../audit.js";
 import { bustIdentityCacheForNamespace } from "../../cache-bust.js";
 import type { NamespaceVisibility } from "../../types.js";
+import { wantsHtml } from "../html/negotiate.js";
+import { renderNamespaceDetail } from "../html/namespace-detail.js";
+import { fetchNamespaceDetail } from "../html/queries.js";
+import { toISO } from "../../utils.js";
 
 const idParam = {
   name: "id",
@@ -29,9 +33,26 @@ export function registerNamespaceCrudRoutes(): void {
   defineRoute(
     "GET",
     "/api/v1/namespaces/:id",
-    async (ctx) => {
+    async (ctx, request) => {
       try {
         const ns = await assertNamespaceReadAccess(ctx.db, ctx.params.id, ctx.identity);
+
+        if (wantsHtml(request)) {
+          const detail = await fetchNamespaceDetail(ctx.db, ctx.params.id);
+          return renderNamespaceDetail({
+            namespace: {
+              id: ns.id,
+              name: ns.name,
+              owner: ns.owner,
+              visibility: ns.visibility,
+              description: ns.description,
+              created_at: toISO(ns.created_at),
+              updated_at: toISO(ns.updated_at),
+            },
+            ...detail,
+          });
+        }
+
         return json(parseNamespaceRow(ns));
       } catch (e) {
         return handleError(e);
