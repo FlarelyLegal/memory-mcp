@@ -473,6 +473,50 @@ describe("MCP ↔ REST parity", () => {
     const expectedCount = manifestRouteKeys.size + REST_ONLY_PATHS.size;
     expect(routes.length).toBe(expectedCount);
   });
+
+  it("literal routes precede parameterized siblings (prevents shadowing)", () => {
+    const routes = getRoutes();
+
+    for (let i = 0; i < routes.length; i++) {
+      for (let j = i + 1; j < routes.length; j++) {
+        const a = routes[i];
+        const b = routes[j];
+        if (a.method !== b.method) continue;
+
+        const segsA = a.pattern.split("/");
+        const segsB = b.pattern.split("/");
+        if (segsA.length !== segsB.length) continue;
+
+        let allMatch = true;
+        let hasLiteralVsParam = false;
+        let aIsLiteral = true;
+
+        for (let k = 0; k < segsA.length; k++) {
+          if (segsA[k] === segsB[k]) continue;
+          const aParam = segsA[k].startsWith(":");
+          const bParam = segsB[k].startsWith(":");
+          if (aParam !== bParam) {
+            hasLiteralVsParam = true;
+            if (aParam) aIsLiteral = false;
+          } else {
+            allMatch = false;
+            break;
+          }
+        }
+
+        if (!allMatch || !hasLiteralVsParam) continue;
+
+        if (aIsLiteral) {
+          expect(i).toBeLessThan(j);
+        } else {
+          expect.unreachable(
+            `${b.method} ${b.pattern} (literal, idx ${j}) is registered after ` +
+              `${a.method} ${a.pattern} (param, idx ${i}) -- will be shadowed`,
+          );
+        }
+      }
+    }
+  });
 });
 
 describe("data field alignment", () => {
