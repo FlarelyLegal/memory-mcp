@@ -36,6 +36,7 @@
       "binding": "DB",
       "database_name": "memory-graph-mcp-db",
       "database_id": "080fbc1c-3431-4ea6-9a8e-427244e21e05",
+      "migrations_dir": "migrations",
     },
   ],
 

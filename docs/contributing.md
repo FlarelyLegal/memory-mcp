@@ -12,6 +12,28 @@ npm run dev -- --local --port 8787
 
 Copy `.dev.vars.example` to `.dev.vars` for the OAuth flow. Without secrets, `/health` and unauthenticated endpoints still work.
 
+## D1 migrations
+
+D1 schema changes are managed with Wrangler migrations in the `migrations/` directory.
+
+- Keep `schemas/schema.sql` as the current-state reference schema.
+- Add a migration file for every schema change (`000x_description.sql`).
+- Apply locally first, then remote worker-b, then remote worker-a.
+
+```bash
+npx wrangler d1 migrations create memory-graph-mcp-db <message> --config wrangler-b.jsonc
+npm run migrate:local
+npm run migrate:b
+npm run migrate:a
+```
+
+Useful checks:
+
+```bash
+npx wrangler d1 migrations list memory-graph-mcp-db --config wrangler-b.jsonc
+npx wrangler d1 migrations list memory-graph-mcp-db --config wrangler-a.jsonc
+```
+
 ## Checks
 
 All four must pass before opening a PR:
