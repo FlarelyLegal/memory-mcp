@@ -22,6 +22,7 @@ function mapAction(action: string): AuditAction {
   const map: Record<string, AuditAction> = {
     service_token_bind_request_created: "service_token.bind_request",
     service_token_bind_request_conflict: "service_token.bind_conflict",
+    service_token_bind_request_denied: "service_token.bind_denied",
     service_token_bind_self_denied: "service_token.bind_denied",
     service_token_bind_self_conflict: "service_token.bind_conflict",
     service_token_bound: "service_token.bind_self",

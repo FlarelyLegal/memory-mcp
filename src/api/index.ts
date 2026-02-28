@@ -36,6 +36,7 @@ import { registerAdminRoutes } from "./routes/admin.js";
 import { registerWorkflowRoutes } from "./routes/workflows.js";
 import { registerTokenRoutes } from "./routes/tokens.js";
 import { registerTokenCrudRoutes } from "./routes/token-crud.js";
+import { registerBindUiRoutes } from "./routes/bind-ui.js";
 import { registerDemoRoutes } from "./routes/demo.js";
 
 // Register all route modules once at module load time.
@@ -61,6 +62,7 @@ function ensureRegistered(): void {
   registerWorkflowRoutes();
   registerTokenRoutes();
   registerTokenCrudRoutes();
+  registerBindUiRoutes();
   registerDemoRoutes();
 }
 

@@ -21,13 +21,8 @@ import {
 } from "./oauth/index.js";
 import { verifyToken } from "./jwt.js";
 import { logError } from "./log.js";
-import {
-  VERSION,
-  SERVER_NAME,
-  SERVER_DISPLAY_NAME,
-  SERVER_DESCRIPTION,
-  REPO_URL,
-} from "./version.js";
+import { VERSION, SERVER_NAME, SERVER_DISPLAY_NAME, SERVER_DESCRIPTION } from "./version.js";
+import { renderLandingPage } from "./landing.js";
 
 /** Default security headers applied to all responses from this handler. */
 const SECURITY_HEADERS: Record<string, string> = {
@@ -202,10 +197,7 @@ async function handleRequest(
   }
 
   if (pathname === "/") {
-    return new Response(
-      `${SERVER_DISPLAY_NAME} v${VERSION}\n${SERVER_DESCRIPTION}\n\n${REPO_URL}\n`,
-      { headers: { "content-type": "text/plain; charset=utf-8" } },
-    );
+    return renderLandingPage();
   }
 
   return new Response("Not Found", { status: 404 });
