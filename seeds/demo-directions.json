@@ -9,7 +9,10 @@
       "name": "Memory Graph MCP",
       "type": "project",
       "summary": "Remote MCP server on Cloudflare Workers providing LLMs with persistent shared memory -- knowledge graphs, semantic search, RBAC namespace sharing, and temporally-decayed recall.",
-      "metadata": { "repo": "https://github.com/FlarelyLegal/memory-mcp", "license": "MIT" }
+      "metadata": {
+        "repo": "https://github.com/FlarelyLegal/memory-mcp",
+        "license": "AGPL-3.0-only"
+      }
     },
     {
       "key": "d1_database",

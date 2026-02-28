@@ -61,7 +61,7 @@ export function buildOpenApiSpec(serverUrl?: string): Record<string, unknown> {
       title: "Memory Graph API",
       description: SERVER_DESCRIPTION,
       version: VERSION,
-      license: { name: "MIT", url: `${REPO_URL}/blob/main/LICENSE` },
+      license: { name: "AGPL-3.0-only", url: `${REPO_URL}/blob/main/LICENSE` },
     },
     servers: serverUrl ? [{ url: serverUrl }] : [],
     paths,
