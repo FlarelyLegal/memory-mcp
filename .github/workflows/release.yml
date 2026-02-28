@@ -108,20 +108,10 @@ jobs:
           }
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Generate changelog
-        if: steps.check.outputs.skip != 'true'
-        id: changelog
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --latest --strip header
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-
       - name: Validate changelog does not include merge lines
         if: steps.check.outputs.skip != 'true'
         run: |
-          CHANGELOG='${{ steps.changelog.outputs.content }}'
+          CHANGELOG='${{ steps.version.outputs.content }}'
           if echo "$CHANGELOG" | grep -Eq '^- Merge pull request|^- Merge branch'; then
             echo "Release changelog still contains merge commit lines."
             exit 1
@@ -133,7 +123,7 @@ jobs:
         with:
           tag_name: ${{ steps.check.outputs.tag }}
           name: ${{ steps.check.outputs.tag }}
-          body: ${{ steps.changelog.outputs.content }}
+          body: ${{ steps.version.outputs.content }}
           target_commitish: ${{ steps.bump.outputs.sha }}
           draft: false
           prerelease: false
@@ -149,7 +139,7 @@ jobs:
             echo "Released [${{ steps.check.outputs.tag }}](https://github.com/${{ github.repository }}/releases/tag/${{ steps.check.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Changelog" >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.changelog.outputs.content }}" >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.version.outputs.content }}" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Version calculated by [git-cliff](https://git-cliff.org) from [Conventional Commits](https://www.conventionalcommits.org/)." >> $GITHUB_STEP_SUMMARY
