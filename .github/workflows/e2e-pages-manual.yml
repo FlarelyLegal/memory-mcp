@@ -1,19 +1,12 @@
-name: E2E Tests
+name: E2E Browser Tests (B Manual)
 
 on:
-  workflow_call:
-    secrets:
-      CF_ACCESS_CLIENT_ID_B:
-        required: true
-      CF_ACCESS_CLIENT_SECRET_B:
-        required: true
-      API_BASE_URL_B:
-        required: true
+  workflow_dispatch:
 
 jobs:
-  e2e:
-    name: E2E Tests (b)
-    runs-on: ubuntu-latest
+  browser:
+    name: Browser Tests (b)
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -21,26 +14,35 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
       - name: Preflight API availability
-        run: |
-          curl -fsS "${API_BASE_URL_B}/health"
-          curl -fsS "${API_BASE_URL_B}/api/openapi.json" >/dev/null
+        run: curl -fsS "${API_BASE_URL_B}/health"
         env:
           API_BASE_URL_B: ${{ secrets.API_BASE_URL_B }}
 
-      - name: Run E2E tests
-        run: npx playwright test --project=api
+      - name: Run browser tests
+        run: npx playwright test --project=browser
         env:
           API_TARGET: b
           API_BASE_URL_B: ${{ secrets.API_BASE_URL_B }}
           CF_ACCESS_CLIENT_ID_B: ${{ secrets.CF_ACCESS_CLIENT_ID_B }}
           CF_ACCESS_CLIENT_SECRET_B: ${{ secrets.CF_ACCESS_CLIENT_SECRET_B }}
 
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: page-screenshots-b
+          path: tests/e2e/screenshots/
+          retention-days: 30
+
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-report-b
+          name: browser-report-b
           path: playwright-report/
           retention-days: 14
 
@@ -48,7 +50,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-junit-b
+          name: browser-junit-b
           path: test-results/junit.xml
           retention-days: 14
 
@@ -56,7 +58,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@v2
         with:
-          name: E2E Results (b)
+          name: Browser Results (b)
           path: test-results/junit.xml
           reporter: java-junit
           fail-on-error: false

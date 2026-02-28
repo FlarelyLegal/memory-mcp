@@ -15,7 +15,7 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Run E2E tests
-        run: npx playwright test
+        run: npx playwright test --project=api
         env:
           API_TARGET: a
           API_BASE_URL_A: ${{ secrets.API_BASE_URL_A }}
