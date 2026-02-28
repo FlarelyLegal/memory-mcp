@@ -49,7 +49,7 @@ describe("identity", () => {
         groupGrants: { ns3: "viewer" },
       },
     });
-    const flags = { get: vi.fn().mockResolvedValue("admin@example.com") };
+    const flags = { get: vi.fn().mockResolvedValue("admin@memory.flarelylegal.com") };
     const db = { batch: vi.fn(), prepare: vi.fn() };
 
     const identity = await loadIdentity(
@@ -120,7 +120,7 @@ describe("cache-bust", () => {
     const grants = [
       {
         namespace_id: "ns1",
-        email: "direct@x.com",
+        email: "direct@memory.flarelylegal.com",
         group_id: null,
         role: "viewer",
         status: "active",
@@ -128,9 +128,9 @@ describe("cache-bust", () => {
       { namespace_id: "ns1", email: null, group_id: "g1", role: "editor", status: "active" },
     ];
     const members = [
-      { group_id: "g1", email: "a@x.com", status: "active" },
-      { group_id: "g1", email: "b@x.com", status: "active" },
-      { group_id: "g1", email: "c@x.com", status: "suspended" },
+      { group_id: "g1", email: "a@memory.flarelylegal.com", status: "active" },
+      { group_id: "g1", email: "b@memory.flarelylegal.com", status: "active" },
+      { group_id: "g1", email: "c@memory.flarelylegal.com", status: "suspended" },
     ];
     return {
       prepare(query: string) {
@@ -164,27 +164,36 @@ describe("cache-bust", () => {
   }
 
   it("busts single and multiple identity cache keys", async () => {
-    const users = makeKv({ "a@x.com": { ok: true }, "b@x.com": { ok: true } });
-    await bustIdentityCache(users as never, "a@x.com");
-    await bustIdentityCaches(users as never, ["b@x.com", "B@X.COM", ""]);
+    const users = makeKv({
+      "a@memory.flarelylegal.com": { ok: true },
+      "b@memory.flarelylegal.com": { ok: true },
+    });
+    await bustIdentityCache(users as never, "a@memory.flarelylegal.com");
+    await bustIdentityCaches(users as never, [
+      "b@memory.flarelylegal.com",
+      "B@MEMORY.FLARELYLEGAL.COM",
+      "",
+    ]);
     expect(users.size()).toBe(0);
   });
 
   it("busts group and namespace fan-out deterministically", async () => {
     const users = makeKv({
-      "a@x.com": { ok: true },
-      "b@x.com": { ok: true },
-      "direct@x.com": { ok: true },
-      "owner@x.com": { ok: true },
+      "a@memory.flarelylegal.com": { ok: true },
+      "b@memory.flarelylegal.com": { ok: true },
+      "direct@memory.flarelylegal.com": { ok: true },
+      "owner@memory.flarelylegal.com": { ok: true },
     });
     const db = makeDb();
 
     await bustIdentityCacheForGroup(db as never, users as never, "g1");
-    expect(users.has("a@x.com")).toBe(false);
-    expect(users.has("b@x.com")).toBe(false);
+    expect(users.has("a@memory.flarelylegal.com")).toBe(false);
+    expect(users.has("b@memory.flarelylegal.com")).toBe(false);
 
-    await bustIdentityCacheForNamespace(db as never, users as never, "ns1", ["owner@x.com"]);
-    expect(users.has("direct@x.com")).toBe(false);
-    expect(users.has("owner@x.com")).toBe(false);
+    await bustIdentityCacheForNamespace(db as never, users as never, "ns1", [
+      "owner@memory.flarelylegal.com",
+    ]);
+    expect(users.has("direct@memory.flarelylegal.com")).toBe(false);
+    expect(users.has("owner@memory.flarelylegal.com")).toBe(false);
   });
 });

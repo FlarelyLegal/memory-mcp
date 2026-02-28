@@ -192,24 +192,24 @@ describe("graph/groups", () => {
     });
     await addGroupMember(db as never, {
       group_id: gid,
-      email: "a@x.com",
+      email: "a@memory.flarelylegal.com",
       role: "owner",
       status: "active",
     });
     await addGroupMember(db as never, {
       group_id: gid,
-      email: "b@x.com",
+      email: "b@memory.flarelylegal.com",
       role: "member",
       status: "active",
     });
     await incrementMemberCount(db as never, gid, 2);
     expect(await countGroupOwners(db as never, gid)).toBe(1);
-    await updateGroupMemberRole(db as never, gid, "b@x.com", "owner");
+    await updateGroupMemberRole(db as never, gid, "b@memory.flarelylegal.com", "owner");
     expect(await countGroupOwners(db as never, gid)).toBe(2);
-    await removeGroupMember(db as never, gid, "a@x.com");
-    expect(await getGroupMembership(db as never, gid, "a@x.com")).toBeNull();
+    await removeGroupMember(db as never, gid, "a@memory.flarelylegal.com");
+    expect(await getGroupMembership(db as never, gid, "a@memory.flarelylegal.com")).toBeNull();
     expect((await listGroupMembers(db as never, gid)).length).toBe(1);
-    expect((await getUserGroupIds(db as never, "b@x.com"))[0]).toBe(gid);
+    expect((await getUserGroupIds(db as never, "b@memory.flarelylegal.com"))[0]).toBe(gid);
   });
 
   it("generates unique slugs", async () => {

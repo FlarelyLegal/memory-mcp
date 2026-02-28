@@ -6,8 +6,10 @@
  * dispatches to the handler.
  */
 import type { Env } from "../types.js";
+import type { DbHandle } from "../db.js";
 import type { HttpMethod } from "./types.js";
-import { session, getBookmark } from "../db.js";
+import { getBookmark } from "../db.js";
+import { getControlPlaneDb } from "../db-router.js";
 import { matchRoute } from "./registry.js";
 import { authenticateRequestIdentity, json, jsonError } from "./middleware.js";
 import { buildOpenApiSpec } from "./openapi.js";
@@ -102,9 +104,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   // Writes go to primary first; reads can hit any replica.
   // If the client sends a bookmark, anchor the session there instead.
   const bookmark = request.headers.get("X-D1-Bookmark");
-  const constraint: D1SessionConstraint =
-    request.method === "GET" ? "first-unconstrained" : "first-primary";
-  const db = session(env.DB, bookmark ?? constraint);
+  const db = getControlPlaneDb(env, {
+    mode: request.method === "GET" ? "read" : "write",
+    bookmark,
+  });
 
   // --- Auth (skip for explicitly public routes) ---
 
@@ -175,10 +178,7 @@ function trackApi(
 }
 
 /** Attach the D1 session bookmark to the response for cross-request consistency. */
-async function withBookmark(
-  db: ReturnType<typeof session>,
-  responsePromise: Promise<Response>,
-): Promise<Response> {
+async function withBookmark(db: DbHandle, responsePromise: Promise<Response>): Promise<Response> {
   const response = await responsePromise;
   const bm = getBookmark(db);
   if (bm) {

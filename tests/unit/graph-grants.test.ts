@@ -146,7 +146,7 @@ describe("graph/grants", () => {
       namespace_id: "ns1",
       email: "user@memory.flarelylegal.com",
       role: "viewer",
-      granted_by: "admin@x.com",
+      granted_by: "admin@memory.flarelylegal.com",
     });
     expect(await getNamespaceGrant(db as never, id)).not.toBeNull();
     expect((await listNamespaceGrants(db as never, "ns1")).length).toBe(1);
@@ -159,13 +159,13 @@ describe("graph/grants", () => {
       namespace_id: "ns1",
       email: "user@memory.flarelylegal.com",
       role: "viewer",
-      granted_by: "admin@x.com",
+      granted_by: "admin@memory.flarelylegal.com",
     });
     const second = await grantAccess(db as never, {
       namespace_id: "ns1",
       email: "user@memory.flarelylegal.com",
       role: "editor",
-      granted_by: "admin@x.com",
+      granted_by: "admin@memory.flarelylegal.com",
     });
     expect(second).toBe(first);
     expect((await listAllNamespaceGrants(db as never, "ns1")).length).toBe(1);
@@ -178,22 +178,22 @@ describe("graph/grants", () => {
       namespace_id: "ns1",
       group_id: "g1",
       role: "viewer",
-      granted_by: "admin@x.com",
+      granted_by: "admin@memory.flarelylegal.com",
     });
-    await revokeAccess(db as never, id, "admin@x.com");
+    await revokeAccess(db as never, id, "admin@memory.flarelylegal.com");
     expect((await getNamespaceGrant(db as never, id))?.status).toBe("revoked");
 
     await grantAccess(db as never, {
       namespace_id: "ns1",
       email: "user@memory.flarelylegal.com",
       role: "viewer",
-      granted_by: "admin@x.com",
+      granted_by: "admin@memory.flarelylegal.com",
     });
     await revokeAccessByPrincipal(
       db as never,
       "ns1",
       { email: "user@memory.flarelylegal.com" },
-      "admin@x.com",
+      "admin@memory.flarelylegal.com",
     );
     expect((await listNamespaceGrants(db as never, "ns1")).length).toBe(0);
   });

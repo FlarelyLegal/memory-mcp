@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS namespaces (
   name TEXT NOT NULL,
   description TEXT,
   owner TEXT,       -- email of the owning user (NULL = legacy/unowned)
+  shard_id TEXT NOT NULL DEFAULT 'core', -- data-plane shard assignment
   visibility TEXT NOT NULL DEFAULT 'private', -- 'private' | 'public'
   metadata TEXT,    -- JSON
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
@@ -16,6 +17,7 @@ CREATE TABLE IF NOT EXISTS namespaces (
 );
 CREATE INDEX IF NOT EXISTS idx_namespaces_owner ON namespaces(owner);
 CREATE INDEX IF NOT EXISTS idx_namespaces_name ON namespaces(name);
+CREATE INDEX IF NOT EXISTS idx_namespaces_shard ON namespaces(shard_id);
 CREATE INDEX IF NOT EXISTS idx_namespaces_visibility ON namespaces(visibility);
 
 -- Entities are the nodes of the graph

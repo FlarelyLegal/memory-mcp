@@ -3,22 +3,37 @@ import type { NamespaceRow, NamespaceVisibility, UserIdentity } from "../types.j
 import { type DbHandle, withRetry, isReplayInsertConflict } from "../db.js";
 import { generateId, toJson } from "../utils.js";
 
+export const DEFAULT_NAMESPACE_SHARD = "core";
+
+export function selectNamespaceShard(_namespaceId: string): string {
+  return DEFAULT_NAMESPACE_SHARD;
+}
+
 export async function createNamespace(
   db: DbHandle,
-  opts: { name: string; description?: string; owner?: string; metadata?: Record<string, unknown> },
+  opts: {
+    name: string;
+    description?: string;
+    owner?: string;
+    metadata?: Record<string, unknown>;
+    shard_id?: string;
+  },
 ): Promise<string> {
   const id = generateId();
+  const shardId = opts.shard_id ?? selectNamespaceShard(id);
   try {
     await withRetry(() =>
       db
         .prepare(
-          `INSERT INTO namespaces (id, name, description, owner, metadata) VALUES (?, ?, ?, ?, ?)`,
+          `INSERT INTO namespaces (id, name, description, owner, shard_id, metadata)
+           VALUES (?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
           opts.name,
           opts.description ?? null,
           opts.owner ?? null,
+          shardId,
           toJson(opts.metadata ?? null),
         )
         .run(),

@@ -139,7 +139,8 @@ describe("parseNamespaceRow", () => {
     id: "ns1",
     name: "Test",
     description: "desc",
-    owner: "user@example.com",
+    owner: "user@memory.flarelylegal.com",
+    shard_id: "core",
     visibility: "private",
     metadata: null,
     created_at: TS,
@@ -156,7 +157,7 @@ describe("parseNamespaceRow", () => {
   it("preserves non-timestamp fields", () => {
     const parsed = parseNamespaceRow(base);
     expect(parsed.name).toBe("Test");
-    expect(parsed.owner).toBe("user@example.com");
+    expect(parsed.owner).toBe("user@memory.flarelylegal.com");
     expect(parsed.visibility).toBe("private");
   });
 });

@@ -21,6 +21,7 @@ export function registerNamespaceRoutes(): void {
           "name",
           "description",
           "owner",
+          "shard_id",
           "visibility",
           "metadata",
           "created_at",
