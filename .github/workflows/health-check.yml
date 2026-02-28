@@ -1,0 +1,105 @@
+name: Health Check
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # every 30 minutes
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check site A
+        id: a
+        continue-on-error: true
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${SITE_A}/health")
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          [ "$status" = "200" ]
+        env:
+          SITE_A: ${{ secrets.API_BASE_URL_A }}
+
+      - name: Check site B
+        id: b
+        continue-on-error: true
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${SITE_B}/health")
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          [ "$status" = "200" ]
+        env:
+          SITE_B: ${{ secrets.API_BASE_URL_B }}
+
+      - name: Open issue if unhealthy
+        if: steps.a.outcome == 'failure' || steps.b.outcome == 'failure'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const siteA = '${{ steps.a.outputs.status }}';
+            const siteB = '${{ steps.b.outputs.status }}';
+            const failA = '${{ steps.a.outcome }}' === 'failure';
+            const failB = '${{ steps.b.outcome }}' === 'failure';
+
+            const lines = [];
+            if (failA) lines.push(`- **Site A**: HTTP ${siteA || 'timeout'}`);
+            if (failB) lines.push(`- **Site B**: HTTP ${siteB || 'timeout'}`);
+
+            const title = `Health check failed: ${[failA && 'A', failB && 'B'].filter(Boolean).join(' + ')}`;
+            const body = `## Health Check Failure\n\n${lines.join('\n')}\n\nDetected at ${new Date().toISOString()}\n\n_Automated by health-check workflow_`;
+
+            // Don't duplicate -- check for existing open issue
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'health-check',
+              per_page: 1,
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['health-check'],
+              });
+            }
+
+      - name: Close issue if healthy
+        if: steps.a.outcome == 'success' && steps.b.outcome == 'success'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'health-check',
+              per_page: 1,
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: `## Recovered\n\nBoth sites healthy at ${new Date().toISOString()}\n\n_Closing automatically_`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                state: 'closed',
+              });
+            }

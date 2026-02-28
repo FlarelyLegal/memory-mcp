@@ -1,0 +1,57 @@
+name: Nightly E2E Smoke
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: E2E Smoke (b)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Preflight API availability
+        run: |
+          curl -fsS "${API_BASE_URL_B}/health"
+          curl -fsS "${API_BASE_URL_B}/api/openapi.json" >/dev/null
+        env:
+          API_BASE_URL_B: ${{ secrets.API_BASE_URL_B }}
+
+      - name: Run E2E tests
+        run: npx playwright test --project=api
+        env:
+          API_TARGET: b
+          API_BASE_URL_B: ${{ secrets.API_BASE_URL_B }}
+          CF_ACCESS_CLIENT_ID_B: ${{ secrets.CF_ACCESS_CLIENT_ID_B }}
+          CF_ACCESS_CLIENT_SECRET_B: ${{ secrets.CF_ACCESS_CLIENT_SECRET_B }}
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-smoke-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-smoke-junit
+          path: test-results/junit.xml
+          retention-days: 7
+
+      - name: Publish test results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: Nightly Smoke Results (b)
+          path: test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: false
