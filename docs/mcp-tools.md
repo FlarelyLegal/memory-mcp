@@ -2,7 +2,7 @@
 
 [< Back to docs](README.md)
 
-17 tools organized by domain. All tools require authentication via the MCP OAuth flow.
+17 tools organized by domain. All tool calls are authenticated via Cloudflare Access. Data access is scoped by namespace ownership and RBAC grants (owner/editor/viewer).
 
 ## Connecting
 
@@ -18,8 +18,21 @@ For Claude Desktop, Cursor, OpenCode, or any MCP-compatible client:
 }
 ```
 
-Your client opens the Cloudflare Access login page. All data is scoped to your email.
-Access is gated by Cloudflare Access — to request a test account, open an issue or reach out.
+Your client opens the Cloudflare Access login page. All data is scoped to your authenticated identity.
+
+> [!NOTE]
+> Access is gated by Cloudflare Access. To request a test account, open an issue or reach out.
+
+## Access control
+
+| Role     | Read | Write | Delete | Share/transfer | Admin tools |
+| -------- | ---- | ----- | ------ | -------------- | ----------- |
+| `viewer` | Yes  | No    | No     | No             | No          |
+| `editor` | Yes  | Yes   | Yes    | No             | No          |
+| `owner`  | Yes  | Yes   | Yes    | Yes            | No          |
+| `admin`  | Yes  | Yes   | Yes    | Yes            | Yes         |
+
+Namespace owners have implicit full control. Editors and viewers are granted access via `manage_namespace share` or REST grant routes. Admin tools require the user's email to be in the `admin:emails` KV allowlist.
 
 ## Session state
 
@@ -37,7 +50,14 @@ The server tracks active context across tool calls:
 | ------------------ | --------------------------------------------- |
 | `manage_namespace` | Manage namespaces and namespace access grants |
 
-Actions: `create`, `list`, `get`, `update`, `delete`, `set_visibility` (admin only), `share`, `unshare`, `list_access`, `transfer`. Delete cascades all entities, relations, memories, conversations, messages, and Vectorize vectors.
+Actions: `create`, `list`, `get`, `update`, `delete`, `set_visibility`, `share`, `unshare`, `list_access`, `transfer`.
+
+- **share**: grant a user or group access at a specified role (viewer/editor). Requires owner.
+- **unshare**: revoke a user or group grant. Requires owner.
+- **list_access**: show all grants on a namespace. Requires owner.
+- **transfer**: transfer ownership to another user. Requires owner.
+- **set_visibility**: set namespace to `public` (any authenticated user can read) or `private` (default). Requires owner.
+- **delete**: cascades all entities, relations, memories, conversations, messages, and Vectorize vectors. Prompts for confirmation via elicitation.
 
 ### Entity
 
@@ -111,7 +131,7 @@ Modes:
 | `namespace_stats`     | Entity/memory/relation/conversation counts for a namespace      |
 | `claim_namespaces`    | Claim all unowned namespaces for current user                   |
 
-Admin tools require the user's email to be in the `admin:emails` KV allowlist. Destructive operations prompt for confirmation.
+Admin tools require the user's email to be in the `admin:emails` KV allowlist. `reindex_vectors` and `consolidate_memory` trigger durable Cloudflare Workflows with step-level retry, and return a workflow instance ID for status tracking. Destructive operations prompt for confirmation via elicitation.
 
 ## Temporal decay
 
