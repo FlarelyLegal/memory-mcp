@@ -215,3 +215,5 @@ export interface AuditLogRow {
   detail: string | null;
   created_at: number;
 }
+
+export * from "./rbac-types.js";
