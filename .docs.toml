@@ -13,7 +13,7 @@
 
 [settings]
 # Files with no breadcrumb requirement (entry points, auto-generated)
-root_files = ["README.md", "AGENTS.md", "CHANGELOG.md"]
+root_files = ["README.md", "AGENTS.md", "CHANGELOG.md", ".github/agents/issue-triage.md", ".github/agents/duplicate-code-detector.md"]
 # Directories to skip entirely
 exclude_paths = ["node_modules", "dist"]
 
