@@ -89,7 +89,7 @@ jobs:
 
       - name: Run opencode
         if: steps.check-pr.outputs.skip != 'true'
-        uses: anomalyco/opencode/github@a9fea49cebbe985ae1aea412e2d99d9f52668f19 # latest
+        uses: anomalyco/opencode/github@0cf0294787322664c6d668fa5ab0a9ce26796f78 # latest
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
