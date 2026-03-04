@@ -49,7 +49,7 @@
     "test:e2e:all": "playwright test"
   },
   "dependencies": {
-    "@cloudflare/workers-oauth-provider": "^0.2.3",
+    "@cloudflare/workers-oauth-provider": "^0.2.4",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "agents": "^0.6.0",
     "zod": "^4.3.6"
